@@ -19,6 +19,10 @@ apply from: '../build.dependencies.gradle'
 android {
     namespace = 'org.firstinspires.ftc.teamcode'
 
+    // Pedro Pathing / Panels dependencies pull in AndroidX libraries that require
+    // compiling against a newer Android API than the stock FTC SDK's compileSdk 30.
+    compileSdkVersion 34
+
     packagingOptions {
         jniLibs.useLegacyPackaging true
     }

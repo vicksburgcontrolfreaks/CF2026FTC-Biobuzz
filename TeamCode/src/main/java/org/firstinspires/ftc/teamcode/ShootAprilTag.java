@@ -47,8 +47,7 @@ public class ShootAprilTag {
     public void alignRotationOnly(int tagId) {
         // PID to center tag by rotation only (x=0, y=0)
         double kp = 0.01, ki = 0.0, kd = 0.0;
-        double prevErrorX = 0, int
-                egralX = 0;
+        double prevErrorX = 0, integralX = 0;
         double prevErrorY = 0, integralY = 0;
         Timer timeout = new Timer();
         double TIMEOUT_SEC = 5.0;
