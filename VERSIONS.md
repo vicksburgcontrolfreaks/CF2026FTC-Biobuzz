@@ -1,6 +1,6 @@
 # Environment Versions
 
-_Last updated: 2026-09-11 17:35 EDT on `CFLT5`_
+_Last updated: 2026-09-11 17:55 EDT on `CFLT5`_
 
 ## Claude Code
 
@@ -23,6 +23,7 @@ claude.ai Google Calendar: https://calendarmcp.googleapis.com/mcp/v1 - ✔ Conne
 ## FTC / Android build toolchain
 _(synced via git — if behind here, `git pull` is the fix, not this script)_
 
+- Upstream master HEAD: 26cd1fdd2a3c4b26173d9ff33a3279c27d1c7ad1
 - Gradle: 9.1.0
 - Android Gradle Plugin: 8.13.2
 - compileSdk: 30

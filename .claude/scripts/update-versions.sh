@@ -13,9 +13,17 @@ DATE_VAL="$(date '+%Y-%m-%d %H:%M %Z')"
 # --- Read what was previously recorded (from git / another machine) before we overwrite it ---
 PREV_CLI=""
 PREV_PLUGINS=""
+PREV_UPSTREAM_SHA=""
 if [ -f "$OUT" ]; then
   PREV_CLI="$(grep -m1 '^- CLI version:' "$OUT" 2>/dev/null | sed 's/^- CLI version: //' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' || true)"
   PREV_PLUGINS="$(awk '/^### Plugins/{f=1;next} f&&/^```/{c++;if(c==2)exit;next} f&&c==1{print}' "$OUT" 2>/dev/null || true)"
+  PREV_UPSTREAM_SHA="$(grep -m1 '^- Upstream master HEAD:' "$OUT" 2>/dev/null | awk '{print $NF}' || true)"
+fi
+
+# --- Check the upstream FTC SDK repo for new commits (best-effort; network access may be unavailable) ---
+CUR_UPSTREAM_SHA=""
+if git remote get-url upstream >/dev/null 2>&1; then
+  CUR_UPSTREAM_SHA="$(timeout 5 git ls-remote upstream refs/heads/master 2>/dev/null | awk '{print $1}' || true)"
 fi
 
 # --- Collect current machine's values ---
@@ -43,6 +51,10 @@ if [ -n "$PREV_PLUGINS" ] && [ "$(echo "$PREV_PLUGINS" | head -1)" != "No plugin
   done <<< "$PREV_PLUGINS"
 fi
 
+if [ -n "$PREV_UPSTREAM_SHA" ] && [ -n "$CUR_UPSTREAM_SHA" ] && [ "$PREV_UPSTREAM_SHA" != "$CUR_UPSTREAM_SHA" ]; then
+  WARNINGS+=("New commits on upstream FTC SDK (FIRST-Tech-Challenge/FtcRobotController master): ${PREV_UPSTREAM_SHA:0:7} -> ${CUR_UPSTREAM_SHA:0:7}. Fix: git fetch upstream && git merge upstream/master")
+fi
+
 # --- Regenerate VERSIONS.md ---
 {
   echo "# Environment Versions"
@@ -66,6 +78,7 @@ fi
   echo "## FTC / Android build toolchain"
   echo "_(synced via git — if behind here, \`git pull\` is the fix, not this script)_"
   echo
+  echo "- Upstream master HEAD: ${CUR_UPSTREAM_SHA:-unknown (offline or no 'upstream' remote)}"
   if [ -f gradle/wrapper/gradle-wrapper.properties ]; then
     GRADLE_VER=$(grep -oE 'gradle-[0-9.]+' gradle/wrapper/gradle-wrapper.properties | head -1 | sed 's/gradle-//' || true)
     echo "- Gradle: ${GRADLE_VER:-unknown}"
