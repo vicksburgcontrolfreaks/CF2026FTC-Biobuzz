@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FTC Robot Configuration File -->
+<RobotConfiguration>
+    <!-- Drive Motors -->
+    <Motor name="lf" type="MotorType.REV_HD_20_1" port="0" motorControllerType="MotorControllerType.REV_HUB_MOTOR" moduleNumber="0" />
+    <Motor name="rf" type="MotorType.REV_HD_20_1" port="1" motorControllerType="MotorControllerType.REV_HUB_MOTOR" moduleNumber="0" />
+    <Motor name="lr" type="MotorType.REV_HD_20_1" port="2" motorControllerType="MotorControllerType.REV_HUB_MOTOR" moduleNumber="0" />
+    <Motor name="rr" type="MotorType.REV_HD_20_1" port="3" motorControllerType="MotorControllerType.REV_HUB_MOTOR" moduleNumber="0" />
+
+    <!-- Odometry Encoders (if using two-wheel odometry) -->
+    <AnalogInput name="leftOdo" type="AnalogInputType.INPUT" port="0" moduleNumber="0" />
+    <AnalogInput name="rightOdo" type="AnalogInputType.INPUT" port="1" moduleNumber="0" />
+
+    <!-- Servo for example (add more as needed) -->
+    <Servo name="exampleServo" type="ServoType.STANDARD" port="0" motorControllerType="MotorControllerType.REV_HUB_SERVO" moduleNumber="1" />
+
+    <!-- AprilTag Camera (Webcam) -->
+    <Device name="webcam" type="DeviceType.WEBCAM" port="0" moduleNumber="0" />
+</RobotConfiguration>
