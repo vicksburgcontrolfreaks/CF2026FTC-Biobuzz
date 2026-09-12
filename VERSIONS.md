@@ -1,10 +1,10 @@
 # Environment Versions
 
-_Last updated: 2026-09-11 17:55 EDT on `CFLT5`_
+_Last updated: 2026-09-12 08:59 EDT on `CFLT1`_
 
 ## Claude Code
 
-- CLI version: 2.1.268 (Claude Code)
+- CLI version: 2.1.269 (Claude Code)
 
 ### Plugins
 ```
@@ -15,7 +15,7 @@ No plugins installed. Use `claude plugin install` to install a plugin.
 ```
 Checking MCP server health…
 
-claude.ai Google Drive: https://drivemcp.googleapis.com/mcp/v1 - ! Needs authentication
+claude.ai Google Drive: https://drivemcp.googleapis.com/mcp/v1 - ✔ Connected
 claude.ai Gmail: https://gmailmcp.googleapis.com/mcp/v1 - ✔ Connected
 claude.ai Google Calendar: https://calendarmcp.googleapis.com/mcp/v1 - ✔ Connected
 ```

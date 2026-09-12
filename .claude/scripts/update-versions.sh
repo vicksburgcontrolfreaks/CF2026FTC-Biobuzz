@@ -17,7 +17,7 @@ PREV_UPSTREAM_SHA=""
 if [ -f "$OUT" ]; then
   PREV_CLI="$(grep -m1 '^- CLI version:' "$OUT" 2>/dev/null | sed 's/^- CLI version: //' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' || true)"
   PREV_PLUGINS="$(awk '/^### Plugins/{f=1;next} f&&/^```/{c++;if(c==2)exit;next} f&&c==1{print}' "$OUT" 2>/dev/null || true)"
-  PREV_UPSTREAM_SHA="$(grep -m1 '^- Upstream master HEAD:' "$OUT" 2>/dev/null | awk '{print $NF}' || true)"
+  PREV_UPSTREAM_SHA="$(grep -m1 '^- Upstream master HEAD:' "$OUT" 2>/dev/null | awk '{print $NF}' | grep -oE '^[0-9a-f]{7,40}$' || true)"
 fi
 
 # --- Check the upstream FTC SDK repo for new commits (best-effort; network access may be unavailable) ---
