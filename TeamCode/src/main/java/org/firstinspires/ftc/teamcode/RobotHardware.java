@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.TouchSensor;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
@@ -18,6 +19,8 @@ public class RobotHardware {
     public Servo flipper;
     // Sensors (beam breaks)
     public DigitalChannel sensor1, sensor2, sensor3;
+    // Limit switch (not yet tied to a mechanism)
+    public TouchSensor limitSwitch;
     // Vision
     public VisionPortal visionPortal;
     public AprilTagProcessor aprilTagProcessor;
@@ -49,6 +52,9 @@ public class RobotHardware {
         sensor1.setMode(DigitalChannel.Mode.INPUT);
         sensor2.setMode(DigitalChannel.Mode.INPUT);
         sensor3.setMode(DigitalChannel.Mode.INPUT);
+
+        // Limit switch (name must match Driver Station hardware config)
+        limitSwitch = hardwareMap.get(TouchSensor.class, "limitSwitch");
 
         // AprilTag vision
         aprilTagProcessor = AprilTagProcessor.easyCreateWithDefaults();
