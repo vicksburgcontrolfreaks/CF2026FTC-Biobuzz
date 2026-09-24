@@ -35,9 +35,9 @@ public class Constants {
             .rightRearMotorName("rr") //EH0
             .leftRearMotorName("lr") //CH0
             .leftFrontMotorName("lf") //CH1 - also carries the turret encoder
-            .leftFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
+            .leftFrontMotorDirection(DcMotorSimple.Direction.REVERSE) // matches working 2025 code
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
-            .rightFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
+            .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD) // matches working 2025 code
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
