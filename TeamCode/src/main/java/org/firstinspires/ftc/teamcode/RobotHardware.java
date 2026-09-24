@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
@@ -16,8 +17,13 @@ public class RobotHardware {
     public DcMotorEx collector;
     public DcMotorEx shooter;
     public Servo flipper;
+    public Servo indexer;
     // Sensors (beam breaks)
     public DigitalChannel sensor1, sensor2, sensor3;
+    // Sensors (REV Color Sensor V2, also reports distance)
+    public NormalizedColorSensor colorSensor;
+    public ColorSensing colorSensing;
+    public PieceDetector pieceDetector;
     // Vision
     public VisionPortal visionPortal;
     public AprilTagProcessor aprilTagProcessor;
@@ -38,6 +44,7 @@ public class RobotHardware {
         collector = hardwareMap.get(DcMotorEx.class, "collector");
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         flipper = hardwareMap.get(Servo.class, "flipper");
+        indexer = hardwareMap.get(Servo.class, "indexer");
 
         collector.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -49,6 +56,11 @@ public class RobotHardware {
         sensor1.setMode(DigitalChannel.Mode.INPUT);
         sensor2.setMode(DigitalChannel.Mode.INPUT);
         sensor3.setMode(DigitalChannel.Mode.INPUT);
+
+        // Color sensor (config name "colorSensor")
+        colorSensor = hardwareMap.get(NormalizedColorSensor.class, "colorSensor");
+        colorSensing = new ColorSensing(colorSensor);
+        pieceDetector = new PieceDetector(colorSensing, indexer);
 
         // AprilTag vision
         aprilTagProcessor = AprilTagProcessor.easyCreateWithDefaults();
