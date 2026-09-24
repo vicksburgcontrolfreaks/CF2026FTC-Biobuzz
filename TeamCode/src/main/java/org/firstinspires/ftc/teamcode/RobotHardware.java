@@ -18,7 +18,8 @@ public class RobotHardware {
     public Servo flipper;
     // Sensors (beam breaks)
     public DigitalChannel sensor1, sensor2, sensor3;
-    // Vision
+    // Vision -- visionPortal is null when no webcam is configured (check hasCamera)
+    public boolean hasCamera;
     public VisionPortal visionPortal;
     public AprilTagProcessor aprilTagProcessor;
 
@@ -50,10 +51,15 @@ public class RobotHardware {
         sensor2.setMode(DigitalChannel.Mode.INPUT);
         sensor3.setMode(DigitalChannel.Mode.INPUT);
 
-        // AprilTag vision
+        // AprilTag vision (optional). The processor always exists, so code can call
+        // getDetections() safely -- with no camera it just never sees any tags.
+        // tryGet returns null instead of crashing when "Webcam 1" isn't configured.
         aprilTagProcessor = AprilTagProcessor.easyCreateWithDefaults();
-        visionPortal = VisionPortal.easyCreateWithDefaults(
-                hardwareMap.get(WebcamName.class, "Webcam 1"), aprilTagProcessor);
+        WebcamName webcam = hardwareMap.tryGet(WebcamName.class, "Webcam 1");
+        hasCamera = (webcam != null);
+        if (hasCamera) {
+            visionPortal = VisionPortal.easyCreateWithDefaults(webcam, aprilTagProcessor);
+        }
     }
 
     public boolean isMagazineFull() {

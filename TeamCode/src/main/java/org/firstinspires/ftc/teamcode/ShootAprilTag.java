@@ -55,7 +55,7 @@ public class ShootAprilTag {
         while (timeout.getElapsedTimeSeconds() < TIMEOUT_SEC) {
             AprilTagDetection detection = getDetection(tagId);
             if (detection == null) {
-                hardware.visionPortal.getCameraState();
+                if (hardware.visionPortal != null) hardware.visionPortal.getCameraState();
                 continue;
             }
 
@@ -104,7 +104,7 @@ public class ShootAprilTag {
         while (timeout.getElapsedTimeSeconds() < TIMEOUT_SEC) {
             AprilTagDetection detection = getDetection(tagId);
             if (detection == null) {
-                hardware.visionPortal.getCameraState();
+                if (hardware.visionPortal != null) hardware.visionPortal.getCameraState();
                 continue;
             }
 
