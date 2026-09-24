@@ -35,9 +35,9 @@ public class Constants {
             .rightRearMotorName("rr") //EH0
             .leftRearMotorName("lr") //EH3
             .leftFrontMotorName("lf") //EH2
-            .leftFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
+            .leftFrontMotorDirection(DcMotorSimple.Direction.REVERSE) // matches working 2025 code
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
-            .rightFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
+            .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD) // matches working 2025 code
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
