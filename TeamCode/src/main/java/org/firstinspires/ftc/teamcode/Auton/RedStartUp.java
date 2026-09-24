@@ -14,7 +14,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  * Red Start Up auto:
  *   1. Start at (59, 8) facing 180 degrees, wait 1 second
  *   2. Drive to (27, 8) facing 180 degrees, wait 1 second
- *   3. Drive to (59, 133) facing 0 degrees
+ *   3. Drive 19 more inches to (8, 8), turning from 180 to 0 degrees on the way
  *
  * The robot is controlled by a "state machine": pathState is a number that
  * says which step we're on. loop() runs over and over (many times a second),
@@ -27,7 +27,7 @@ public class RedStartUp extends OpMode {
     // Where the robot goes. Pose = (x inches, y inches, heading in radians)
     private final Pose startPose  = new Pose(59, 8,   Math.toRadians(180));
     private final Pose secondPose = new Pose(27, 8,   Math.toRadians(180));
-    private final Pose finalPose  = new Pose(59, 133, Math.toRadians(0));
+    private final Pose finalPose  = new Pose(8,   8,   Math.toRadians(0));
 
     // How long to wait at each stop
     private static final double WAIT_SECONDS = 1.0;
@@ -44,7 +44,7 @@ public class RedStartUp extends OpMode {
         startToSecond = new Path(new BezierLine(startPose, secondPose));
         startToSecond.setLinearHeadingInterpolation(startPose.getHeading(), secondPose.getHeading());
 
-        // Straight line up the field, turning slowly from 180 to 0 the whole way there
+        // Straight line 19 more inches along the wall, turning slowly from 180 to 0 the whole way there
         secondToFinal = new Path(new BezierLine(secondPose, finalPose));
         secondToFinal.setLinearHeadingInterpolation(secondPose.getHeading(), finalPose.getHeading());
     }
