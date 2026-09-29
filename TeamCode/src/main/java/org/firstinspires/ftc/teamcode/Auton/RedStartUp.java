@@ -7,14 +7,17 @@ import com.pedropathing.paths.Path;
 import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 /*
  * Red Start Up auto:
- *   1. Start at (59, 8) facing 180 degrees, wait 1 second
- *   2. Drive to (27, 8) facing 180 degrees, wait 1 second
- *   3. Drive 19 more inches to (8, 8), turning from 180 to 0 degrees on the way
+ *   1. Start at (59, 8) facing 180 degrees, wait 2 seconds
+ *   2. Drive straight along the wall to (8, 8), still facing 180 degrees
+ *      - when the robot passes x = 31, turn the collector on
+ *   3. When it arrives, turn the collector off and say "Done" on the Driver Station
  *
  * The robot is controlled by a "state machine": pathState is a number that
  * says which step we're on. loop() runs over and over (many times a second),
@@ -25,55 +28,55 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 public class RedStartUp extends OpMode {
 
     // Where the robot goes. Pose = (x inches, y inches, heading in radians)
-    private final Pose startPose  = new Pose(59, 8,   Math.toRadians(180));
-    private final Pose secondPose = new Pose(27, 8,   Math.toRadians(180));
-    private final Pose finalPose  = new Pose(8,   8,   Math.toRadians(0));
+    private final Pose startPose = new Pose(59, 8, Math.toRadians(180));
+    private final Pose endPose   = new Pose(8,  8, Math.toRadians(180));
 
-    // How long to wait at each stop
-    private static final double WAIT_SECONDS = 1.0;
+    // Turn the collector on once the robot's X gets to this number or smaller.
+    // (We're driving toward smaller X, so "<=" means "we've reached it or passed it".)
+    private static final double COLLECTOR_START_X = 31;
+    private static final double COLLECTOR_POWER = 0.5; // same as DriveTeleOp
+
+    // How long to wait before starting
+    private static final double WAIT_SECONDS = 2.0;
+
+    // Top speed while testing (1.0 = full speed). Slower = less overshoot and softer
+    // hits if something goes wrong. Raise it once the robot stops where it should.
+    private static final double MAX_POWER = 0.5;
 
     private Follower follower;    // Pedro Pathing: drives the robot along paths
+    private DcMotorEx collector;
     private Timer pathTimer;      // measures time since the current step started
     private int pathState;        // which step we're on
+    private boolean collectorOn = false;
 
-    private Path startToSecond;
-    private Path secondToFinal;
+    private Path startToEnd;
 
     private void buildPaths() {
         // Straight line left along the wall, keep facing 180 the whole way
-        startToSecond = new Path(new BezierLine(startPose, secondPose));
-        startToSecond.setLinearHeadingInterpolation(startPose.getHeading(), secondPose.getHeading());
-
-        // Straight line 19 more inches along the wall, turning slowly from 180 to 0 the whole way there
-        secondToFinal = new Path(new BezierLine(secondPose, finalPose));
-        secondToFinal.setLinearHeadingInterpolation(secondPose.getHeading(), finalPose.getHeading());
+        startToEnd = new Path(new BezierLine(startPose, endPose));
+        startToEnd.setLinearHeadingInterpolation(startPose.getHeading(), endPose.getHeading());
     }
 
     private void autonomousPathUpdate() {
         switch (pathState) {
             case 0:
-                // Sitting at the start. After 1 second, drive to the second spot.
+                // Sitting at the start. After the wait, drive to the end.
                 if (pathTimer.getElapsedTimeSeconds() > WAIT_SECONDS) {
-                    follower.followPath(startToSecond, true); // true = hold position at the end
+                    follower.followPath(startToEnd, true); // true = hold position at the end
                     setPathState(1);
                 }
                 break;
             case 1:
-                // Driving. isBusy() is true until the robot reaches the end of the path.
-                if (!follower.isBusy()) {
-                    setPathState(2); // this also restarts the timer for the wait
+                // Driving. Turn the collector on once we pass x = 31.
+                if (!collectorOn && follower.getPose().getX() <= COLLECTOR_START_X) {
+                    collector.setPower(COLLECTOR_POWER);
+                    collectorOn = true;
                 }
-                break;
-            case 2:
-                // Waiting at the second spot (the follower keeps holding us there).
-                if (pathTimer.getElapsedTimeSeconds() > WAIT_SECONDS) {
-                    follower.followPath(secondToFinal, true);
-                    setPathState(3);
-                }
-                break;
-            case 3:
-                // Driving to the final spot. When we arrive, we're done.
+                // isBusy() is true until the robot reaches the end of the path.
                 if (!follower.isBusy()) {
+                    collector.setPower(0);
+                    collectorOn = false;
+                    telemetry.speak("Done"); // spoken by the Driver Station
                     setPathState(-1); // -1 isn't a case above, so nothing else happens
                 }
                 break;
@@ -89,8 +92,13 @@ public class RedStartUp extends OpMode {
     @Override
     public void init() {
         pathTimer = new Timer();
+
+        collector = hardwareMap.get(DcMotorEx.class, "collector");
+        collector.setDirection(DcMotorSimple.Direction.REVERSE); // same as RobotHardware
+
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startPose); // tell the robot where it is at the beginning
+        follower.setMaxPower(MAX_POWER);
         buildPaths();
     }
 
@@ -105,9 +113,16 @@ public class RedStartUp extends OpMode {
         autonomousPathUpdate();
 
         telemetry.addData("Step", pathState);
+        telemetry.addData("Collector", collectorOn ? "ON" : "off");
         telemetry.addData("X", follower.getPose().getX());
         telemetry.addData("Y", follower.getPose().getY());
         telemetry.addData("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));
         telemetry.update();
+    }
+
+    @Override
+    public void stop() {
+        // Make sure the collector doesn't keep spinning if Stop is pressed mid-run
+        if (collector != null) collector.setPower(0);
     }
 }
