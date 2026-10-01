@@ -14,10 +14,14 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 /*
  * Red Start Up auto:
- *   1. Start at (59, 8) facing 180 degrees, wait 2 seconds
+ *   1. Start at (59, 8) facing 180 degrees, go right away (no wait)
  *   2. Drive straight along the wall to (8, 8), still facing 180 degrees
  *      - when the robot passes x = 31, turn the collector on
- *   3. When it arrives, turn the collector off and say "Done" on the Driver Station
+ *   3. When it arrives, turn the collector off
+ *   4. Drive around the hive, stopping at each corner, still facing 180:
+ *      (33, 59) -> (33, 111) -> (59, 111) -> (59, 133)
+ *      The robot is ~18 in. wide, so y = 111 keeps it about 4 in. above the hive.
+ *   5. Say "Done" on the Driver Station
  *
  * The robot is controlled by a "state machine": pathState is a number that
  * says which step we're on. loop() runs over and over (many times a second),
@@ -31,17 +35,24 @@ public class RedStartUp extends OpMode {
     private final Pose startPose = new Pose(59, 8, Math.toRadians(180));
     private final Pose endPose   = new Pose(8,  8, Math.toRadians(180));
 
+    // Around the hive (see the comment at the top for why these numbers)
+    private final Pose hiveLeftLow   = new Pose(33, 59,  Math.toRadians(180));
+    private final Pose hiveLeftHigh  = new Pose(33, 111, Math.toRadians(180));
+    private final Pose hiveTopMiddle = new Pose(59, 111, Math.toRadians(180));
+    private final Pose nearFlower    = new Pose(59, 133, Math.toRadians(180)); // adjust once the collector is built
+
     // Turn the collector on once the robot's X gets to this number or smaller.
     // (We're driving toward smaller X, so "<=" means "we've reached it or passed it".)
     private static final double COLLECTOR_START_X = 31;
     private static final double COLLECTOR_POWER = 0.5; // same as DriveTeleOp
 
-    // How long to wait before starting
-    private static final double WAIT_SECONDS = 2.0;
+    // How long to wait before starting. 0 = go right away. (Handy to raise in a
+    // match if our alliance partner needs us to stay out of their way at first.)
+    private static final double WAIT_SECONDS = 0;
 
     // Top speed while testing (1.0 = full speed). Slower = less overshoot and softer
     // hits if something goes wrong. Raise it once the robot stops where it should.
-    private static final double MAX_POWER = 0.5;
+    private static final double MAX_POWER = 0.85;
 
     private Follower follower;    // Pedro Pathing: drives the robot along paths
     private DcMotorEx collector;
@@ -50,17 +61,31 @@ public class RedStartUp extends OpMode {
     private boolean collectorOn = false;
 
     private Path startToEnd;
+    private Path toHiveLeftLow, toHiveLeftHigh, toHiveTopMiddle, toNearFlower;
 
     private void buildPaths() {
         // Straight line left along the wall, keep facing 180 the whole way
         startToEnd = new Path(new BezierLine(startPose, endPose));
         startToEnd.setLinearHeadingInterpolation(startPose.getHeading(), endPose.getHeading());
+
+        // Around the hive. Constant heading = keep facing 180 the whole time.
+        toHiveLeftLow = new Path(new BezierLine(endPose, hiveLeftLow));
+        toHiveLeftLow.setConstantHeadingInterpolation(Math.toRadians(180));
+
+        toHiveLeftHigh = new Path(new BezierLine(hiveLeftLow, hiveLeftHigh));
+        toHiveLeftHigh.setConstantHeadingInterpolation(Math.toRadians(180));
+
+        toHiveTopMiddle = new Path(new BezierLine(hiveLeftHigh, hiveTopMiddle));
+        toHiveTopMiddle.setConstantHeadingInterpolation(Math.toRadians(180));
+
+        toNearFlower = new Path(new BezierLine(hiveTopMiddle, nearFlower));
+        toNearFlower.setConstantHeadingInterpolation(Math.toRadians(180));
     }
 
     private void autonomousPathUpdate() {
         switch (pathState) {
             case 0:
-                // Sitting at the start. After the wait, drive to the end.
+                // Sitting at the start. After the wait (if any), drive to the end.
                 if (pathTimer.getElapsedTimeSeconds() > WAIT_SECONDS) {
                     follower.followPath(startToEnd, true); // true = hold position at the end
                     setPathState(1);
@@ -76,6 +101,31 @@ public class RedStartUp extends OpMode {
                 if (!follower.isBusy()) {
                     collector.setPower(0);
                     collectorOn = false;
+                    follower.followPath(toHiveLeftLow, true);
+                    setPathState(2);
+                }
+                break;
+            case 2:
+                // Each step below: wait until we arrive, then start the next move.
+                if (!follower.isBusy()) {
+                    follower.followPath(toHiveLeftHigh, true);
+                    setPathState(3);
+                }
+                break;
+            case 3:
+                if (!follower.isBusy()) {
+                    follower.followPath(toHiveTopMiddle, true);
+                    setPathState(4);
+                }
+                break;
+            case 4:
+                if (!follower.isBusy()) {
+                    follower.followPath(toNearFlower, true);
+                    setPathState(5);
+                }
+                break;
+            case 5:
+                if (!follower.isBusy()) {
                     telemetry.speak("Done"); // spoken by the Driver Station
                     setPathState(-1); // -1 isn't a case above, so nothing else happens
                 }
