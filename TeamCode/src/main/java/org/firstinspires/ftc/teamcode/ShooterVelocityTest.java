@@ -29,6 +29,7 @@ public class ShooterVelocityTest extends LinearOpMode {
     // pollen- vs. nectar-sized balls), found by bench-sweeping on 2026-10-01.
     private static final double POLLEN_POSITION = 0.48;
     private static final double NECTAR_POSITION = 0.135;
+    private static final double INDEXER_STEP_PER_LOOP = 0.005;
 
     // Live-tunable from the Panels dashboard (panels.bylazar.com) while this op mode
     // is running -- no redeploy needed. Seeded from the motor's current firmware values
@@ -71,6 +72,7 @@ public class ShooterVelocityTest extends LinearOpMode {
         telemetry.addLine("Dpad Up/Down: target RPM +/- 100");
         telemetry.addLine("A: toggle shooter on/off");
         telemetry.addLine("B: indexer to pollen spacing, X: indexer to nectar spacing");
+        telemetry.addLine("Bumpers: hold to fine-tune indexer spacing from there");
         telemetry.addLine("Tune P/I/D/F live at panels.bylazar.com");
         telemetry.update();
 
@@ -96,6 +98,12 @@ public class ShooterVelocityTest extends LinearOpMode {
             if (gamepad1.x) {
                 indexerTarget = NECTAR_POSITION;
             }
+            if (gamepad1.right_bumper) {
+                indexerTarget = Math.min(indexerTarget + INDEXER_STEP_PER_LOOP, 1.0);
+            }
+            if (gamepad1.left_bumper) {
+                indexerTarget = Math.max(indexerTarget - INDEXER_STEP_PER_LOOP, 0.0);
+            }
 
             dpadUpPrev = dpadUp;
             dpadDownPrev = dpadDown;
@@ -119,7 +127,7 @@ public class ShooterVelocityTest extends LinearOpMode {
             telemetryM.addData("Target RPM", running ? targetRPM : 0.0);
             telemetryM.addData("Left Actual RPM", leftRPM);
             telemetryM.addData("Right Actual RPM", rightRPM);
-            telemetryM.addData("Indexer Mode", indexerTarget == NECTAR_POSITION ? "Nectar" : "Pollen");
+            telemetryM.addData("Indexer Position", indexerTarget);
             telemetryM.update(telemetry);
         }
     }
