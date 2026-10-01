@@ -1,10 +1,10 @@
 # Environment Versions
 
-_Last updated: 2026-09-29 16:28 EDT on `CFLT3`_
+_Last updated: 2026-09-12 08:59 EDT on `CFLT1`_
 
 ## Claude Code
 
-- CLI version: 2.1.272 (Claude Code)
+- CLI version: 2.1.269 (Claude Code)
 
 ### Plugins
 ```
@@ -15,7 +15,6 @@ No plugins installed. Use `claude plugin install` to install a plugin.
 ```
 Checking MCP server health…
 
-claude.ai Claude Docs: https://api.anthropic.com/v1/pages/mcp - ✔ Connected
 claude.ai Google Drive: https://drivemcp.googleapis.com/mcp/v1 - ✔ Connected
 claude.ai Gmail: https://gmailmcp.googleapis.com/mcp/v1 - ✔ Connected
 claude.ai Google Calendar: https://calendarmcp.googleapis.com/mcp/v1 - ✔ Connected
@@ -24,7 +23,7 @@ claude.ai Google Calendar: https://calendarmcp.googleapis.com/mcp/v1 - ✔ Conne
 ## FTC / Android build toolchain
 _(synced via git — if behind here, `git pull` is the fix, not this script)_
 
-- Upstream master HEAD: unknown (offline or no 'upstream' remote)
+- Upstream master HEAD: 26cd1fdd2a3c4b26173d9ff33a3279c27d1c7ad1
 - Gradle: 9.1.0
 - Android Gradle Plugin: 8.13.2
 - compileSdk: 30
@@ -44,6 +43,5 @@ org.firstinspires.ftc:Vision:11.2.1
 androidx.appcompat:appcompat:1.2.0
 com.pedropathing:ftc:2.0.2
 com.pedropathing:telemetry:0.0.6
-com.bylazar:fullpanels:1.0.13
-com.acmerobotics.dashboard:dashboard:0.6.0
+com.bylazar:fullpanels:1.0.7
 ```

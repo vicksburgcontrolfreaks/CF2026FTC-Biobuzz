@@ -1,9 +1,8 @@
-    repositories {
+repositories {
     mavenCentral()
     google() // Needed for androidx
     maven { url = 'https://maven.pedropathing.com' }
     maven { url = "https://mymaven.bylazar.com/releases" }
-    maven { url = 'https://maven.brott.dev/' }
 }
 
 dependencies {
@@ -19,10 +18,7 @@ dependencies {
 
     implementation 'com.pedropathing:ftc:2.0.2'
     implementation 'com.pedropathing:telemetry:0.0.6'
-    implementation 'com.bylazar:fullpanels:1.0.13'
+    implementation 'com.bylazar:fullpanels:1.0.7'
     //https://panels.bylazar.com/docs/com.bylazar.fullpanels/
-
-    implementation 'com.acmerobotics.dashboard:dashboard:0.6.0'
-    //https://acmerobotics.github.io/ftc-dashboard/gettingstarted -- piloting on ShooterVelocityTest
 }
 
