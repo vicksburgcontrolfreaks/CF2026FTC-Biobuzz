@@ -10,7 +10,11 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
+import org.firstinspires.ftc.teamcode.field.PathSafety;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /*
  * Red Start Up auto:
@@ -62,6 +66,18 @@ public class RedStartUp extends OpMode {
 
     private Path startToEnd;
     private Path toHiveLeftLow, toHiveLeftHigh, toHiveTopMiddle, toNearFlower;
+
+    private final List<String> pathWarnings = new ArrayList<>();
+
+    // Would the robot hit the hive, a flower, or a wall on any path?
+    // Runs during init, so we find out BEFORE pressing Start.
+    private void checkPaths() {
+        pathWarnings.addAll(PathSafety.check("Path 1 (to 8,8)",     startToEnd));
+        pathWarnings.addAll(PathSafety.check("Path 2 (to 33,59)",   toHiveLeftLow));
+        pathWarnings.addAll(PathSafety.check("Path 3 (to 33,111)",  toHiveLeftHigh));
+        pathWarnings.addAll(PathSafety.check("Path 4 (to 59,111)",  toHiveTopMiddle));
+        pathWarnings.addAll(PathSafety.check("Path 5 (to 59,133)",  toNearFlower));
+    }
 
     private void buildPaths() {
         // Straight line left along the wall, keep facing 180 the whole way
@@ -150,6 +166,21 @@ public class RedStartUp extends OpMode {
         follower.setStartingPose(startPose); // tell the robot where it is at the beginning
         follower.setMaxPower(MAX_POWER);
         buildPaths();
+        checkPaths();
+    }
+
+    // Runs over and over after INIT is pressed, until Start
+    @Override
+    public void init_loop() {
+        if (pathWarnings.isEmpty()) {
+            telemetry.addLine("Path check: OK");
+        } else {
+            telemetry.addLine("!! PATH CHECK: " + pathWarnings.size() + " problem(s) !!");
+            for (String warning : pathWarnings) {
+                telemetry.addLine("  " + warning);
+            }
+        }
+        telemetry.update();
     }
 
     @Override
@@ -162,6 +193,7 @@ public class RedStartUp extends OpMode {
         follower.update();       // must run every loop or the robot won't move/hold
         autonomousPathUpdate();
 
+        telemetry.addData("Path check problems", pathWarnings.size());
         telemetry.addData("Step", pathState);
         telemetry.addData("Collector", collectorOn ? "ON" : "off");
         telemetry.addData("X", follower.getPose().getX());
