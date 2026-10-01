@@ -1,17 +1,16 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.bylazar.configurables.PanelsConfigurables;
-import com.bylazar.configurables.annotations.Configurable;
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
+import com.acmerobotics.dashboard.FtcDashboard;
+import com.acmerobotics.dashboard.config.Config;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 
-@Configurable
+@Config
 @TeleOp(name = "Shooter Velocity Test", group = "Test")
 public class ShooterVelocityTest extends LinearOpMode {
 
@@ -24,7 +23,7 @@ public class ShooterVelocityTest extends LinearOpMode {
     private static final double RPM_STEP = 100;
     private static final double MAX_RPM = 3000;
 
-    // Live-tunable from the Panels dashboard (panels.bylazar.com) while this op mode
+    // Live-tunable from FTC Dashboard (192.168.43.1:8080/dash) while this op mode
     // is running -- no redeploy needed. Seeded from the motor's current firmware values
     // in runOpMode() so the sliders start at the real baseline, not a guess.
     public static double P;
@@ -37,8 +36,6 @@ public class ShooterVelocityTest extends LinearOpMode {
     private boolean running = false;
 
     private boolean dpadUpPrev, dpadDownPrev, aPrev;
-
-    private TelemetryManager telemetryM;
 
     @Override
     public void runOpMode() {
@@ -55,12 +52,13 @@ public class ShooterVelocityTest extends LinearOpMode {
         D = currentPIDF.d;
         F = currentPIDF.f;
 
-        telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
-        PanelsConfigurables.INSTANCE.refreshClass(this);
+        // Mirrors telemetry to both the Driver Station and the FTC Dashboard web UI
+        // (numeric values there are automatically graphable) from a single call site.
+        telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
 
         telemetry.addLine("Dpad Up/Down: target RPM +/- 100");
         telemetry.addLine("A: toggle shooter on/off");
-        telemetry.addLine("Tune P/I/D/F live at panels.bylazar.com");
+        telemetry.addLine("Tune P/I/D/F live at 192.168.43.1:8080/dash");
         telemetry.update();
 
         waitForStart();
@@ -96,11 +94,11 @@ public class ShooterVelocityTest extends LinearOpMode {
             double leftRPM = ticksPerSecToRPM(shooterLeft.getVelocity());
             double rightRPM = ticksPerSecToRPM(shooterRight.getVelocity());
 
-            telemetryM.addData("Running", running);
-            telemetryM.addData("Target RPM", running ? targetRPM : 0.0);
-            telemetryM.addData("Left Actual RPM", leftRPM);
-            telemetryM.addData("Right Actual RPM", rightRPM);
-            telemetryM.update(telemetry);
+            telemetry.addData("Running", running);
+            telemetry.addData("Target RPM", running ? targetRPM : 0.0);
+            telemetry.addData("Left Actual RPM", leftRPM);
+            telemetry.addData("Right Actual RPM", rightRPM);
+            telemetry.update();
         }
     }
 

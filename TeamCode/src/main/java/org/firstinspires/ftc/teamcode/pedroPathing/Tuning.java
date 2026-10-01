@@ -1200,6 +1200,7 @@ class Drawing {
      */
     public static void init() {
         panelsField.setOffsets(PanelsField.INSTANCE.getPresets().getPEDRO_PATHING());
+        panelsField.setBackground(PanelsField.INSTANCE.getImages().getBIOBUZZ().getLIGHT());
     }
 
     /**

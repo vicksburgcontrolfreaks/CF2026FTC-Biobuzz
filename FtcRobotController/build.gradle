@@ -18,7 +18,10 @@ android {
         buildConfig = true
     }
 
-    compileSdkVersion 30
+    // Pedro Pathing / Panels / FTC Dashboard dependencies (pulled in here too, since
+    // build.dependencies.gradle is applied to this module as well) require compiling
+    // against a newer Android API than the stock FTC SDK's compileSdk 30.
+    compileSdkVersion 34
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
