@@ -41,10 +41,10 @@ public class ShooterVelocityTest extends LinearOpMode {
     private DcMotorEx shooterLeft, shooterRight;
     private Servo indexer;
     private double targetRPM = 0.0;
-    private boolean onNectar = false;
+    private double indexerTarget = POLLEN_POSITION;
     private boolean running = false;
 
-    private boolean dpadUpPrev, dpadDownPrev, aPrev, xPrev;
+    private boolean dpadUpPrev, dpadDownPrev, aPrev;
 
     private TelemetryManager telemetryM;
 
@@ -70,7 +70,7 @@ public class ShooterVelocityTest extends LinearOpMode {
 
         telemetry.addLine("Dpad Up/Down: target RPM +/- 100");
         telemetry.addLine("A: toggle shooter on/off");
-        telemetry.addLine("X: toggle indexer between pollen/nectar spacing");
+        telemetry.addLine("B: indexer to pollen spacing, X: indexer to nectar spacing");
         telemetry.addLine("Tune P/I/D/F live at panels.bylazar.com");
         telemetry.update();
 
@@ -80,7 +80,6 @@ public class ShooterVelocityTest extends LinearOpMode {
             boolean dpadUp = gamepad1.dpad_up;
             boolean dpadDown = gamepad1.dpad_down;
             boolean a = gamepad1.a;
-            boolean x = gamepad1.x;
 
             if (dpadUp && !dpadUpPrev) {
                 targetRPM = Math.min(targetRPM + RPM_STEP, MAX_RPM);
@@ -91,16 +90,18 @@ public class ShooterVelocityTest extends LinearOpMode {
             if (a && !aPrev) {
                 running = !running;
             }
-            if (x && !xPrev) {
-                onNectar = !onNectar;
+            if (gamepad1.b) {
+                indexerTarget = POLLEN_POSITION;
+            }
+            if (gamepad1.x) {
+                indexerTarget = NECTAR_POSITION;
             }
 
             dpadUpPrev = dpadUp;
             dpadDownPrev = dpadDown;
             aPrev = a;
-            xPrev = x;
 
-            indexer.setPosition(onNectar ? NECTAR_POSITION : POLLEN_POSITION);
+            indexer.setPosition(indexerTarget);
 
             // Re-applied every loop so edits made on the dashboard while running take
             // effect immediately.
@@ -118,7 +119,7 @@ public class ShooterVelocityTest extends LinearOpMode {
             telemetryM.addData("Target RPM", running ? targetRPM : 0.0);
             telemetryM.addData("Left Actual RPM", leftRPM);
             telemetryM.addData("Right Actual RPM", rightRPM);
-            telemetryM.addData("Indexer Mode", onNectar ? "Nectar" : "Pollen");
+            telemetryM.addData("Indexer Mode", indexerTarget == NECTAR_POSITION ? "Nectar" : "Pollen");
             telemetryM.update(telemetry);
         }
     }
