@@ -25,11 +25,10 @@ public class ShooterVelocityTest extends LinearOpMode {
     private static final double RPM_STEP = 100;
     private static final double MAX_RPM = 3000;
 
-    // Starting spacing for the indexer servo (adjusts the gap between the two wheels
-    // to accommodate pollen- vs. nectar-sized balls). Bumpers sweep this live so we
-    // can find the real pollen/nectar values on the bench before hardcoding them.
-    private static final double POLLEN_POSITION = 0.5;
-    private static final double INDEXER_STEP_PER_LOOP = 0.005;
+    // Indexer servo positions (adjusts the gap between the two wheels to accommodate
+    // pollen- vs. nectar-sized balls), found by bench-sweeping on 2026-10-01.
+    private static final double POLLEN_POSITION = 0.48;
+    private static final double NECTAR_POSITION = 0.135;
 
     // Live-tunable from the Panels dashboard (panels.bylazar.com) while this op mode
     // is running -- no redeploy needed. Seeded from the motor's current firmware values
@@ -42,10 +41,10 @@ public class ShooterVelocityTest extends LinearOpMode {
     private DcMotorEx shooterLeft, shooterRight;
     private Servo indexer;
     private double targetRPM = 0.0;
-    private double indexerPosition = POLLEN_POSITION;
+    private boolean onNectar = false;
     private boolean running = false;
 
-    private boolean dpadUpPrev, dpadDownPrev, aPrev;
+    private boolean dpadUpPrev, dpadDownPrev, aPrev, xPrev;
 
     private TelemetryManager telemetryM;
 
@@ -54,7 +53,7 @@ public class ShooterVelocityTest extends LinearOpMode {
         shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
         shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
         indexer = hardwareMap.get(Servo.class, "indexer");
-        indexer.setPosition(indexerPosition);
+        indexer.setPosition(POLLEN_POSITION);
 
         // Wheels face each other, so both run off the same commanded velocity
         // with one side physically reversed.
@@ -71,7 +70,7 @@ public class ShooterVelocityTest extends LinearOpMode {
 
         telemetry.addLine("Dpad Up/Down: target RPM +/- 100");
         telemetry.addLine("A: toggle shooter on/off");
-        telemetry.addLine("Bumpers: hold to sweep indexer spacing (find pollen/nectar positions)");
+        telemetry.addLine("X: toggle indexer between pollen/nectar spacing");
         telemetry.addLine("Tune P/I/D/F live at panels.bylazar.com");
         telemetry.update();
 
@@ -81,6 +80,7 @@ public class ShooterVelocityTest extends LinearOpMode {
             boolean dpadUp = gamepad1.dpad_up;
             boolean dpadDown = gamepad1.dpad_down;
             boolean a = gamepad1.a;
+            boolean x = gamepad1.x;
 
             if (dpadUp && !dpadUpPrev) {
                 targetRPM = Math.min(targetRPM + RPM_STEP, MAX_RPM);
@@ -91,18 +91,16 @@ public class ShooterVelocityTest extends LinearOpMode {
             if (a && !aPrev) {
                 running = !running;
             }
+            if (x && !xPrev) {
+                onNectar = !onNectar;
+            }
 
             dpadUpPrev = dpadUp;
             dpadDownPrev = dpadDown;
             aPrev = a;
+            xPrev = x;
 
-            if (gamepad1.right_bumper) {
-                indexerPosition = Math.min(indexerPosition + INDEXER_STEP_PER_LOOP, 1.0);
-            }
-            if (gamepad1.left_bumper) {
-                indexerPosition = Math.max(indexerPosition - INDEXER_STEP_PER_LOOP, 0.0);
-            }
-            indexer.setPosition(indexerPosition);
+            indexer.setPosition(onNectar ? NECTAR_POSITION : POLLEN_POSITION);
 
             // Re-applied every loop so edits made on the dashboard while running take
             // effect immediately.
@@ -120,7 +118,7 @@ public class ShooterVelocityTest extends LinearOpMode {
             telemetryM.addData("Target RPM", running ? targetRPM : 0.0);
             telemetryM.addData("Left Actual RPM", leftRPM);
             telemetryM.addData("Right Actual RPM", rightRPM);
-            telemetryM.addData("Indexer Position", indexerPosition);
+            telemetryM.addData("Indexer Mode", onNectar ? "Nectar" : "Pollen");
             telemetryM.update(telemetry);
         }
     }
