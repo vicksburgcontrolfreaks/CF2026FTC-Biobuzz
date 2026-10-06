@@ -22,7 +22,7 @@ public class AprilTagAuto extends OpMode {
 
     @Override
     public void init() {
-        webcam = hardwareMap.get(WebcamName.class, "webcam");
+        webcam = hardwareMap.get(WebcamName.class, "Webcam 1");
         pipeline = new AprilTagPipeline(webcam);
         pipeline.startStreaming();
 

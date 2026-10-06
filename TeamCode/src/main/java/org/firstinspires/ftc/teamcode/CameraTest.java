@@ -12,7 +12,7 @@ public class CameraTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        WebcamName webcamName = hardwareMap.get(WebcamName.class, "webcam");
+        WebcamName webcamName = hardwareMap.get(WebcamName.class, "Webcam 1");
         camera = OpenCvCameraFactory.getInstance().createWebcam(webcamName);
 
         camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener() {
