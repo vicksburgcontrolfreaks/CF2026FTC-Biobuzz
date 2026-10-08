@@ -126,6 +126,7 @@ public class AprilTagFollow extends LinearOpMode {
     public void runOpMode() {
         initDriveMotors();
         initCamera();
+        onInit();
 
         telemetry.addLine("Follows tag " + TARGET_TAG_ID + " at " + TARGET_DISTANCE + " in.");
         telemetry.addLine("Camera faces " + (CAMERA_FACES_BACKWARD ? "BACKWARD" : "forward"));
@@ -133,6 +134,7 @@ public class AprilTagFollow extends LinearOpMode {
         telemetry.addLine("Camera view: 3 dots menu > Camera Stream");
         telemetry.update();
         waitForStart();
+        onStart();
 
         ElapsedTime sinceLastSeen = new ElapsedTime();
         boolean everSeen = false;
@@ -148,7 +150,7 @@ public class AprilTagFollow extends LinearOpMode {
             // Speed limit: one step per press
             if (gamepad1.dpadUpWasPressed())   maxSpeed += SPEED_STEP;
             if (gamepad1.dpadDownWasPressed()) maxSpeed -= SPEED_STEP;
-            maxSpeed = Range.clip(maxSpeed, MIN_SPEED, MAX_SPEED);
+            maxSpeed = Range.clip(maxSpeed, MIN_SPEED, speedCap());
 
             boolean following = gamepad1.left_bumper;
             AprilTagDetection tag = findTargetTag();
@@ -233,6 +235,12 @@ public class AprilTagFollow extends LinearOpMode {
                 strafe = -strafe;
             }
 
+            // Last chance to change the move (the field version blocks moves
+            // into obstacles here). Runs every loop, even when not following.
+            double[] allowed = limitMove(drive, strafe);
+            drive = allowed[0];
+            strafe = allowed[1];
+
             // The bumper always wins: not held = not moving, whatever happened above
             if (!following) {
                 drive = 0; strafe = 0; turn = 0;
@@ -246,6 +254,27 @@ public class AprilTagFollow extends LinearOpMode {
 
         moveRobot(0, 0, 0);
         visionPortal.close();
+    }
+
+    // ---------------- HOOKS ----------------
+    // Spots where another OpMode built on this one (like AprilTagFieldFollow)
+    // can add its own behavior. Here they do nothing.
+
+    // After the motors and camera are set up, before INIT finishes
+    protected void onInit() {}
+
+    // Right after Start is pressed
+    protected void onStart() {}
+
+    // The highest the dpad can set the top speed to
+    protected double speedCap() {
+        return MAX_SPEED;
+    }
+
+    // Gets the move the robot wants (robot directions: drive + = forward,
+    // strafe + = left) and returns the move it's ALLOWED to make: {drive, strafe}
+    protected double[] limitMove(double drive, double strafe) {
+        return new double[]{drive, strafe};
     }
 
     // How hard to push for one error: nothing if we're close enough, otherwise

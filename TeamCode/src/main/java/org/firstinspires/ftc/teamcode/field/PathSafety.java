@@ -33,14 +33,8 @@ public final class PathSafety {
 
     private PathSafety() {} // nobody should make a PathSafety object
 
-    // Things the robot should never touch
-    private static final Zone[] OBSTACLES = {
-            FieldConstants.HIVE,
-            FieldConstants.FLOWER_FAR_WALL,
-            FieldConstants.FLOWER_BLUE_WALL,
-            FieldConstants.FLOWER_AUDIENCE_WALL,
-            FieldConstants.FLOWER_RED_WALL,
-    };
+    // Things the robot should never touch (one shared list, see FieldConstants)
+    private static final Zone[] OBSTACLES = FieldConstants.OBSTACLES;
 
     // Robots start pushed up against the wall, and the field numbers are only
     // good to about 1 in., so let the robot's box poke this far past a wall

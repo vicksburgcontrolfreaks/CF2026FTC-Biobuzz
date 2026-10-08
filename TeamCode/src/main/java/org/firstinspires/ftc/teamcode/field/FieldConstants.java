@@ -62,6 +62,12 @@ public final class FieldConstants {
             FLOWER_FAR_WALL, FLOWER_BLUE_WALL, FLOWER_AUDIENCE_WALL, FLOWER_RED_WALL
     };
 
+    // Everything a robot must never drive into. PathSafety (path checks) and
+    // FieldGuard (live driving) both use this list, so they always agree.
+    public static final Zone[] OBSTACLES = {
+            HIVE, FLOWER_FAR_WALL, FLOWER_BLUE_WALL, FLOWER_AUDIENCE_WALL, FLOWER_RED_WALL
+    };
+
     // Manual 9.7
     public static final double FLOWER_TOP_OPENING_HEIGHT = 21.5;    // top of flower, where POLLEN/NECTAR go in
     public static final double FLOWER_TOP_OPENING_DIAMETER = 4.0;
