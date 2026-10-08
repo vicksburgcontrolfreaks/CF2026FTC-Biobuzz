@@ -31,8 +31,8 @@ import java.util.concurrent.TimeUnit;
  * SAFETY: it only moves while the left bumper is held. Let go -> stops, always.
  *
  * IF IT LOSES THE TAG (bumper still held):
- *   1. for LOST_COAST_SECONDS it keeps doing what it was doing -- usually the
- *      tag shows up again (it was just blurry, or slipped out of view)
+ *   1. for LOST_COAST_SECONDS it keeps doing what it was doing, fading out --
+ *      usually the tag shows up again (it was just blurry, or slipped out of view)
  *   2. then, if the tag was last seen off to one side, it turns that way for
  *      up to SEARCH_SECONDS to find it again
  *   3. then it gives up and stops
@@ -74,13 +74,23 @@ public class AprilTagFollow extends LinearOpMode {
     private static final double MIN_STRAFE_POWER = 0.15;
     private static final double MIN_TURN_POWER   = 0.08;
 
-    // "Close enough": inside these, don't push at all (stops jittering at the target)
-    private static final double DISTANCE_TOLERANCE = 1.0; // inches
-    private static final double YAW_TOLERANCE      = 3.0; // degrees
-    private static final double BEARING_TOLERANCE  = 2.0; // degrees
+    // "Close enough": inside these, don't push at all. The camera's readings
+    // jump around a few degrees even when nothing moves, so these must be
+    // bigger than that jumping or the robot chases noise. Yaw is the jumpiest.
+    private static final double DISTANCE_TOLERANCE = 2.0; // inches
+    private static final double YAW_TOLERANCE      = 8.0; // degrees
+    private static final double BEARING_TOLERANCE  = 5.0; // degrees
+
+    // ---------------- SMOOTHING ----------------
+    // Average the readings so one bad camera frame can't cause a kick.
+    // How much each NEW frame counts: 1.0 = no smoothing (jumpy but quick),
+    // 0.1 = very smooth (calm but slow to notice the tag moved).
+    private static final double SMOOTHING = 0.3;
 
     // ---------------- WHEN THE TAG IS LOST ----------------
-    private static final double LOST_COAST_SECONDS = 0.5; // keep going this long
+    // Keep going this long, fading to a stop. Keep it SHORT: the robot is
+    // driving blind, and too long makes it overshoot and wobble.
+    private static final double LOST_COAST_SECONDS = 0.2;
     private static final double SEARCH_SECONDS     = 3.0; // then turn to look this long
     // Only search if the tag was last seen at least this far to one side.
     // (If it was straight ahead it probably went too far away -- turning won't help.)
@@ -122,6 +132,11 @@ public class AprilTagFollow extends LinearOpMode {
         double lastBearing = 0;                          // where the tag was when last seen
         double lastDrive = 0, lastStrafe = 0, lastTurn = 0; // what we were doing then
 
+        // Smoothed (averaged) readings
+        boolean smoothReady = false;
+        double smoothDistance = 0, smoothBearing = 0, smoothYaw = 0;
+        long lastFrameTime = 0; // to count each camera picture only once
+
         while (opModeIsActive()) {
             // Speed limit: one step per press
             if (gamepad1.dpadUpWasPressed())   maxSpeed += SPEED_STEP;
@@ -138,9 +153,10 @@ public class AprilTagFollow extends LinearOpMode {
                 if (!following || !everSeen) {
                     telemetry.addLine("Tag " + TARGET_TAG_ID + ": NOT SEEN -> stopped");
                 } else if (lostFor < LOST_COAST_SECONDS) {
-                    // Probably just a blurry frame or two: keep going
-                    drive = lastDrive; strafe = lastStrafe; turn = lastTurn;
-                    telemetry.addLine(String.format("Tag LOST %.1fs -> keep going", lostFor));
+                    // Probably just a blurry frame or two: keep going, fading out
+                    double fade = 1.0 - lostFor / LOST_COAST_SECONDS;
+                    drive = lastDrive * fade; strafe = lastStrafe * fade; turn = lastTurn * fade;
+                    telemetry.addLine(String.format("Tag LOST %.1fs -> coasting", lostFor));
                 } else if (lostFor < LOST_COAST_SECONDS + SEARCH_SECONDS
                         && Math.abs(lastBearing) >= SEARCH_MIN_BEARING) {
                     // It went out the side of the camera's view: turn that way
@@ -154,10 +170,27 @@ public class AprilTagFollow extends LinearOpMode {
                 sinceLastSeen.reset();
                 everSeen = true;
                 TagPosition pos = whereIsTheTag(tag);
+                double rawYaw = tag.ftcPose.yaw;
 
-                double distanceError = pos.forward - TARGET_DISTANCE; // + = too far away
-                double bearingError  = pos.bearing;                   // + = tag is to our left
-                double yawError      = tag.ftcPose.yaw;               // + = we're off to one side of its face
+                // Smooth the readings. Start fresh if the tag was really gone
+                // (old readings are wrong by now). Only count NEW camera
+                // pictures -- this loop runs faster than the camera.
+                boolean newFrame = tag.frameAcquisitionNanoTime != lastFrameTime;
+                lastFrameTime = tag.frameAcquisitionNanoTime;
+                if (!smoothReady || lostFor > LOST_COAST_SECONDS) {
+                    smoothDistance = pos.forward;
+                    smoothBearing  = pos.bearing;
+                    smoothYaw      = rawYaw;
+                    smoothReady = true;
+                } else if (newFrame) {
+                    smoothDistance += SMOOTHING * (pos.forward - smoothDistance);
+                    smoothBearing  += SMOOTHING * (pos.bearing - smoothBearing);
+                    smoothYaw      += SMOOTHING * (rawYaw      - smoothYaw);
+                }
+
+                double distanceError = smoothDistance - TARGET_DISTANCE; // + = too far away
+                double bearingError  = smoothBearing;                    // + = tag is to our left
+                double yawError      = smoothYaw;                        // + = we're off to one side of its face
                 lastBearing = bearingError;
 
                 if (following) {
@@ -169,12 +202,16 @@ public class AprilTagFollow extends LinearOpMode {
 
                 telemetry.addLine("Tag " + TARGET_TAG_ID + ": SEEN"
                         + (following ? " -> FOLLOWING" : " (hold left bumper)"));
-                telemetry.addData("Distance (in)", "%5.1f  (want %.0f, error %+5.1f)",
-                        pos.forward, TARGET_DISTANCE, distanceError);
+                // "smooth" is what the robot acts on; "raw" is this one frame.
+                // Watch raw jump around with the tag still -- that's the noise.
+                telemetry.addData("Distance (in)", "%5.1f  raw %5.1f  (want %.0f)",
+                        smoothDistance, pos.forward, TARGET_DISTANCE);
+                telemetry.addData("Bearing (deg)", "%+5.1f  raw %+5.1f  (want 0 +/-%.0f, + = left)",
+                        bearingError, pos.bearing, BEARING_TOLERANCE);
+                telemetry.addData("Yaw (deg)", "%+5.1f  raw %+5.1f  (want 0 +/-%.0f)",
+                        yawError, rawYaw, YAW_TOLERANCE);
                 telemetry.addData("Sideways (in)", "%+5.1f  (+ = tag is to the right)", pos.right);
                 telemetry.addData("Tag height (in)", "%5.1f  (above the floor)", pos.height);
-                telemetry.addData("Bearing (deg)", "%+5.1f  (want 0, + = tag to the left)", bearingError);
-                telemetry.addData("Yaw (deg)", "%+5.1f  (want 0, 0 = square to its face)", yawError);
                 telemetry.addData("Straight-line range (in)", "%5.1f", tag.ftcPose.range);
 
                 // Remember what we're doing, in case the next frames lose the tag
