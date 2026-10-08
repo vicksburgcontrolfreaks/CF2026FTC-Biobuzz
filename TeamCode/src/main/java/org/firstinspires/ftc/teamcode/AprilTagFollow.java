@@ -4,6 +4,7 @@ import com.pedropathing.ftc.drivetrains.MecanumConstants;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
@@ -27,15 +28,22 @@ import java.util.concurrent.TimeUnit;
  *   HOLD left bumper  -> follow the tag. Let go -> robot stops instantly.
  *   dpad up / down    -> raise / lower the top speed (shown on the Driver Station)
  *
- * SAFETY: it only moves while the left bumper is held AND it can see the tag.
- * Lose the tag -> it stops. It never goes looking for it.
+ * SAFETY: it only moves while the left bumper is held. Let go -> stops, always.
+ *
+ * IF IT LOSES THE TAG (bumper still held):
+ *   1. for LOST_COAST_SECONDS it keeps doing what it was doing -- usually the
+ *      tag shows up again (it was just blurry, or slipped out of view)
+ *   2. then, if the tag was last seen off to one side, it turns that way for
+ *      up to SEARCH_SECONDS to find it again
+ *   3. then it gives up and stops
  *
  * Based on the FTC SDK sample RobotAutoDriveToAprilTagOmni. Each loop it
  * measures three "errors" and fixes each one with a different wheel motion:
  *   - too far / too close           -> drive forward / back
  *   - tag off to one side of camera -> turn to point at it
  *   - not square to the tag's face  -> strafe sideways around it
- * Each fix is error x GAIN, so a big error = a big push, small error = gentle.
+ * Each push = MIN_POWER + error x GAIN. MIN_POWER is there because wheels
+ * don't move at all below some power (friction), so a tiny push does nothing.
  */
 @TeleOp(name = "AprilTag Follow", group = "Test")
 public class AprilTagFollow extends LinearOpMode {
@@ -52,12 +60,38 @@ public class AprilTagFollow extends LinearOpMode {
     // Change this when it does -- the distance math below already uses it.
     private static final double CAMERA_PITCH_DEG = 0.0;
 
-    // ---------------- HOW HARD TO PUSH (gains) ----------------
-    // Same starting numbers as the SDK sample. If the robot wobbles back and
-    // forth around the target, lower the gain. If it creeps slowly, raise it.
-    private static final double DRIVE_GAIN  = 0.02;  // power per inch of distance error
-    private static final double STRAFE_GAIN = 0.015; // power per degree of "not square"
-    private static final double TURN_GAIN   = 0.01;  // power per degree of "not pointed at it"
+    // ---------------- HOW HARD TO PUSH ----------------
+    // GAIN = extra power per inch (or degree) of error. If the robot wobbles
+    // back and forth around the target, lower it. If it's sluggish, raise it.
+    private static final double DRIVE_GAIN  = 0.025; // per inch of distance error
+    private static final double STRAFE_GAIN = 0.02;  // per degree of "not square"
+    private static final double TURN_GAIN   = 0.012; // per degree of "not pointed at it"
+
+    // MIN_POWER = the smallest push that actually moves the robot. To tune: if
+    // the screen shows a push but the robot doesn't move, raise it. If the robot
+    // jumps past the target and back, lower it. Strafing needs the most.
+    private static final double MIN_DRIVE_POWER  = 0.08;
+    private static final double MIN_STRAFE_POWER = 0.15;
+    private static final double MIN_TURN_POWER   = 0.08;
+
+    // "Close enough": inside these, don't push at all (stops jittering at the target)
+    private static final double DISTANCE_TOLERANCE = 1.0; // inches
+    private static final double YAW_TOLERANCE      = 3.0; // degrees
+    private static final double BEARING_TOLERANCE  = 2.0; // degrees
+
+    // ---------------- WHEN THE TAG IS LOST ----------------
+    private static final double LOST_COAST_SECONDS = 0.5; // keep going this long
+    private static final double SEARCH_SECONDS     = 3.0; // then turn to look this long
+    // Only search if the tag was last seen at least this far to one side.
+    // (If it was straight ahead it probably went too far away -- turning won't help.)
+    private static final double SEARCH_MIN_BEARING = 10.0; // degrees
+
+    // ---------------- CAMERA PICTURE ----------------
+    // Short exposure = less blur when moving, but a darker picture. If the
+    // Camera Stream looks dark and it loses the tag even when still, raise
+    // EXPOSURE_MS (try 10-15). If it loses the tag only when moving, lower it.
+    private static final int EXPOSURE_MS = 6;
+    private static final int CAMERA_GAIN = 250;
 
     // ---------------- SPEED LIMIT (dpad up/down) ----------------
     private static final double START_SPEED = 0.25; // start slow
@@ -83,34 +117,58 @@ public class AprilTagFollow extends LinearOpMode {
         telemetry.update();
         waitForStart();
 
+        ElapsedTime sinceLastSeen = new ElapsedTime();
+        boolean everSeen = false;
+        double lastBearing = 0;                          // where the tag was when last seen
+        double lastDrive = 0, lastStrafe = 0, lastTurn = 0; // what we were doing then
+
         while (opModeIsActive()) {
             // Speed limit: one step per press
             if (gamepad1.dpadUpWasPressed())   maxSpeed += SPEED_STEP;
             if (gamepad1.dpadDownWasPressed()) maxSpeed -= SPEED_STEP;
             maxSpeed = Range.clip(maxSpeed, MIN_SPEED, MAX_SPEED);
 
+            boolean following = gamepad1.left_bumper;
             AprilTagDetection tag = findTargetTag();
 
             double drive = 0, strafe = 0, turn = 0;
+            double lostFor = sinceLastSeen.seconds();
 
             if (tag == null) {
-                telemetry.addLine("Tag " + TARGET_TAG_ID + ": NOT SEEN -> stopped");
+                if (!following || !everSeen) {
+                    telemetry.addLine("Tag " + TARGET_TAG_ID + ": NOT SEEN -> stopped");
+                } else if (lostFor < LOST_COAST_SECONDS) {
+                    // Probably just a blurry frame or two: keep going
+                    drive = lastDrive; strafe = lastStrafe; turn = lastTurn;
+                    telemetry.addLine(String.format("Tag LOST %.1fs -> keep going", lostFor));
+                } else if (lostFor < LOST_COAST_SECONDS + SEARCH_SECONDS
+                        && Math.abs(lastBearing) >= SEARCH_MIN_BEARING) {
+                    // It went out the side of the camera's view: turn that way
+                    turn = Math.signum(lastBearing) * maxSpeed * TURN_SHARE;
+                    telemetry.addLine(String.format("Tag LOST %.1fs -> searching %s",
+                            lostFor, lastBearing > 0 ? "LEFT" : "RIGHT"));
+                } else {
+                    telemetry.addLine("Tag LOST -> gave up, stopped");
+                }
             } else {
+                sinceLastSeen.reset();
+                everSeen = true;
                 TagPosition pos = whereIsTheTag(tag);
 
                 double distanceError = pos.forward - TARGET_DISTANCE; // + = too far away
                 double bearingError  = pos.bearing;                   // + = tag is to our left
                 double yawError      = tag.ftcPose.yaw;               // + = we're off to one side of its face
+                lastBearing = bearingError;
 
-                if (gamepad1.left_bumper) {
+                if (following) {
                     double turnLimit = maxSpeed * TURN_SHARE;
-                    drive  = Range.clip(distanceError * DRIVE_GAIN,  -maxSpeed,  maxSpeed);
-                    strafe = Range.clip(-yawError     * STRAFE_GAIN, -maxSpeed,  maxSpeed);
-                    turn   = Range.clip(bearingError  * TURN_GAIN,   -turnLimit, turnLimit);
+                    drive  = push(distanceError, DRIVE_GAIN,  MIN_DRIVE_POWER,  DISTANCE_TOLERANCE, maxSpeed);
+                    strafe = push(-yawError,     STRAFE_GAIN, MIN_STRAFE_POWER, YAW_TOLERANCE,      maxSpeed);
+                    turn   = push(bearingError,  TURN_GAIN,   MIN_TURN_POWER,   BEARING_TOLERANCE,  turnLimit);
                 }
 
                 telemetry.addLine("Tag " + TARGET_TAG_ID + ": SEEN"
-                        + (gamepad1.left_bumper ? " -> FOLLOWING" : " (hold left bumper)"));
+                        + (following ? " -> FOLLOWING" : " (hold left bumper)"));
                 telemetry.addData("Distance (in)", "%5.1f  (want %.0f, error %+5.1f)",
                         pos.forward, TARGET_DISTANCE, distanceError);
                 telemetry.addData("Sideways (in)", "%+5.1f  (+ = tag is to the right)", pos.right);
@@ -118,8 +176,15 @@ public class AprilTagFollow extends LinearOpMode {
                 telemetry.addData("Bearing (deg)", "%+5.1f  (want 0, + = tag to the left)", bearingError);
                 telemetry.addData("Yaw (deg)", "%+5.1f  (want 0, 0 = square to its face)", yawError);
                 telemetry.addData("Straight-line range (in)", "%5.1f", tag.ftcPose.range);
+
+                // Remember what we're doing, in case the next frames lose the tag
+                lastDrive = drive; lastStrafe = strafe; lastTurn = turn;
             }
 
+            // The bumper always wins: not held = not moving, whatever happened above
+            if (!following) {
+                drive = 0; strafe = 0; turn = 0;
+            }
             moveRobot(drive, strafe, turn);
 
             telemetry.addData("Top speed", "%.2f  (dpad up/down)", maxSpeed);
@@ -129,6 +194,16 @@ public class AprilTagFollow extends LinearOpMode {
 
         moveRobot(0, 0, 0);
         visionPortal.close();
+    }
+
+    // How hard to push for one error: nothing if we're close enough, otherwise
+    // at least minPower (so the wheels actually move) plus more for bigger
+    // errors, never more than limit. The sign of the error picks the direction.
+    private static double push(double error, double gain, double minPower,
+                               double tolerance, double limit) {
+        if (Math.abs(error) <= tolerance) return 0;
+        double power = Math.signum(error) * (minPower + Math.abs(error) * gain);
+        return Range.clip(power, -limit, limit);
     }
 
     // Tag 30 if the camera sees it, otherwise null. Other tags are ignored.
@@ -228,7 +303,7 @@ public class AprilTagFollow extends LinearOpMode {
                 .build();
 
         // Short exposure = less blur while the robot moves (from the SDK sample)
-        setManualExposure(6, 250);
+        setManualExposure(EXPOSURE_MS, CAMERA_GAIN);
     }
 
     private void setManualExposure(int exposureMS, int gain) {
