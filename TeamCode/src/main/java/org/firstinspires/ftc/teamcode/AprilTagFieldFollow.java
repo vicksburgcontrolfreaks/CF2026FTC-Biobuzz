@@ -28,6 +28,9 @@ public class AprilTagFieldFollow extends AprilTagFollow {
     // Slower than the plain version, so it can stop before an obstacle
     private static final double FIELD_SPEED_CAP = 0.35;
 
+    // Closer than the plain version (36 in.)
+    private static final double FIELD_TARGET_DISTANCE = 24.0; // inches, camera to tag
+
     // Pedro's odometry (the Pinpoint), used ONLY to know where we are.
     // Same settings as the autos. It never drives the motors.
     private PinpointLocalizer odometry;
@@ -42,6 +45,11 @@ public class AprilTagFieldFollow extends AprilTagFollow {
     protected void onStart() {
         // In case the robot got nudged between INIT and Start
         odometry.setPose(START_POSE);
+    }
+
+    @Override
+    protected double targetDistance() {
+        return FIELD_TARGET_DISTANCE;
     }
 
     @Override

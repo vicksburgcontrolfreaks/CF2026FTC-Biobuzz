@@ -128,7 +128,7 @@ public class AprilTagFollow extends LinearOpMode {
         initCamera();
         onInit();
 
-        telemetry.addLine("Follows tag " + TARGET_TAG_ID + " at " + TARGET_DISTANCE + " in.");
+        telemetry.addLine("Follows tag " + TARGET_TAG_ID + " at " + targetDistance() + " in.");
         telemetry.addLine("Camera faces " + (CAMERA_FACES_BACKWARD ? "BACKWARD" : "forward"));
         telemetry.addLine("HOLD left bumper to follow. dpad up/down = speed.");
         telemetry.addLine("Camera view: 3 dots menu > Camera Stream");
@@ -197,7 +197,7 @@ public class AprilTagFollow extends LinearOpMode {
                     smoothYaw      += SMOOTHING * (rawYaw      - smoothYaw);
                 }
 
-                double distanceError = smoothDistance - TARGET_DISTANCE; // + = too far away
+                double distanceError = smoothDistance - targetDistance(); // + = too far away
                 double bearingError  = smoothBearing;                    // + = tag is to our left
                 double yawError      = smoothYaw;                        // + = we're off to one side of its face
                 lastBearing = bearingError;
@@ -214,7 +214,7 @@ public class AprilTagFollow extends LinearOpMode {
                 // "smooth" is what the robot acts on; "raw" is this one frame.
                 // Watch raw jump around with the tag still -- that's the noise.
                 telemetry.addData("Distance (in)", "%5.1f  raw %5.1f  (want %.0f)",
-                        smoothDistance, pos.forward, TARGET_DISTANCE);
+                        smoothDistance, pos.forward, targetDistance());
                 telemetry.addData("Bearing (deg)", "%+5.1f  raw %+5.1f  (want 0 +/-%.0f, + = left)",
                         bearingError, pos.bearing, BEARING_TOLERANCE);
                 telemetry.addData("Yaw (deg)", "%+5.1f  raw %+5.1f  (want 0 +/-%.0f)",
@@ -265,6 +265,11 @@ public class AprilTagFollow extends LinearOpMode {
 
     // Right after Start is pressed
     protected void onStart() {}
+
+    // How far from the tag to stop, in inches
+    protected double targetDistance() {
+        return TARGET_DISTANCE;
+    }
 
     // The highest the dpad can set the top speed to
     protected double speedCap() {
