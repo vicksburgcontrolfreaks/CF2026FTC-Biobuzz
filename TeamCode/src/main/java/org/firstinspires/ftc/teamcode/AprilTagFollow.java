@@ -53,7 +53,13 @@ public class AprilTagFollow extends LinearOpMode {
     private static final double TARGET_DISTANCE = 36.0; // inches, camera to tag, along the floor
 
     // ---------------- WHERE THE CAMERA IS ----------------
-    // Measured on the robot. Centered left/right, facing straight forward.
+    // true = camera is on the BACK of the robot, looking backward.
+    // Then "get closer to the tag" means driving BACKWARD, and the camera's
+    // left is the robot's right, so drive and strafe flip. Turning does NOT
+    // flip: spinning the robot left spins the camera left too, either way.
+    private static final boolean CAMERA_FACES_BACKWARD = true;
+
+    // Measured on the robot. Centered left/right.
     private static final double CAMERA_HEIGHT    = 18.0; // inches above the floor
     // How far the camera is tipped UP (0 = level). On the field the tags are on
     // the BOTTOM of the hive cells, so a hive camera will probably tip up.
@@ -122,6 +128,7 @@ public class AprilTagFollow extends LinearOpMode {
         initCamera();
 
         telemetry.addLine("Follows tag " + TARGET_TAG_ID + " at " + TARGET_DISTANCE + " in.");
+        telemetry.addLine("Camera faces " + (CAMERA_FACES_BACKWARD ? "BACKWARD" : "forward"));
         telemetry.addLine("HOLD left bumper to follow. dpad up/down = speed.");
         telemetry.addLine("Camera view: 3 dots menu > Camera Stream");
         telemetry.update();
@@ -210,12 +217,20 @@ public class AprilTagFollow extends LinearOpMode {
                         bearingError, pos.bearing, BEARING_TOLERANCE);
                 telemetry.addData("Yaw (deg)", "%+5.1f  raw %+5.1f  (want 0 +/-%.0f)",
                         yawError, rawYaw, YAW_TOLERANCE);
-                telemetry.addData("Sideways (in)", "%+5.1f  (+ = tag is to the right)", pos.right);
+                telemetry.addData("Sideways (in)", "%+5.1f  (+ = to the CAMERA's right)", pos.right);
                 telemetry.addData("Tag height (in)", "%5.1f  (above the floor)", pos.height);
                 telemetry.addData("Straight-line range (in)", "%5.1f", tag.ftcPose.range);
 
                 // Remember what we're doing, in case the next frames lose the tag
                 lastDrive = drive; lastStrafe = strafe; lastTurn = turn;
+            }
+
+            // Everything above is worked out from the CAMERA's point of view.
+            // If the camera looks out the back, flip drive and strafe so the
+            // robot moves the right way. (Turn stays the same -- see the top.)
+            if (CAMERA_FACES_BACKWARD) {
+                drive = -drive;
+                strafe = -strafe;
             }
 
             // The bumper always wins: not held = not moving, whatever happened above
@@ -225,7 +240,7 @@ public class AprilTagFollow extends LinearOpMode {
             moveRobot(drive, strafe, turn);
 
             telemetry.addData("Top speed", "%.2f  (dpad up/down)", maxSpeed);
-            telemetry.addData("Wheels", "drive %+.2f  strafe %+.2f  turn %+.2f", drive, strafe, turn);
+            telemetry.addData("Wheels (robot)", "drive %+.2f  strafe %+.2f  turn %+.2f", drive, strafe, turn);
             telemetry.update();
         }
 
