@@ -110,7 +110,7 @@ public class AprilTagFollow extends LinearOpMode {
     private static final int CAMERA_GAIN = 250;
 
     // ---------------- SPEED LIMIT (dpad up/down) ----------------
-    private static final double START_SPEED = 0.25; // start slow
+    private static final double START_SPEED = 0.3; // start slow
     private static final double SPEED_STEP  = 0.05;
     private static final double MIN_SPEED   = 0.05;
     private static final double MAX_SPEED   = 0.60; // dpad can't go past this
