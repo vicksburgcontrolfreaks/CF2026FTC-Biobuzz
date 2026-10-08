@@ -22,7 +22,7 @@ public class ShooterVelocityTest extends LinearOpMode {
     private static final double MOTOR_GEAR_RATIO = 3.0;
     private static final double TICKS_PER_WHEEL_REV = TICKS_PER_REV * MOTOR_GEAR_RATIO;
 
-    private static final double RPM_STEP = 100;
+    private static final double RPM_STEP = 25;
     private static final double MAX_RPM = 3000;
 
     // Indexer servo positions (adjusts the gap between the two wheels to accommodate
