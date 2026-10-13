@@ -55,13 +55,24 @@ public class Turret {
     public static double DRIVE_GEAR_TEETH = 30.0;
     public static double TURRET_GEAR_TEETH = 69.0;
 
-    // MEASURE THIS ON THE ROBOT -- do not trust the starting value.
-    // A REV Through Bore Encoder is 8192 ticks per revolution of its own shaft.
-    //   Encoder mounted on the TURRET axis:  8192 / 360       = 22.76 ticks/deg
-    //   Encoder mounted on the SERVO shaft:  8192 * 2.3 / 360 = 52.33 ticks/deg
-    // TurretTest has a "zero reference" button so you can turn the turret a
-    // measured 90 degrees and read the real number straight off telemetry.
-    public static double TICKS_PER_DEGREE = 22.76;
+    // MEASURED 2026-10-13 with TurretRangeTest, by pushing to both hard stops:
+    //   stop A -9617 ticks, magnet -124, stop B +12832  ->  span 22449 ticks
+    //   22449 ticks / 210 deg = 106.90 ticks/deg
+    //
+    // UNRESOLVED, and only affects the degree LABELS, not the limits: the REV
+    // Through Bore V2 (REV-11-3174) is 8192 counts/rev, and a 69T/30T pair is
+    // 2.3:1, which predicts 52.34 ticks/deg and a 10991-tick span. The measured
+    // span is 2.04x that, implying a real turret:encoder ratio of 4.70:1. The
+    // likeliest explanation is that the encoder gear is not 30T (15T would give
+    // 4.6:1 and a travel of 214.5 deg, which fits "about 210"), or that there is
+    // an un-counted gear in between. Settle it by taping the encoder gear and
+    // counting turns across a full sweep: ~1.3 turns means 2.3:1, ~2.7 means 4.6:1.
+    //
+    // Why this is safe to leave as-is: MIN_ANGLE/MAX_ANGLE are +/- half of travel
+    // and this number came from the same span, so the soft limits land on the real
+    // stops either way. Only absolute degrees are off, by about 2%, which starts
+    // to matter when AprilTag bearings get fed in for auto-aim.
+    public static double TICKS_PER_DEGREE = 106.90;
 
     // Set to -1 if positive servo power makes the reported angle go DOWN.
     // You will find this out in the first 10 seconds of testing. This is the ONLY
@@ -73,17 +84,38 @@ public class Turret {
     private static final String ENCODER_MOTOR_NAME = "rf";
 
     // ---- Travel limits ------------------------------------------------------
-    // 210 degrees of total travel, centered so 0 = straight ahead.
-    public static double MIN_ANGLE = -105.0;
-    public static double MAX_ANGLE = 105.0;
+    // The hard stops measured at exactly -105.0 and +105.0 degrees, which is the
+    // 210 degrees of travel divided either side of center. These limits are pulled
+    // in 3 degrees from the stops so the turret never rests against one; widen
+    // toward 105 if the extra reach is needed, but do not exceed it.
+    //
+    // Because ticks-per-degree was derived from the same span, these limits land on
+    // the measured stops regardless of whether travel was exactly 210 deg -- an
+    // error there shifts the degree labels, not where the turret actually stops.
+    public static double MIN_ANGLE = -102.0;
+    public static double MAX_ANGLE = 102.0;
 
     // ---- Homing -------------------------------------------------------------
-    // The turret angle where the magnet switch sits, and which way to drive to
-    // find it. ASSUMPTION: the magnet is at the negative end of travel. If it is
-    // at the other end, flip the sign on both of these.
-    public static double HOME_SWITCH_ANGLE = -105.0;
+    // MEASURED: the magnet sits at -16.2 degrees -- very near the MIDDLE of travel,
+    // 88.8 degrees from one hard stop and 121.2 from the other. That is why homing
+    // searches both directions instead of driving one fixed way: from a cold start
+    // the turret may be on either side of the magnet, and roughly 42% of starting
+    // positions would otherwise drive away from it into a hard stop.
+    //
+    // This is the CENTER of the magnet's roughly 5-degree trigger band, measured by
+    // sweeping through it. Homing trips on whichever edge it reaches first, which is
+    // repeatable because the search always approaches from the same side.
+    public static double HOME_SWITCH_ANGLE = -16.2;
+
+    // Which way to search FIRST. The magnet is just below center, so searching
+    // negative finds it quickly from most positions. If the first direction stalls
+    // against a stop, homing reverses automatically.
     public static double HOMING_DIRECTION = -1.0;
     public static double HOMING_POWER = 0.25;
+
+    // Per-direction budget, not a total. Worst case is a full 121 degrees of travel
+    // to reach the magnet, so this may need raising once the turret's actual speed
+    // at HOMING_POWER is known.
     public static double HOMING_TIMEOUT_SEC = 6.0;
 
     // After homing, drive here so the turret is not resting against the stop.
@@ -126,6 +158,11 @@ public class Turret {
     private final ElapsedTime stallTimer = new ElapsedTime();
     private int lastStallTicks = 0;
 
+    // Homing search state. The magnet is mid-travel, so one direction may run into a
+    // hard stop before reaching it; when that happens the search flips once.
+    private double homingSearchDir = HOMING_DIRECTION;
+    private boolean homingReversed = false;
+
     public void init(HardwareMap hardwareMap) {
         init(hardwareMap, hardwareMap.get(DcMotorEx.class, ENCODER_MOTOR_NAME));
     }
@@ -155,9 +192,11 @@ public class Turret {
     public void startHoming() {
         state = State.HOMING;
         controlMode = ControlMode.HOLD;
+        homingSearchDir = HOMING_DIRECTION;
+        homingReversed = false;
         homingTimer.reset();
         resetStallWatch();
-        statusNote = "homing";
+        statusNote = "homing: searching " + (homingSearchDir < 0 ? "-" : "+");
     }
 
     /** Closed-loop target in turret degrees. Clamped to the soft limits once homed. */
@@ -239,19 +278,30 @@ public class Turret {
             return 0.0;
         }
 
-        if (homingTimer.seconds() > HOMING_TIMEOUT_SEC) {
+        // Either the search ran out of time or it ran into a hard stop. Both mean
+        // "the magnet is not this way", so flip once and try the other direction.
+        boolean timedOut = homingTimer.seconds() > HOMING_TIMEOUT_SEC;
+        boolean hitSomething = isStalled();
+
+        if (timedOut || hitSomething) {
+            if (!homingReversed) {
+                homingReversed = true;
+                homingSearchDir = -homingSearchDir;
+                homingTimer.reset();
+                resetStallWatch();
+                statusNote = (hitSomething ? "hit a stop" : "timed out")
+                        + ", reversing search";
+                return 0.0;   // pause a loop before driving the other way
+            }
+
             state = State.FAILED;
-            statusNote = "HOMING TIMED OUT - never saw the magnet";
+            statusNote = hitSomething
+                    ? "HOMING FAILED - hit stops both ways, never saw the magnet"
+                    : "HOMING FAILED - timed out both ways; raise HOMING_TIMEOUT_SEC";
             return 0.0;
         }
 
-        if (isStalled()) {
-            state = State.FAILED;
-            statusNote = "HOMING STALLED - hit a hard stop, check HOMING_DIRECTION";
-            return 0.0;
-        }
-
-        return HOMING_DIRECTION * HOMING_POWER;
+        return homingSearchDir * HOMING_POWER;
     }
 
     private double closedLoopPower() {

@@ -138,49 +138,80 @@ it too low and the turret stops short of its target and buzzes forever.
 
 ---
 
-## Step 4 — Measure `TICKS_PER_DEGREE`
+## Step 4 — Range and `TICKS_PER_DEGREE` — **DONE 2026-10-13**
 
-The most important number in the file. Do not skip it.
+Measured with the **Turret Range Test** op mode (no power; push the turret by hand
+to one hard stop, then slowly to the other, passing the magnet on the way).
 
-1. Line the turret up straight ahead by eye.
-2. Press **`B`** (this calls the current spot 0° and zeroes the reference).
-3. Jog the turret a **measured 90°** — protractor, or tape marks on the ring.
-4. Read **`Ticks since ref`** off telemetry.
-5. `TICKS_PER_DEGREE = that number ÷ 90`
+| Landmark | Encoder ticks | Angle |
+|---|---|---|
+| Hard stop, clockwise end | **-9617** | -105.0° |
+| Magnet switch (center of band) | **-124** | **-16.2°** |
+| Hard stop, counter-clockwise end | **+12832** | +105.0° |
 
-Sanity check against theory (Through Bore = 8192 ticks per rev of its own shaft):
+```
+span             = 12832 - (-9617) = 22449 ticks
+TICKS_PER_DEGREE = 22449 / 210     = 106.90
+```
 
-| Encoder mounted on | Expected ticks/degree |
-|---|---|
-| The **turret** axis | 8192 / 360 = **22.76** |
-| The **servo** shaft | 8192 × 2.3 / 360 = **52.33** |
+Ticks **increase counter-clockwise**, which matches `ENCODER_DIRECTION = 1.0`
+(positive angle = counter-clockwise, viewed from above).
 
-If your measurement is near one of those, good. If it is near neither, stop and
-figure out why before homing — every angle in the code depends on this.
+### Why the range sweep beats the old protractor method
 
-Repeat the measurement 2–3 times. Backlash in the 30T/69T mesh will give you slightly
-different answers; average them.
+Pushing to both stops captures all 210° in one reading, so any slop in where you
+stopped is spread over 210° instead of 90° — roughly twice as accurate, and no
+protractor needed. The stops are a reference the robot already has.
+
+### Open question: the gearing doesn't match the measurement
+
+The encoder is a **REV Through Bore V2 (REV-11-3174) — 8192 counts/rev**, confirmed
+from REV's spec page (2048 cycles × 4). With a 69T turret gear and a 30T encoder
+gear, that predicts:
+
+```
+ratio          = 69/30             = 2.30 : 1
+ticks/deg      = 8192 * 2.3 / 360  = 52.34
+span over 210° = 52.34 * 210       = 10,991 ticks
+measured span  =                     22,449 ticks   <-- 2.04x larger
+```
+
+Working back from 8192 counts/rev, the encoder turned **2.74 revolutions** across
+the sweep. Over 210° (0.583 turret rev) that is a real **turret:encoder ratio of
+4.70:1**, not 2.30:1.
+
+| Candidate | Then travel is | Likely? |
+|---|---|---|
+| Encoder gear is **15T**, not 30T → 4.6:1 | ~214.5° | ✅ fits — 4.6 vs 4.70 is the same ~2% as 210 vs 214.5 |
+| An un-counted gear between the 69T and the encoder | ~214.5° | ✅ same arithmetic |
+| Gearing is right, travel is really 429° | >1 full turn | ❌ not with hard stops |
+
+**To settle it:** tape a mark on the encoder gear, sweep stop to stop, count turns.
+
+- **~1.3 turns** → ratio really is 2.3:1, and something else is doubling counts
+- **~2.7 turns** → ratio is ~4.6:1, so that gear is not 30T
+
+**This does not block anything.** `MIN_ANGLE`/`MAX_ANGLE` are ±half of travel and
+ticks-per-degree came from the same span, so the soft limits land on the real stops
+regardless — an error here shifts the degree *labels*, not where the turret
+physically stops. It starts to matter when AprilTag bearings in real degrees get fed
+to `setTargetAngle()` for auto-aim.
 
 ---
 
-## Step 5 — Find the magnet
+## Step 5 — The magnet — **DONE 2026-10-13**
 
-**Jog slowly** toward the end of travel where the magnet is. Watch `Home switch`
-flip from `open` to `PRESSED`.
+The magnet reads `PRESSED` over about a **5° band**, centered at **-16.2°**.
 
-Confirm the assumption baked into the code:
+**It is near the MIDDLE of travel** — 88.8° from the clockwise stop, 121.2° from
+the counter-clockwise one. That is why homing searches both directions (Step 6).
 
-```
-HOME_SWITCH_ANGLE = -105.0   // magnet is at the negative end of travel
-HOMING_DIRECTION  = -1.0     // so drive negative to find it
-```
+The 5° band costs less accuracy than it looks like: homing always approaches from
+the same side, so it always trips on the same edge of the band. Width only hurts if
+the approach direction or speed varies, and `HOMING_POWER` is fixed.
 
-- Magnet at the **other** end → flip the sign on **both**.
-- Magnet in the **middle** of travel → **stop.** Homing needs different logic,
-  because it can creep the wrong way into a hard stop. Ask before running Step 6.
-
-Also note: does the switch stay pressed over a range, or only at one spot? A wide
-magnet means the homed zero drifts depending on approach speed.
+Polarity was confirmed with the **Magnetic Sensor Test** op mode: `open` with the
+magnet away, `PRESSED` with it near.
 
 ---
 
@@ -188,22 +219,27 @@ magnet means the homed zero drifts depending on approach speed.
 
 Finger on stop. Press **`X`**.
 
-Expected:
+Because the magnet sits mid-travel, the turret may start on either side of it, so
+homing **searches both ways**:
 
-1. Slow creep toward the magnet at `HOMING_POWER` (0.25).
-2. Switch trips → power cuts instantly.
-3. State goes `HOMING` → `READY`.
-4. Turret drives itself to `PARK_ANGLE` (0°) and holds.
+1. Creeps in `HOMING_DIRECTION` (negative by default) at `HOMING_POWER`.
+2. If it reaches a hard stop or runs out of time first, it **reverses once** and
+   searches the other way. `Note` reads `hit a stop, reversing search`.
+3. Switch trips → power cuts instantly, state goes `HOMING` → `READY`.
+4. Turret drives itself to `PARK_ANGLE` (0°, straight ahead) and holds.
+
+Worst case is about 121° of travel to find the magnet, so expect a few seconds.
 
 If it goes `FAILED`, read the `Note` line:
 
 | Note | Means | Fix |
 |---|---|---|
-| `HOMING TIMED OUT - never saw the magnet` | 6 s elapsed, no switch | Wrong `HOMING_DIRECTION`, or switch not wired/configured |
-| `HOMING STALLED - hit a hard stop...` | Encoder stopped moving while powered | Driving away from the magnet — flip `HOMING_DIRECTION` |
+| `HOMING FAILED - hit stops both ways...` | Swept the whole range, never saw the magnet | Sensor not wired, not configured, or wrong name |
+| `HOMING FAILED - timed out both ways...` | Never reached a stop or the magnet | Turret too slow at this power — raise `HOMING_TIMEOUT_SEC` |
 
-The stall detector is the gear-saver. If it trips, **do not raise `HOMING_POWER` to
-push through it.** It is telling you the truth.
+The stall detector is the gear-saver. If homing reverses immediately in *both*
+directions, do **not** raise `HOMING_POWER` to push through — either the turret
+isn't moving at all, or `STALL_TICKS` is too tight for how slowly it creeps.
 
 ---
 
@@ -239,22 +275,26 @@ wrong — go back to Step 4.
 
 Panels edits are **not saved**. They vanish when the op mode stops.
 
-Record what you measured:
+Record what you measured. Anything still blank is a starting guess, not a result:
 
-| Constant | Guess in code | Measured |
-|---|---|---|
-| `TICKS_PER_DEGREE` | 22.76 | |
-| `ENCODER_DIRECTION` | 1.0 | |
-| `MIN_POWER` | 0.12 | |
-| `kP` | 0.010 | |
-| `TOLERANCE_DEG` | 2.0 | |
-| `HOME_SWITCH_ANGLE` | -105.0 | |
-| `HOMING_DIRECTION` | -1.0 | |
-| `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | |
+| Constant | Original guess | Measured | In code? |
+|---|---|---|---|
+| `TICKS_PER_DEGREE` | 22.76 | **106.90** | ✅ |
+| `HOME_SWITCH_ANGLE` | -105.0 | **-16.2** | ✅ |
+| `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | stops at ±105, limits set **±102** | ✅ |
+| `HOMING_DIRECTION` | -1.0 | -1.0 (searches both ways now) | ✅ |
+| `ENCODER_DIRECTION` | 1.0 | 1.0 — ticks rise counter-clockwise | ✅ |
+| `MIN_POWER` | 0.12 | *not yet measured* | — |
+| `kP` | 0.010 | *not yet tuned* | — |
+| `TOLERANCE_DEG` | 2.0 | *not yet tuned* | — |
+| `HOMING_TIMEOUT_SEC` | 6.0 | *check against real travel time* | — |
 
-Then edit the defaults in `Turret.java` so they survive a redeploy, rebuild, and
-commit. **Only then** does this count as tested, and only then is it worth opening a
-PR or wiring the turret into a real TeleOp.
+The measured values are already committed as the defaults in `Turret.java`, so they
+survive a redeploy. The remaining three come out of Steps 3 and 7, which need the
+turret actually under power.
+
+**Only once those are filled in** does this count as tested, and only then is it
+worth opening a PR or wiring the turret into a real TeleOp.
 
 ---
 
