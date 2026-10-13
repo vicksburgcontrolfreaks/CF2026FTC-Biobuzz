@@ -25,11 +25,13 @@ public final class Routes {
             .driveTo(HIVE_TOP)
             .driveTo(FAR_WALL_START);
 
-    // Start against the far wall, go around the left of the hive, then drive
-    // along the garden wall into the corner, collecting the garden pollen.
+    // Start against the far wall, go around the left of the hive, drive along
+    // the garden wall into the corner collecting the garden pollen, then back
+    // up to the garden wall start point (where START_UP_GARDEN_WALL begins).
     public static final Route START_UP_FAR_WALL = Route.startAt(FAR_WALL_START)
             .driveTo(HIVE_TOP)
             .driveTo(HIVE_LEFT_HIGH)
-            .driveTo(GARDEN_APPROACH)    // straight down the left of the hive to the wall
-            .collectTo(GARDEN_CORNER);   // along the wall, collector on near the corner
+            .driveTo(GARDEN_APPROACH)      // straight down the left of the hive to the wall
+            .collectTo(GARDEN_CORNER)      // along the wall, collector on near the corner
+            .driveTo(GARDEN_WALL_START);   // back up along the wall (still facing the red wall)
 }
