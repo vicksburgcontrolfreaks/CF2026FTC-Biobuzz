@@ -11,6 +11,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 @Configurable
 @TeleOp(name = "Shooter Velocity Test", group = "Test")
@@ -29,7 +30,6 @@ public class ShooterVelocityTest extends LinearOpMode {
     // pollen- vs. nectar-sized balls), found by bench-sweeping on 2026-10-01.
     private static final double POLLEN_POSITION = 0.48;
     private static final double NECTAR_POSITION = 0.135;
-    private static final double INDEXER_STEP_PER_LOOP = 0.005;
 
     // Live-tunable from the Panels dashboard (panels.bylazar.com) while this op mode
     // is running -- no redeploy needed. Seeded from the motor's current firmware values
@@ -38,6 +38,13 @@ public class ShooterVelocityTest extends LinearOpMode {
     public static double I;
     public static double D;
     public static double F;
+
+    // Servo position units per SECOND of holding a bumper -- scaled by real elapsed
+    // time, so a one-second hold always moves the same amount no matter how fast the
+    // loop happens to be running. The two presets are only 0.345 apart, so this is
+    // deliberately slow: roughly 0.012 per quick tap. Raise it live from Panels if
+    // you are hunting for a position far from both presets.
+    public static double INDEXER_STEP_PER_SEC = 0.08;
 
     private DcMotorEx shooterLeft, shooterRight;
     private Servo indexer;
@@ -48,6 +55,10 @@ public class ShooterVelocityTest extends LinearOpMode {
     private boolean dpadUpPrev, dpadDownPrev, aPrev;
 
     private TelemetryManager telemetryM;
+
+    // Measures how long the previous loop actually took, so bumper nudges are in
+    // position-per-second instead of position-per-loop.
+    private final ElapsedTime loopTimer = new ElapsedTime();
 
     @Override
     public void runOpMode() {
@@ -69,7 +80,8 @@ public class ShooterVelocityTest extends LinearOpMode {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         PanelsConfigurables.INSTANCE.refreshClass(this);
 
-        telemetry.addLine("Dpad Up/Down: target RPM +/- 100");
+        // Built from RPM_STEP so this line cannot drift out of date again.
+        telemetry.addLine(String.format("Dpad Up/Down: target RPM +/- %.0f", RPM_STEP));
         telemetry.addLine("A: toggle shooter on/off");
         telemetry.addLine("B: indexer to pollen spacing, X: indexer to nectar spacing");
         telemetry.addLine("Bumpers: hold to fine-tune indexer spacing from there");
@@ -78,7 +90,14 @@ public class ShooterVelocityTest extends LinearOpMode {
 
         waitForStart();
 
+        loopTimer.reset();
+
         while (opModeIsActive()) {
+            // Seconds since the last pass through this loop, then immediately restart
+            // the clock for the next one.
+            double dt = loopTimer.seconds();
+            loopTimer.reset();
+
             boolean dpadUp = gamepad1.dpad_up;
             boolean dpadDown = gamepad1.dpad_down;
             boolean a = gamepad1.a;
@@ -98,11 +117,12 @@ public class ShooterVelocityTest extends LinearOpMode {
             if (gamepad1.x) {
                 indexerTarget = NECTAR_POSITION;
             }
+            double indexerNudge = INDEXER_STEP_PER_SEC * dt;
             if (gamepad1.right_bumper) {
-                indexerTarget = Math.min(indexerTarget + INDEXER_STEP_PER_LOOP, 1.0);
+                indexerTarget = Math.min(indexerTarget + indexerNudge, 1.0);
             }
             if (gamepad1.left_bumper) {
-                indexerTarget = Math.max(indexerTarget - INDEXER_STEP_PER_LOOP, 0.0);
+                indexerTarget = Math.max(indexerTarget - indexerNudge, 0.0);
             }
 
             dpadUpPrev = dpadUp;
