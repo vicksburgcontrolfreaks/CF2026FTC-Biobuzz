@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.subsystems;
 import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.TouchSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -20,11 +21,29 @@ import com.qualcomm.robotcore.util.Range;
  * just a setAngle() method.
  *
  * Driver Station config names this expects:
- *   "turret"        - CRServo (Continuous Rotation Servo) on a servo port
- *   "turretEncoder" - any motor type, on the motor port that the Through Bore
- *                     encoder cable plugs into. NEVER set power on it; we only
- *                     ever read getCurrentPosition().
- *   "turretHome"    - REV Touch Sensor (the magnetic limit switch), digital port
+ *   "turret"     - CRServo (Continuous Rotation Servo) on a servo port
+ *   "turretHome" - REV Touch Sensor (the magnetic limit switch), digital port
+ *   "rf"         - the RIGHT FRONT DRIVE MOTOR. The turret encoder is plugged into
+ *                  that motor port's spare encoder connector, so there is no
+ *                  separate encoder device to configure. Read the warning below.
+ *
+ * SHARING THE "rf" MOTOR PORT
+ * The drivetrain owns "rf". This class only ever READS its encoder -- it never
+ * sets power, direction, run mode, or resets the encoder on it. Two rules keep
+ * that safe, and breaking either one breaks the turret:
+ *
+ *   1. "rf" must stay in RUN_WITHOUT_ENCODER (the default). If anything puts it
+ *      in RUN_USING_ENCODER or RUN_TO_POSITION, the hub's velocity PID would try
+ *      to regulate the drive wheel using the TURRET's position. Nothing in this
+ *      repo does that today, and Pedro Pathing's Mecanum class does not either.
+ *   2. Nobody calls STOP_AND_RESET_ENCODER on "rf", which would zero the turret's
+ *      position mid-match.
+ *
+ * Direction is handled for us: the SDK negates getCurrentPosition() when a motor
+ * is REVERSE (DcMotorImpl.adjustPosition), and this repo sets rf's direction
+ * differently in different op modes -- Pedro's Constants says REVERSE while
+ * RobotHardware says FORWARD. readRawTicks() divides that out so turret angles
+ * mean the same thing everywhere, and ENCODER_DIRECTION stays the only sign knob.
  *
  * Call init() once, then update() every loop. Nothing moves unless update() runs.
  */
@@ -45,8 +64,13 @@ public class Turret {
     public static double TICKS_PER_DEGREE = 22.76;
 
     // Set to -1 if positive servo power makes the reported angle go DOWN.
-    // You will find this out in the first 10 seconds of testing.
+    // You will find this out in the first 10 seconds of testing. This is the ONLY
+    // place turret sign should be adjusted -- do not "fix" it by changing rf's
+    // direction, which belongs to the drivetrain.
     public static double ENCODER_DIRECTION = 1.0;
+
+    // The drive motor whose spare encoder port the turret encoder is wired into.
+    private static final String ENCODER_MOTOR_NAME = "rf";
 
     // ---- Travel limits ------------------------------------------------------
     // 210 degrees of total travel, centered so 0 = straight ahead.
@@ -84,7 +108,8 @@ public class Turret {
     public enum ControlMode { HOLD, JOG }
 
     private CRServo servo;
-    private DcMotorEx encoder;
+    /** Shared with the drivetrain. READ ONLY -- see the class comment. */
+    private DcMotorEx encoderMotor;
     private TouchSensor homeSwitch;
 
     private State state = State.NOT_HOMED;
@@ -102,15 +127,23 @@ public class Turret {
     private int lastStallTicks = 0;
 
     public void init(HardwareMap hardwareMap) {
+        init(hardwareMap, hardwareMap.get(DcMotorEx.class, ENCODER_MOTOR_NAME));
+    }
+
+    /**
+     * Same as init(hardwareMap) but reuses a drive motor handle the caller already
+     * has. Use this from RobotHardware so there is one rf object, not two.
+     */
+    public void init(HardwareMap hardwareMap, DcMotorEx sharedEncoderMotor) {
         servo = hardwareMap.get(CRServo.class, "turret");
-        encoder = hardwareMap.get(DcMotorEx.class, "turretEncoder");
+        encoderMotor = sharedEncoderMotor;
         homeSwitch = hardwareMap.get(TouchSensor.class, "turretHome");
 
         servo.setPower(0.0);
 
         // Treat wherever we booted up as angle 0 until homing proves otherwise.
         // Soft limits stay OFF while NOT_HOMED, because this number is a guess.
-        homeTickOffset = encoder.getCurrentPosition();
+        homeTickOffset = readRawTicks();
         referenceAngle = 0.0;
         state = State.NOT_HOMED;
         statusNote = "not homed";
@@ -149,7 +182,7 @@ public class Turret {
      * This is for measuring TICKS_PER_DEGREE during testing, not for match code.
      */
     public void resetReferenceHere(double assumedAngle) {
-        homeTickOffset = encoder.getCurrentPosition();
+        homeTickOffset = readRawTicks();
         referenceAngle = assumedAngle;
     }
 
@@ -197,7 +230,7 @@ public class Turret {
     private double updateHoming() {
         if (homeSwitch.isPressed()) {
             // Found it. This encoder reading IS the switch angle, by definition.
-            homeTickOffset = encoder.getCurrentPosition();
+            homeTickOffset = readRawTicks();
             referenceAngle = HOME_SWITCH_ANGLE;
             state = State.READY;
             controlMode = ControlMode.HOLD;
@@ -252,13 +285,31 @@ public class Turret {
         return power;
     }
 
+    /**
+     * Encoder ticks with the drive motor's direction setting cancelled out.
+     *
+     * The SDK runs getCurrentPosition() through DcMotorImpl.adjustPosition(), which
+     * negates the value when the motor is REVERSE. rf's direction is the
+     * drivetrain's business and is not consistent across op modes, so undoing it
+     * here keeps a given turret angle meaning the same thing in TeleOp and in auto.
+     * Re-read every call rather than cached at init, in case something changes
+     * rf's direction while the op mode is running.
+     */
+    private int readRawTicks() {
+        int ticks = encoderMotor.getCurrentPosition();
+        if (encoderMotor.getDirection() == DcMotorSimple.Direction.REVERSE) {
+            ticks = -ticks;
+        }
+        return ticks;
+    }
+
     private void resetStallWatch() {
         stallTimer.reset();
-        lastStallTicks = encoder.getCurrentPosition();
+        lastStallTicks = readRawTicks();
     }
 
     private boolean isStalled() {
-        int now = encoder.getCurrentPosition();
+        int now = readRawTicks();
         if (Math.abs(now - lastStallTicks) > STALL_TICKS) {
             resetStallWatch();
             return false;
@@ -270,16 +321,16 @@ public class Turret {
 
     /** Turret angle in degrees. Only meaningful once isHomed() is true. */
     public double getAngle() {
-        double ticks = (encoder.getCurrentPosition() - homeTickOffset) * ENCODER_DIRECTION;
+        double ticks = (readRawTicks() - homeTickOffset) * ENCODER_DIRECTION;
         return referenceAngle + ticks / TICKS_PER_DEGREE;
     }
 
     public int getRawTicks() {
-        return encoder.getCurrentPosition();
+        return readRawTicks();
     }
 
     public int getTicksSinceReference() {
-        return (int) (encoder.getCurrentPosition() - homeTickOffset);
+        return (int) (readRawTicks() - homeTickOffset);
     }
 
     public boolean isHomeSwitchPressed() {
