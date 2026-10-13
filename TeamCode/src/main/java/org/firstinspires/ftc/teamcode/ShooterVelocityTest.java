@@ -64,8 +64,12 @@ public class ShooterVelocityTest extends LinearOpMode {
     public void runOpMode() {
         shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
         shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
-        indexer = hardwareMap.get(Servo.class, "indexer");
-        indexer.setPosition(POLLEN_POSITION);
+        // Optional: tryGet returns null instead of throwing, so the shooter half of
+        // this op mode still runs on a robot that has no indexer servo configured.
+        indexer = hardwareMap.tryGet(Servo.class, "indexer");
+        if (indexer != null) {
+            indexer.setPosition(POLLEN_POSITION);
+        }
 
         // Wheels face each other, so both run off the same commanded velocity
         // with one side physically reversed.
@@ -83,8 +87,12 @@ public class ShooterVelocityTest extends LinearOpMode {
         // Built from RPM_STEP so this line cannot drift out of date again.
         telemetry.addLine(String.format("Dpad Up/Down: target RPM +/- %.0f", RPM_STEP));
         telemetry.addLine("A: toggle shooter on/off");
-        telemetry.addLine("B: indexer to pollen spacing, X: indexer to nectar spacing");
-        telemetry.addLine("Bumpers: hold to fine-tune indexer spacing from there");
+        if (indexer != null) {
+            telemetry.addLine("B: indexer to pollen spacing, X: indexer to nectar spacing");
+            telemetry.addLine("Bumpers: hold to fine-tune indexer spacing from there");
+        } else {
+            telemetry.addLine("No 'indexer' servo configured - shooter only");
+        }
         telemetry.addLine("Tune P/I/D/F live at panels.bylazar.com");
         telemetry.update();
 
@@ -129,7 +137,9 @@ public class ShooterVelocityTest extends LinearOpMode {
             dpadDownPrev = dpadDown;
             aPrev = a;
 
-            indexer.setPosition(indexerTarget);
+            if (indexer != null) {
+                indexer.setPosition(indexerTarget);
+            }
 
             // Re-applied every loop so edits made on the dashboard while running take
             // effect immediately.
@@ -147,7 +157,8 @@ public class ShooterVelocityTest extends LinearOpMode {
             telemetryM.addData("Target RPM", running ? targetRPM : 0.0);
             telemetryM.addData("Left Actual RPM", leftRPM);
             telemetryM.addData("Right Actual RPM", rightRPM);
-            telemetryM.addData("Indexer Position", indexerTarget);
+            telemetryM.addData("Indexer Position",
+                    indexer != null ? String.valueOf(indexerTarget) : "not configured");
             telemetryM.update(telemetry);
         }
     }
