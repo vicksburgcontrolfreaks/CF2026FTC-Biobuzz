@@ -91,6 +91,42 @@ public final class PathSafety {
         return warnings;
     }
 
+    // Is this a legal place to set the robot up (rule G304)? Give it the RED
+    // version of the start -- blue is the same spun 180 degrees, so if red is
+    // OK, blue is too. Returns a list of warnings (empty = looks OK).
+    public static List<String> checkStart(String startName, Pose redStart) {
+        List<String> warnings = new ArrayList<>();
+        Zone robot = robotFootprint(redStart.getX(), redStart.getY(), redStart.getHeading());
+
+        // G304.A: all of the robot on our half of the field
+        if (robot.maxX > FieldConstants.CENTER + 1e-6) {
+            warnings.add(String.format("%s: robot crosses the middle line by %.1f in.",
+                    startName, robot.maxX - FieldConstants.CENTER));
+        }
+        // G304.C: touching the wall
+        Zone field = FieldConstants.FIELD;
+        boolean touchingWall = robot.minX <= field.minX + WALL_TOLERANCE
+                || robot.maxX >= field.maxX - WALL_TOLERANCE
+                || robot.minY <= field.minY + WALL_TOLERANCE
+                || robot.maxY >= field.maxY - WALL_TOLERANCE;
+        if (!touchingWall) {
+            warnings.add(startName + ": robot isn't touching a wall");
+        }
+        if (!insideWalls(robot)) {
+            warnings.add(startName + ": robot is inside a wall");
+        }
+        // G304.D and E: not touching a flower or the hive, not in the loading zone
+        for (Zone obstacle : OBSTACLES) {
+            if (robot.overlaps(obstacle)) {
+                warnings.add(startName + ": robot touches " + obstacle.name);
+            }
+        }
+        if (robot.overlaps(FieldConstants.RED_LOADING_ZONE)) {
+            warnings.add(startName + ": robot is in the loading zone");
+        }
+        return warnings;
+    }
+
     // The box (lined up with the walls) that the robot covers when its center is
     // at (x, y) facing 'heading'. Facing 0 or 180, it's exactly the robot.
     // Turned at an angle, the box is a bit BIGGER than the robot (it has to fit
