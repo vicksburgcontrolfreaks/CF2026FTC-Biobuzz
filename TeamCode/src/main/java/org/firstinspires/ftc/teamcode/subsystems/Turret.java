@@ -114,7 +114,8 @@ public class Turret {
     // the center is half that, 1.9 deg.
     public static double HOME_SWITCH_ANGLE = -20.21;
 
-    // Which way to search FIRST. The magnet is just below center, so searching
+    // Which way to search FIRST, and -- more importantly -- the direction the final
+    // approach always comes from. The magnet is just below center, so searching
     // negative finds it quickly from most positions. If the first direction stalls
     // against a stop, homing reverses automatically.
     public static double HOMING_DIRECTION = -1.0;
@@ -124,6 +125,30 @@ public class Turret {
     // to reach the magnet, so 6.0 is probably too short -- expect to raise it once
     // the turret's actual speed at HOMING_POWER is known.
     public static double HOMING_TIMEOUT_SEC = 6.0;
+
+    // ---- Homing: the final approach -----------------------------------------
+    // The magnet trigger band is WIDE -- measured at 942 ticks, about 12 degrees.
+    // Where the switch first trips therefore depends on which side you came at it
+    // from, and the coarse search can arrive from either side. Taking that first
+    // trip as the zero reference would put the turret whole angle frame out by up
+    // to a full band width.
+    //
+    // So homing never uses the coarse trip. Once the search finds the magnet it
+    // backs off clear of the band and re-approaches in HOMING_DIRECTION, every time,
+    // at a lower power. The reference is then always the same physical edge, reached
+    // the same way, and repeatability is set by loop timing rather than by 12 degrees
+    // of band.
+    //
+    // THIS CHANGES WHAT HOME_SWITCH_ANGLE MEANS: it is the angle of that one edge --
+    // the first trip when travelling in HOMING_DIRECTION -- NOT the center of the
+    // band. Re-measure it that way after any change to the magnet or its mount.
+    public static double HOMING_BACKOFF_DEG = 8.0;
+
+    // Must stay above MIN_POWER or the turret will not move at all. Slower is more
+    // repeatable, because the trip is only noticed once per loop and whatever the
+    // turret travels during that loop is error. Too slow and the stall detector may
+    // fire on the approach -- if that happens, lower STALL_TICKS before raising this.
+    public static double HOMING_APPROACH_POWER = 0.15;
 
     // After homing, drive here so the turret is not resting against the stop.
     public static double PARK_ANGLE = 0.0;
@@ -165,10 +190,16 @@ public class Turret {
     private final ElapsedTime stallTimer = new ElapsedTime();
     private int lastStallTicks = 0;
 
+    /** Homing runs SEARCH -> BACKOFF -> APPROACH; only APPROACH sets the reference. */
+    private enum HomingPhase { SEARCH, BACKOFF, APPROACH }
+
     // Homing search state. The magnet is mid-travel, so one direction may run into a
     // hard stop before reaching it; when that happens the search flips once.
     private double homingSearchDir = HOMING_DIRECTION;
     private boolean homingReversed = false;
+    private HomingPhase homingPhase = HomingPhase.SEARCH;
+    private boolean backoffReleased = false;   // has the switch let go yet?
+    private int backoffStartTicks = 0;         // reading when it let go
 
     public void init(HardwareMap hardwareMap) {
         init(hardwareMap, hardwareMap.get(DcMotorEx.class, ENCODER_MOTOR_NAME));
@@ -201,6 +232,8 @@ public class Turret {
         controlMode = ControlMode.HOLD;
         homingSearchDir = HOMING_DIRECTION;
         homingReversed = false;
+        homingPhase = HomingPhase.SEARCH;
+        backoffReleased = false;
         homingTimer.reset();
         resetStallWatch();
         statusNote = "homing: searching " + (homingSearchDir < 0 ? "-" : "+");
@@ -274,14 +307,24 @@ public class Turret {
     // ---- Internals ----------------------------------------------------------
 
     private double updateHoming() {
+        switch (homingPhase) {
+            case SEARCH:   return homingSearch();
+            case BACKOFF:  return homingBackoff();
+            case APPROACH: return homingApproach();
+            default:       return 0.0;
+        }
+    }
+
+    /** Coarse hunt for the magnet, either direction. Does NOT set the reference. */
+    private double homingSearch() {
         if (homeSwitch.isPressed()) {
-            // Found it. This encoder reading IS the switch angle, by definition.
-            homeTickOffset = readRawTicks();
-            referenceAngle = HOME_SWITCH_ANGLE;
-            state = State.READY;
-            controlMode = ControlMode.HOLD;
-            targetAngle = Range.clip(PARK_ANGLE, MIN_ANGLE, MAX_ANGLE);
-            statusNote = "homed, parking";
+            // Found it -- but which edge this is depends on which way we arrived,
+            // and the band is 12 degrees wide. Back off and come in the standard way.
+            homingPhase = HomingPhase.BACKOFF;
+            backoffReleased = false;
+            homingTimer.reset();
+            resetStallWatch();
+            statusNote = "found magnet, backing off";
             return 0.0;
         }
 
@@ -309,6 +352,59 @@ public class Turret {
         }
 
         return homingSearchDir * HOMING_POWER;
+    }
+
+    /**
+     * Retreat against HOMING_DIRECTION until the switch releases, then
+     * HOMING_BACKOFF_DEG further, so the re-approach always starts outside the band.
+     * Waiting for the release first means this works whatever the band width is.
+     */
+    private double homingBackoff() {
+        if (!backoffReleased) {
+            if (!homeSwitch.isPressed()) {
+                backoffReleased = true;
+                backoffStartTicks = readRawTicks();
+            }
+        } else if (Math.abs(readRawTicks() - backoffStartTicks)
+                >= HOMING_BACKOFF_DEG * TICKS_PER_DEGREE) {
+            homingPhase = HomingPhase.APPROACH;
+            homingTimer.reset();
+            resetStallWatch();
+            statusNote = "re-approaching slowly";
+            return 0.0;
+        }
+
+        if (homingTimer.seconds() > HOMING_TIMEOUT_SEC || isStalled()) {
+            // Only plausible if the magnet sat right against a hard stop, which it
+            // does not -- so this almost certainly means the switch is stuck on.
+            state = State.FAILED;
+            statusNote = "HOMING FAILED - could not back off the magnet; switch stuck?";
+            return 0.0;
+        }
+
+        return -HOMING_DIRECTION * HOMING_POWER;
+    }
+
+    /** The only place the zero reference is ever set. Always the same edge. */
+    private double homingApproach() {
+        if (homeSwitch.isPressed()) {
+            homeTickOffset = readRawTicks();
+            referenceAngle = HOME_SWITCH_ANGLE;
+            state = State.READY;
+            controlMode = ControlMode.HOLD;
+            targetAngle = Range.clip(PARK_ANGLE, MIN_ANGLE, MAX_ANGLE);
+            statusNote = "homed, parking";
+            return 0.0;
+        }
+
+        if (homingTimer.seconds() > HOMING_TIMEOUT_SEC || isStalled()) {
+            state = State.FAILED;
+            statusNote = "HOMING FAILED - magnet not seen on re-approach; "
+                    + "is HOMING_APPROACH_POWER above MIN_POWER?";
+            return 0.0;
+        }
+
+        return HOMING_DIRECTION * HOMING_APPROACH_POWER;
     }
 
     private double closedLoopPower() {

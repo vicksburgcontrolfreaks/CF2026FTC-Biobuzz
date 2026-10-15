@@ -29,7 +29,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  * HOW TO USE
  *   1. Press start. Push the turret gently to ONE hard stop, then slowly all the way
  *      to the OTHER, passing the magnet on the way. Do not force past a stop.
- *   2. Read the DERIVED CONSTANTS block and write the numbers down.
+ *   2. Read the DERIVED CONSTANTS block and write the numbers down. Sweep
+ *      straight through the magnet without backing up, or the band reads wrong.
  *   3. A resets everything if you want a clean second run.
  *
  * Config needed:
@@ -152,17 +153,32 @@ public class TurretRangeTest extends LinearOpMode {
                 telemetryM.addData("suggested MAX_ANGLE", halfTravel - 3.0);
 
                 if (haveMagnet) {
-                    double magnetCenter = (magnetMinTicks + magnetMaxTicks) / 2.0;
-                    double homeAngle = toAngle(magnetCenter, midTicks, tpd);
-                    double bandDeg = (magnetMaxTicks - magnetMinTicks) / tpd;
+                    double loEdge = toAngle(magnetMinTicks, midTicks, tpd);
+                    double hiEdge = toAngle(magnetMaxTicks, midTicks, tpd);
+                    double bandDeg = Math.abs(hiEdge - loEdge);
+                    double bandCenter = (loEdge + hiEdge) / 2.0;
 
-                    telemetryM.addData("HOME_SWITCH_ANGLE", homeAngle);
+                    // Homing always makes its final approach travelling in
+                    // HOMING_DIRECTION, so it trips on whichever edge it meets
+                    // FIRST coming that way: the high-angle edge when travelling
+                    // negative, the low-angle edge when travelling positive. That
+                    // one edge -- not the band center -- is the reference.
+                    boolean approachingNegative = Turret.HOMING_DIRECTION < 0;
+                    double approachEdge = approachingNegative
+                            ? Math.max(loEdge, hiEdge)
+                            : Math.min(loEdge, hiEdge);
+
+                    telemetryM.addData("HOME_SWITCH_ANGLE", approachEdge);
+                    telemetryM.addLine("^ the edge homing meets first travelling "
+                            + (approachingNegative ? "-" : "+"));
                     telemetryM.addData("magnet band (deg)", bandDeg);
-                    telemetryM.addLine("This is the band CENTER, which is better than");
-                    telemetryM.addLine("the edge you see by watching for the trip.");
+                    telemetryM.addData("  band edges", String.format("%.1f / %.1f", loEdge, hiEdge));
+                    telemetryM.addData("  band center (FYI)", bandCenter);
+                    telemetryM.addLine("Band only reads right if you swept STRAIGHT");
+                    telemetryM.addLine("through the magnet without backing up.");
                     // Homing has to drive TOWARD the magnet, so the sign follows
                     // whichever side of center the magnet turned out to be on.
-                    telemetryM.addData("HOMING_DIRECTION", homeAngle < 0 ? -1.0 : 1.0);
+                    telemetryM.addData("HOMING_DIRECTION", bandCenter < 0 ? -1.0 : 1.0);
                 } else {
                     telemetryM.addLine("HOME_SWITCH_ANGLE: sweep past the magnet");
                 }

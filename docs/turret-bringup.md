@@ -208,16 +208,30 @@ this — something here is still wrong.
 
 ---
 
-## Step 5 — The magnet — **DONE 2026-10-13**
+## Step 5 — The magnet — **RE-MEASURE, mount was rebuilt 2026-10-15**
 
-The magnet reads `PRESSED` over about a **6.8° band** (roughly 530 ticks), centered at **-22.1°**.
+The magnet reads `PRESSED` over a **12.0° band** (942 ticks), measured by sweeping
+straight through it: picked up at -11923 ticks, dropped out at -12865.
 
-**It is near the MIDDLE of travel** — 120.9° from the clockwise stop, 165.0° from
-the counter-clockwise one. That is why homing searches both directions (Step 6).
+**It is near the MIDDLE of travel** — about 123° from one hard stop and 163° from
+the other. That is why homing searches both directions (Step 6).
 
-The 6.8° band costs less accuracy than it looks like: homing always approaches from
-the same side, so it always trips on the same edge of the band. Width only hurts if
-the approach direction or speed varies, and `HOMING_POWER` is fixed.
+### The band is wide enough to matter
+
+An earlier draft of this doc claimed the width cost nothing, on the grounds that
+homing "always approaches from the same side." That was wrong twice over. The band
+is 12°, not the 5° first guessed, and homing searches **both** directions, so it can
+arrive at the magnet from either side and trip on either edge. Using one edge as the
+zero reference would throw the turret's whole angle frame off by up to 12°.
+
+That is what the two-stage approach in Step 6 exists to fix. Because of it,
+`HOME_SWITCH_ANGLE` is **the angle of one specific edge** — the first trip when
+travelling in `HOMING_DIRECTION` — and *not* the center of the band. Turret Range
+Test reports that edge directly, labelled, along with both edges and the center.
+
+**The magnet mount was rebuilt on 2026-10-15** (prototype hardware), so the numbers
+above describe the old mount. Re-run the range test and re-measure before trusting
+any angle.
 
 Polarity was confirmed with the **Magnetic Sensor Test** op mode: `open` with the
 magnet away, `PRESSED` with it near.
@@ -228,16 +242,35 @@ magnet away, `PRESSED` with it near.
 
 Finger on stop. Press **`X`**.
 
-Because the magnet sits mid-travel, the turret may start on either side of it, so
-homing **searches both ways**:
+Homing runs in three phases. The first finds the magnet; the last is the only one
+that sets the zero reference.
+
+**SEARCH** — the magnet sits mid-travel, so the turret may start on either side of
+it and the search goes both ways:
 
 1. Creeps in `HOMING_DIRECTION` (negative by default) at `HOMING_POWER`.
 2. If it reaches a hard stop or runs out of time first, it **reverses once** and
    searches the other way. `Note` reads `hit a stop, reversing search`.
-3. Switch trips → power cuts instantly, state goes `HOMING` → `READY`.
-4. Turret drives itself to `PARK_ANGLE` (0°, straight ahead) and holds.
+3. Switch trips → `Note` reads `found magnet, backing off`. **This trip is thrown
+   away** — it could be either edge of a 12° band, depending on which way the
+   search happened to arrive.
 
-Worst case is about 165° of travel to find the magnet, so expect several seconds.
+**BACKOFF** — drives back against `HOMING_DIRECTION` until the switch *releases*,
+then `HOMING_BACKOFF_DEG` (8°) further, so the re-approach starts cleanly outside
+the band. Waiting for the release rather than counting a fixed distance means this
+works no matter how wide the band turns out to be.
+
+**APPROACH** — creeps back in `HOMING_DIRECTION` at the slower
+`HOMING_APPROACH_POWER`. The trip here *is* the reference: same edge, same
+direction, same speed, every single time. State goes `READY`, and the turret drives
+itself to `PARK_ANGLE` (0°, straight ahead) and holds.
+
+What this buys: repeatability stops being set by the 12° band and starts being set
+by loop timing — how far the turret moves between the switch tripping and the code
+noticing. That is why the approach is deliberately slow.
+
+Worst case is about 163° of travel to find the magnet, plus the back-off and
+re-approach, so expect several seconds.
 
 If it goes `FAILED`, read the `Note` line:
 
@@ -245,6 +278,8 @@ If it goes `FAILED`, read the `Note` line:
 |---|---|---|
 | `HOMING FAILED - hit stops both ways...` | Swept the whole range, never saw the magnet | Sensor not wired, not configured, or wrong name |
 | `HOMING FAILED - timed out both ways...` | Never reached a stop or the magnet | Turret too slow at this power — raise `HOMING_TIMEOUT_SEC` |
+| `HOMING FAILED - could not back off the magnet; switch stuck?` | Switch never released while backing away | Switch reading `PRESSED` constantly — check wiring and the magnet gap |
+| `HOMING FAILED - magnet not seen on re-approach...` | Backed off, came back, never found it again | `HOMING_APPROACH_POWER` is below `MIN_POWER`, so the turret never moved |
 
 The stall detector is the gear-saver. If homing reverses immediately in *both*
 directions, do **not** raise `HOMING_POWER` to push through — either the turret
@@ -289,14 +324,16 @@ Record what you measured. Anything still blank is a starting guess, not a result
 | Constant | Original guess | Measured | In code? |
 |---|---|---|---|
 | `TICKS_PER_DEGREE` | 22.76 | **78.51** (from gear teeth) | ✅ |
-| `HOME_SWITCH_ANGLE` | -105.0 | **-22.06** | ✅ |
+| `HOME_SWITCH_ANGLE` | -105.0 | *re-measure — mount rebuilt, and it is now an EDGE not the band center* | ⚠️ |
 | `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | stops at ±143, limits set **±140** | ✅ |
 | `HOMING_DIRECTION` | -1.0 | -1.0 (searches both ways now) | ✅ |
 | `ENCODER_DIRECTION` | 1.0 | 1.0 — ticks rise counter-clockwise | ✅ |
 | `MIN_POWER` | 0.12 | *not yet measured* | — |
 | `kP` | 0.010 | *not yet tuned* | — |
 | `TOLERANCE_DEG` | 2.0 | *not yet tuned* | — |
-| `HOMING_TIMEOUT_SEC` | 6.0 | *likely too short — worst case is now 165°* | — |
+| `HOMING_TIMEOUT_SEC` | 6.0 | *likely too short — worst case is now 163°* | — |
+| `HOMING_BACKOFF_DEG` | 8.0 | *should clear the 12° band; raise if it does not* | — |
+| `HOMING_APPROACH_POWER` | 0.15 | *must end up above `MIN_POWER`* | — |
 
 The measured values are already committed as the defaults in `Turret.java`, so they
 survive a redeploy. The remaining three come out of Steps 3 and 7, which need the
