@@ -2,9 +2,9 @@
 
 How to test the turret subsystem the first time it goes on the robot.
 
-**Status:** code written and compiling, **never run on hardware** (turret not built
-yet as of 2026-10-08). Nothing in here is confirmed. Every number in `Turret.java`
-is a starting guess until you measure it.
+**Status:** code written and compiling. The turret is built, and Steps 4-5 are done
+by hand-turning it, but it has **never run under power** as of 2026-10-15. Nothing
+past Step 5 is confirmed — `MIN_POWER`, `kP` and `TOLERANCE_DEG` are still guesses.
 
 Related files:
 - `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/subsystems/Turret.java`
@@ -17,10 +17,10 @@ Related files:
 | Part | Detail |
 |---|---|
 | Servo | Dual-mode servo run in **continuous rotation (CR) mode** |
-| Gearing | 30T drive gear → 69T turret gear = **2.3:1 reduction** |
+| Gearing | 20T pinion → 69T turret gear = **3.45:1 reduction** |
 | Encoder | REV Through Bore, 4-pin cable into the **`rf` drive motor's spare encoder port** |
 | Home sensor | REV magnetic limit switch, digital port |
-| Travel | **210°** total |
+| Travel | **234.5°** total (from CAD, 2026-10-15) |
 
 ### Sharing the `rf` motor port
 
@@ -47,7 +47,7 @@ One trap already handled in code: the SDK negates `getCurrentPosition()` for a
 is the only thing that controls turret sign. Don't "fix" turret sign by editing
 `rf`'s direction — that belongs to the drivetrain.
 
-**Why CR mode and not a normal servo:** 210° of turret travel × 2.3 = **483°** the
+**Why CR mode and not a normal servo:** 234.5° of turret travel × 3.45 = **809°** the
 servo shaft has to turn. A standard servo maxes out near 270–300°, so it physically
 cannot reach. CR mode has no travel limit.
 
@@ -145,13 +145,17 @@ to one hard stop, then slowly to the other, passing the magnet on the way).
 
 | Landmark | Encoder ticks | Angle |
 |---|---|---|
-| Hard stop, clockwise end | **-9617** | -105.0° |
-| Magnet switch (center of band) | **-124** | **-16.2°** |
-| Hard stop, counter-clockwise end | **+12832** | +105.0° |
+| Hard stop, clockwise end | **-9617** | -117.25° |
+| Magnet switch (center of band) | **-124** | **-18.1°** |
+| Hard stop, counter-clockwise end | **+12832** | +117.25° |
+
+Travel is **234.5°**, measured in CAD on 2026-10-15. The first draft of this doc
+guessed "about 210°," which is where the old `TICKS_PER_DEGREE = 106.90` came from.
+That guess was low by 24.5°, which made every reported angle read about 12% small.
 
 ```
 span             = 12832 - (-9617) = 22449 ticks
-TICKS_PER_DEGREE = 22449 / 210     = 106.90
+TICKS_PER_DEGREE = 22449 / 234.5   = 95.73
 ```
 
 Ticks **increase counter-clockwise**, which matches `ENCODER_DIRECTION = 1.0`
@@ -159,54 +163,42 @@ Ticks **increase counter-clockwise**, which matches `ENCODER_DIRECTION = 1.0`
 
 ### Why the range sweep beats the old protractor method
 
-Pushing to both stops captures all 210° in one reading, so any slop in where you
-stopped is spread over 210° instead of 90° — roughly twice as accurate, and no
-protractor needed. The stops are a reference the robot already has.
+Pushing to both stops captures the whole 234.5° in one reading, so any slop in where
+you stopped is spread over the full range instead of 90° — roughly twice as accurate,
+and no protractor needed. The stops are a reference the robot already has.
 
-### Open question: the gearing doesn't match the measurement
+### Resolved: do NOT recompute this from the gear teeth
 
-The encoder is a **REV Through Bore V2 (REV-11-3174) — 8192 counts/rev**, confirmed
-from REV's spec page (2048 cycles × 4). With a 69T turret gear and a 30T encoder
-gear, that predicts:
+The tooth counts and the encoder spec do **not** predict the measured span, and that
+is expected. All three of these are confirmed independently:
 
-```
-ratio          = 69/30             = 2.30 : 1
-ticks/deg      = 8192 * 2.3 / 360  = 52.34
-span over 210° = 52.34 * 210       = 10,991 ticks
-measured span  =                     22,449 ticks   <-- 2.04x larger
-```
+- **Encoder: REV Through Bore V2 (REV-11-3174), 8192 counts/rev.** Verified by taping
+  the encoder gear and sweeping stop to stop — about **2.6 turns** counted by hand,
+  against the **2.74** that 22449 / 8192 implies. Match.
+- **Gearing: 69T / 20T = 3.45:1**, from tooth count.
+- **Travel: 234.5°**, from CAD.
 
-Working back from 8192 counts/rev, the encoder turned **2.74 revolutions** across
-the sweep. Over 210° (0.583 turret rev) that is a real **turret:encoder ratio of
-4.70:1**, not 2.30:1.
+Together those predict a span of `8192 × 3.45 × (234.5 / 360) = 18,410` ticks, but
+the encoder counted **22,449** — 22% more. So the encoder is **not** turning at the
+pinion's 3.45:1. Either there is an un-counted stage in its path or it rides a
+different gear; the real turret-to-encoder ratio is **4.21:1**. Worth tracing on the
+CAD some day, but it changes nothing here.
 
-| Candidate | Then travel is | Likely? |
-|---|---|---|
-| Encoder gear is **15T**, not 30T → 4.6:1 | ~214.5° | ✅ fits — 4.6 vs 4.70 is the same ~2% as 210 vs 214.5 |
-| An un-counted gear between the 69T and the encoder | ~214.5° | ✅ same arithmetic |
-| Gearing is right, travel is really 429° | >1 full turn | ❌ not with hard stops |
-
-**To settle it:** tape a mark on the encoder gear, sweep stop to stop, count turns.
-
-- **~1.3 turns** → ratio really is 2.3:1, and something else is doubling counts
-- **~2.7 turns** → ratio is ~4.6:1, so that gear is not 30T
-
-**This does not block anything.** `MIN_ANGLE`/`MAX_ANGLE` are ±half of travel and
-ticks-per-degree came from the same span, so the soft limits land on the real stops
-regardless — an error here shifts the degree *labels*, not where the turret
-physically stops. It starts to matter when AprilTag bearings in real degrees get fed
-to `setTargetAngle()` for auto-aim.
+**Why it changes nothing:** `TICKS_PER_DEGREE` is measured ticks over measured
+degrees, so it is right whatever the gear train turns out to be — the tooth counts
+were only ever a cross-check on it. `Turret.gearRatio()` reports the tooth-count
+ratio to telemetry only; nothing in the control path reads it.
 
 ---
 
 ## Step 5 — The magnet — **DONE 2026-10-13**
 
-The magnet reads `PRESSED` over about a **5° band**, centered at **-16.2°**.
+The magnet reads `PRESSED` over about a **5.5° band** (roughly 530 ticks), centered at **-18.1°**.
 
-**It is near the MIDDLE of travel** — 88.8° from the clockwise stop, 121.2° from
+**It is near the MIDDLE of travel** — 99.2° from the clockwise stop, 135.3° from
 the counter-clockwise one. That is why homing searches both directions (Step 6).
 
-The 5° band costs less accuracy than it looks like: homing always approaches from
+The 5.5° band costs less accuracy than it looks like: homing always approaches from
 the same side, so it always trips on the same edge of the band. Width only hurts if
 the approach direction or speed varies, and `HOMING_POWER` is fixed.
 
@@ -228,7 +220,7 @@ homing **searches both ways**:
 3. Switch trips → power cuts instantly, state goes `HOMING` → `READY`.
 4. Turret drives itself to `PARK_ANGLE` (0°, straight ahead) and holds.
 
-Worst case is about 121° of travel to find the magnet, so expect a few seconds.
+Worst case is about 135° of travel to find the magnet, so expect a few seconds.
 
 If it goes `FAILED`, read the `Note` line:
 
@@ -265,7 +257,7 @@ enough, that is a conversation, not a quick constant tweak.
 
 Once homed, in JOG mode, hold the trigger toward each end.
 
-Expected: power cuts at ±105° and `Note` reads `at MAX limit` / `at MIN limit`, and
+Expected: power cuts at ±114° — the soft limits, 3° inside the ±117.25° stops — and `Note` reads `at MAX limit` / `at MIN limit`, and
 jogging **back** still works. If the turret sails past a limit, `TICKS_PER_DEGREE` is
 wrong — go back to Step 4.
 
@@ -279,9 +271,9 @@ Record what you measured. Anything still blank is a starting guess, not a result
 
 | Constant | Original guess | Measured | In code? |
 |---|---|---|---|
-| `TICKS_PER_DEGREE` | 22.76 | **106.90** | ✅ |
-| `HOME_SWITCH_ANGLE` | -105.0 | **-16.2** | ✅ |
-| `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | stops at ±105, limits set **±102** | ✅ |
+| `TICKS_PER_DEGREE` | 22.76 | **95.73** | ✅ |
+| `HOME_SWITCH_ANGLE` | -105.0 | **-18.09** | ✅ |
+| `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | stops at ±117.25, limits set **±114** | ✅ |
 | `HOMING_DIRECTION` | -1.0 | -1.0 (searches both ways now) | ✅ |
 | `ENCODER_DIRECTION` | 1.0 | 1.0 — ticks rise counter-clockwise | ✅ |
 | `MIN_POWER` | 0.12 | *not yet measured* | — |

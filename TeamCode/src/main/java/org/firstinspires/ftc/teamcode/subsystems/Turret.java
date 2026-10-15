@@ -52,27 +52,27 @@ public class Turret {
 
     // ---- Geometry -----------------------------------------------------------
     // Ratio check: the servo must turn 69/30 = 2.3 revs for one full turret rev.
-    public static double DRIVE_GEAR_TEETH = 30.0;
+    public static double DRIVE_GEAR_TEETH = 20.0;
     public static double TURRET_GEAR_TEETH = 69.0;
 
     // MEASURED 2026-10-13 with TurretRangeTest, by pushing to both hard stops:
     //   stop A -9617 ticks, magnet -124, stop B +12832  ->  span 22449 ticks
-    //   22449 ticks / 210 deg = 106.90 ticks/deg
+    // Travel is 234.5 deg, from CAD (2026-10-15). This supersedes the earlier
+    // "about 210 deg" guess, which is where the old 106.90 came from:
+    //   22449 ticks / 234.5 deg = 95.73 ticks/deg
     //
-    // UNRESOLVED, and only affects the degree LABELS, not the limits: the REV
-    // Through Bore V2 (REV-11-3174) is 8192 counts/rev, and a 69T/30T pair is
-    // 2.3:1, which predicts 52.34 ticks/deg and a 10991-tick span. The measured
-    // span is 2.04x that, implying a real turret:encoder ratio of 4.70:1. The
-    // likeliest explanation is that the encoder gear is not 30T (15T would give
-    // 4.6:1 and a travel of 214.5 deg, which fits "about 210"), or that there is
-    // an un-counted gear in between. Settle it by taping the encoder gear and
-    // counting turns across a full sweep: ~1.3 turns means 2.3:1, ~2.7 means 4.6:1.
+    // Do NOT try to recompute this from the gear teeth -- it will not match, and
+    // that is expected. The 69T/20T pair is 3.45:1, which with an 8192 count/rev
+    // REV Through Bore V2 (REV-11-3174) predicts an 18410-tick span, but the
+    // encoder counted 22449. Both the tooth counts and the 234.5 deg are confirmed,
+    // so the encoder is simply not driven at the pinion's 3.45:1 -- there is an
+    // un-counted stage, or it rides a different gear. That is harmless here:
+    // ticks-per-degree is measured ticks over measured degrees, so it is right
+    // whatever the gear train turns out to be.
     //
-    // Why this is safe to leave as-is: MIN_ANGLE/MAX_ANGLE are +/- half of travel
-    // and this number came from the same span, so the soft limits land on the real
-    // stops either way. Only absolute degrees are off, by about 2%, which starts
-    // to matter when AprilTag bearings get fed in for auto-aim.
-    public static double TICKS_PER_DEGREE = 106.90;
+    // The 8192 count/rev figure IS confirmed: a tape-and-count sweep gave about 2.6
+    // encoder turns, matching the 2.74 the tick count implies (22449 / 8192).
+    public static double TICKS_PER_DEGREE = 95.73;
 
     // Set to -1 if positive servo power makes the reported angle go DOWN.
     // You will find this out in the first 10 seconds of testing. This is the ONLY
@@ -84,28 +84,29 @@ public class Turret {
     private static final String ENCODER_MOTOR_NAME = "rf";
 
     // ---- Travel limits ------------------------------------------------------
-    // The hard stops measured at exactly -105.0 and +105.0 degrees, which is the
-    // 210 degrees of travel divided either side of center. These limits are pulled
-    // in 3 degrees from the stops so the turret never rests against one; widen
-    // toward 105 if the extra reach is needed, but do not exceed it.
+    // Travel is 234.5 deg, so the hard stops sit at -117.25 and +117.25 either side
+    // of center. These limits are pulled in about 3 degrees from the stops so the
+    // turret never rests against one; widen toward 117 if the extra reach is needed,
+    // but do not exceed it.
     //
-    // Because ticks-per-degree was derived from the same span, these limits land on
-    // the measured stops regardless of whether travel was exactly 210 deg -- an
-    // error there shifts the degree labels, not where the turret actually stops.
-    public static double MIN_ANGLE = -102.0;
-    public static double MAX_ANGLE = 102.0;
+    // Because ticks-per-degree was derived from the same sweep, these limits land on
+    // the measured stops even if travel is not exactly 234.5 deg -- an error there
+    // shifts the degree labels, not where the turret actually stops.
+    public static double MIN_ANGLE = -114.0;
+    public static double MAX_ANGLE = 114.0;
 
     // ---- Homing -------------------------------------------------------------
-    // MEASURED: the magnet sits at -16.2 degrees -- very near the MIDDLE of travel,
-    // 88.8 degrees from one hard stop and 121.2 from the other. That is why homing
+    // MEASURED: the magnet sits at -18.1 degrees -- very near the MIDDLE of travel,
+    // 99.2 degrees from one hard stop and 135.3 from the other. That is why homing
     // searches both directions instead of driving one fixed way: from a cold start
     // the turret may be on either side of the magnet, and roughly 42% of starting
     // positions would otherwise drive away from it into a hard stop.
     //
-    // This is the CENTER of the magnet's roughly 5-degree trigger band, measured by
-    // sweeping through it. Homing trips on whichever edge it reaches first, which is
-    // repeatable because the search always approaches from the same side.
-    public static double HOME_SWITCH_ANGLE = -16.2;
+    // This is the CENTER of the magnet's trigger band (about 530 ticks, so 5.5 deg),
+    // measured by sweeping through it. Homing trips on whichever edge it reaches
+    // first, which is repeatable because the search always approaches from the same
+    // side.
+    public static double HOME_SWITCH_ANGLE = -18.09;
 
     // Which way to search FIRST. The magnet is just below center, so searching
     // negative finds it quickly from most positions. If the first direction stalls
@@ -113,7 +114,7 @@ public class Turret {
     public static double HOMING_DIRECTION = -1.0;
     public static double HOMING_POWER = 0.25;
 
-    // Per-direction budget, not a total. Worst case is a full 121 degrees of travel
+    // Per-direction budget, not a total. Worst case is a full 135 degrees of travel
     // to reach the magnet, so this may need raising once the turret's actual speed
     // at HOMING_POWER is known.
     public static double HOMING_TIMEOUT_SEC = 6.0;
