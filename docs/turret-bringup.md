@@ -208,30 +208,47 @@ this — something here is still wrong.
 
 ---
 
-## Step 5 — The magnet — **RE-MEASURE, mount was rebuilt 2026-10-15**
+## Step 5 — The magnet — **DONE 2026-10-15** (rebuilt mount)
 
-The magnet reads `PRESSED` over a **12.0° band** (942 ticks), measured by sweeping
-straight through it: picked up at -11923 ticks, dropped out at -12865.
+Three Turret Range Test sweeps on the rebuilt magnet mount:
 
-**It is near the MIDDLE of travel** — about 123° from one hard stop and 163° from
-the other. That is why homing searches both directions (Step 6).
+| Run | travel (deg) | `HOME_SWITCH_ANGLE` | band (deg) |
+|---|---|---|---|
+| 1 | 286.46 | -21.8 | 12.4 |
+| 2 | 286.20 | -21.3 | 13.6 |
+| 3 | 286.20 | -22.1 | 11.4 |
+| **mean** | **286.29** | **-21.73** | **12.47** |
+| spread | 0.26 | 0.80 | 2.20 |
 
-### The band is wide enough to matter
+`HOME_SWITCH_ANGLE = -21.73` is in the code. The magnet sits near the MIDDLE of
+travel — about 121° from one hard stop, 165° from the other — which is why homing
+searches both directions (Step 6).
 
-An earlier draft of this doc claimed the width cost nothing, on the grounds that
-homing "always approaches from the same side." That was wrong twice over. The band
-is 12°, not the 5° first guessed, and homing searches **both** directions, so it can
-arrive at the magnet from either side and trip on either edge. Using one edge as the
-zero reference would throw the turret's whole angle frame off by up to 12°.
+### Read that table twice: travel is nailed, the band is not
 
-That is what the two-stage approach in Step 6 exists to fix. Because of it,
-`HOME_SWITCH_ANGLE` is **the angle of one specific edge** — the first trip when
-travelling in `HOMING_DIRECTION` — and *not* the center of the band. Turret Range
-Test reports that edge directly, labelled, along with both edges and the center.
+**Travel repeats to ±0.13°.** That is the gear-teeth `TICKS_PER_DEGREE = 78.51`
+confirmed by measurement, three times, on a number nothing in the sweep can fudge.
+Treat 286.3° as settled.
 
-**The magnet mount was rebuilt on 2026-10-15** (prototype hardware), so the numbers
-above describe the old mount. Re-run the range test and re-measure before trusting
-any angle.
+**The band wanders by 2.2°** (11.4 to 13.6), and the edge by 0.8°. That is hand-sweep
+noise: how fast you push changes where the trip gets sampled, because the switch is
+only read once per loop. It is not the sensor being flaky.
+
+It also no longer matters much. The band width used to set the accuracy of the zero
+reference; since Step 6 re-approaches from a fixed direction at a fixed power, it
+does not. Expect the powered approach to repeat better than these hand sweeps — once
+homing works, home twice and compare the resting angle to see how much better.
+
+### `HOME_SWITCH_ANGLE` is an EDGE
+
+It is the angle where the switch first trips while travelling in `HOMING_DIRECTION`,
+**not** the center of the band. An earlier draft of this doc said the width cost
+nothing because homing "always approaches from the same side" — wrong twice: the band
+is 12°, not the 5° first guessed, and the search arrives from either side. Step 6
+exists to make the final approach consistent so this edge means something.
+
+Turret Range Test reports that edge directly and labels which one it is, with both
+edges and the center printed below it.
 
 Polarity was confirmed with the **Magnetic Sensor Test** op mode: `open` with the
 magnet away, `PRESSED` with it near.
@@ -324,7 +341,7 @@ Record what you measured. Anything still blank is a starting guess, not a result
 | Constant | Original guess | Measured | In code? |
 |---|---|---|---|
 | `TICKS_PER_DEGREE` | 22.76 | **78.51** (from gear teeth) | ✅ |
-| `HOME_SWITCH_ANGLE` | -105.0 | *re-measure — mount rebuilt, and it is now an EDGE not the band center* | ⚠️ |
+| `HOME_SWITCH_ANGLE` | -105.0 | **-21.73** (an EDGE, rebuilt mount, 3 sweeps) | ✅ |
 | `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | stops at ±143, limits set **±140** | ✅ |
 | `HOMING_DIRECTION` | -1.0 | -1.0 (searches both ways now) | ✅ |
 | `ENCODER_DIRECTION` | 1.0 | 1.0 — ticks rise counter-clockwise | ✅ |

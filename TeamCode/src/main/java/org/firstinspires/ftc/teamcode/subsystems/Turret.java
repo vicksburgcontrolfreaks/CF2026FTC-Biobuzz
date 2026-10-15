@@ -100,19 +100,22 @@ public class Turret {
     public static double MAX_ANGLE = 140.0;
 
     // ---- Homing -------------------------------------------------------------
-    // MEASURED: the magnet sits at -20.2 degrees -- near the MIDDLE of travel,
-    // 122.8 degrees from one hard stop and 163.2 from the other. That is why homing
-    // searches both directions instead of driving one fixed way: from a cold start
-    // the turret may be on either side of the magnet, and roughly 43% of starting
-    // positions would otherwise drive away from it into a hard stop.
+    // MEASURED 2026-10-15 on the rebuilt magnet mount, three Turret Range Test
+    // sweeps: -21.8, -21.3, -22.1 -> mean -21.73, spread 0.8 deg. The magnet sits
+    // near the MIDDLE of travel, about 121 degrees from one hard stop and 165 from
+    // the other, which is why homing searches both directions.
     //
-    // This is the CENTER of the magnet's trigger band, not an edge of it. Two hand
-    // sweeps crossing the magnet from opposite directions tripped 291 ticks apart
-    // (3.7 deg), which is the band width; the center is the average. Centering
-    // matters because the bidirectional search can arrive from either side, so an
-    // edge value would be off by the full band width half the time. Worst case from
-    // the center is half that, 1.9 deg.
-    public static double HOME_SWITCH_ANGLE = -20.21;
+    // THIS IS AN EDGE, NOT THE BAND CENTER. The band is wide -- 12.5 deg, and it
+    // wandered from 11.4 to 13.6 across the three sweeps -- so its center would be a
+    // poor reference. Homing instead always makes its final approach travelling in
+    // HOMING_DIRECTION, and this is the angle where the switch first trips coming
+    // that way. Re-measure it the same way after any change to the magnet or mount.
+    //
+    // The 0.8 deg spread is hand-sweep noise: how fast you push changes where the
+    // trip gets sampled, since the switch is only read once per loop. The powered
+    // approach runs at a fixed HOMING_APPROACH_POWER, so it should repeat better.
+    // Once homing works, home twice and compare the resting angle to find out.
+    public static double HOME_SWITCH_ANGLE = -21.73;
 
     // Which way to search FIRST, and -- more importantly -- the direction the final
     // approach always comes from. The magnet is just below center, so searching
