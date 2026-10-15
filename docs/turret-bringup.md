@@ -18,7 +18,7 @@ Related files:
 |---|---|
 | Servo | Dual-mode servo run in **continuous rotation (CR) mode** |
 | Gearing | 20T pinion → 69T turret gear = **3.45:1 reduction** |
-| Encoder | REV Through Bore, 4-pin cable into the **`rf` drive motor's spare encoder port** |
+| Encoder | REV Through Bore V2 (REV-11-3174) on **its own gear** meshing the ring — *not* the servo pinion. 4-pin cable into the **`rf` drive motor's spare encoder port** |
 | Home sensor | REV magnetic limit switch, digital port |
 | Travel | **234.5°** total (from CAD, 2026-10-15) |
 
@@ -179,10 +179,21 @@ is expected. All three of these are confirmed independently:
 - **Travel: 234.5°**, from CAD.
 
 Together those predict a span of `8192 × 3.45 × (234.5 / 360) = 18,410` ticks, but
-the encoder counted **22,449** — 22% more. So the encoder is **not** turning at the
-pinion's 3.45:1. Either there is an un-counted stage in its path or it rides a
-different gear; the real turret-to-encoder ratio is **4.21:1**. Worth tracing on the
-CAD some day, but it changes nothing here.
+the encoder counted **22,449** — 22% more. The CAD explains it: **the encoder is not
+on the servo's pinion at all.** It has its own gear meshing the ring independently.
+
+![Turret gear train](images/turret-gear-train.png)
+
+Two small gears mesh the 69T ring: the **20T servo pinion** (top left, under the
+servo block) and the **encoder's own gear** (bottom left, beside the REV-11-3174).
+So 69T / 20T = 3.45:1 describes the *drive* path only — the encoder's path is a
+separate ratio, which the measured span puts at **4.21:1** (an encoder gear of
+roughly 16T). Ø142.00 confirms the ring itself: a module-2, 69T gear has an outside
+diameter of (69 + 2) × 2 = 142 mm.
+
+Reading the encoder off the ring rather than off the servo pinion is the better
+arrangement anyway — backlash in the servo's gear train does not corrupt the
+position reading.
 
 **Why it changes nothing:** `TICKS_PER_DEGREE` is measured ticks over measured
 degrees, so it is right whatever the gear train turns out to be — the tooth counts
