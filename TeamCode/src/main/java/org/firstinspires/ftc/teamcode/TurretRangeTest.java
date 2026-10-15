@@ -18,11 +18,13 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  * come out of it. No power is applied -- the servo is explicitly stopped and never
  * driven, so you push the turret yourself.
  *
- * WHY THIS BEATS MEASURING 90 DEGREES WITH A PROTRACTOR
- * Pushing gently to both hard stops captures the whole TRAVEL_DEG of rotation in a
- * single reading. Any slop in where exactly you stopped is spread across 210 degrees
- * instead of 90, so the ticks-per-degree number that falls out is about twice as
- * accurate -- and it needs no protractor at all, just the stops the robot already has.
+ * WHAT THIS MEASURES
+ * Not TICKS_PER_DEGREE -- that comes from the gear teeth and the encoder's
+ * counts/rev, which are exact integers (see Turret). This op mode runs the other
+ * way round: it takes Turret.TICKS_PER_DEGREE as known and reports the TRAVEL the
+ * sweep implies, plus the magnet's position and the soft limits that follow.
+ * Pushing gently to both hard stops captures the whole travel in one reading, using
+ * stops the robot already has instead of a protractor.
  *
  * HOW TO USE
  *   1. Press start. Push the turret gently to ONE hard stop, then slowly all the way
@@ -41,11 +43,13 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
 public class TurretRangeTest extends LinearOpMode {
 
     /**
-     * Total physical travel between the hard stops, in degrees. The team measured
-     * 210. Everything below is derived from this, so if it is wrong, all the derived
-     * constants are wrong by the same factor -- it is the one number to be sure of.
+     * Optional cross-check, ignored when 0. If you think you know the travel from
+     * somewhere else -- CAD, a protractor -- put it here and this op mode will show
+     * the ticks-per-degree that that travel would imply, next to the one the gear
+     * teeth give. If the two disagree, one of the two inputs is wrong, and the gear
+     * teeth are integers.
      */
-    public static double TRAVEL_DEG = 210.0;
+    public static double TRAVEL_DEG_CHECK = 0.0;
 
     private DcMotorEx encoderMotor;
     private TouchSensor homeSwitch;
@@ -116,54 +120,62 @@ public class TurretRangeTest extends LinearOpMode {
 
             int spanTicks = maxTicks - minTicks;
 
+            double tpd = Turret.TICKS_PER_DEGREE;
+            double midTicks = (minTicks + maxTicks) / 2.0;
+
+            // Angle first: it is the number you came here to read, and the Driver
+            // Station telemetry window cuts off long blocks.
             telemetryM.addLine("=== LIVE ===");
+            telemetryM.addData("angle (deg)", toAngle(ticks, midTicks, tpd));
             telemetryM.addData("encoder ticks", ticks);
             telemetryM.addData("magnet", pressed ? "PRESSED" : "open");
-            telemetryM.addData("ticks from min end", ticks - minTicks);
-            telemetryM.addData("ticks from max end", maxTicks - ticks);
+            telemetryM.addLine("Angle zero is the middle of the sweep SO FAR, so it");
+            telemetryM.addLine("only settles once both stops have been touched.");
 
             telemetryM.addLine("");
-            telemetryM.addLine("=== TRAVEL SEEN SO FAR ===");
-            telemetryM.addData("min ticks", minTicks);
-            telemetryM.addData("max ticks", maxTicks);
+            telemetryM.addLine("=== TRAVEL ===");
             telemetryM.addData("span (ticks)", spanTicks);
-            telemetryM.addLine("Span stops growing once both stops are reached.");
+            telemetryM.addData("travel (deg)", spanTicks / tpd);
+            telemetryM.addData("min / max ticks", minTicks + " / " + maxTicks);
+            telemetryM.addLine("Both stop growing once both stops are reached.");
 
             telemetryM.addLine("");
             telemetryM.addLine("=== DERIVED CONSTANTS ===");
             if (spanTicks < 50) {
                 telemetryM.addLine("Not enough travel yet - keep sweeping.");
             } else {
-                double ticksPerDegree = spanTicks / TRAVEL_DEG;
-                double halfTravel = TRAVEL_DEG / 2.0;
-                double midTicks = (minTicks + maxTicks) / 2.0;
+                double halfTravel = spanTicks / tpd / 2.0;
 
-                telemetryM.addData("TRAVEL_DEG (input)", TRAVEL_DEG);
-                telemetryM.addData("TICKS_PER_DEGREE", ticksPerDegree);
-                telemetryM.addData("MIN_ANGLE", -halfTravel);
-                telemetryM.addData("MAX_ANGLE", halfTravel);
-                telemetryM.addData("current angle (deg)",
-                        toAngle(ticks, midTicks, ticksPerDegree));
+                telemetryM.addData("hard stops (deg)",
+                        String.format("%.1f / +%.1f", -halfTravel, halfTravel));
+                telemetryM.addData("suggested MIN_ANGLE", -(halfTravel - 3.0));
+                telemetryM.addData("suggested MAX_ANGLE", halfTravel - 3.0);
 
                 if (haveMagnet) {
                     double magnetCenter = (magnetMinTicks + magnetMaxTicks) / 2.0;
-                    double homeAngle = toAngle(magnetCenter, midTicks, ticksPerDegree);
-                    double bandDeg = (magnetMaxTicks - magnetMinTicks) / ticksPerDegree;
+                    double homeAngle = toAngle(magnetCenter, midTicks, tpd);
+                    double bandDeg = (magnetMaxTicks - magnetMinTicks) / tpd;
 
                     telemetryM.addData("HOME_SWITCH_ANGLE", homeAngle);
                     telemetryM.addData("magnet band (deg)", bandDeg);
+                    telemetryM.addLine("This is the band CENTER, which is better than");
+                    telemetryM.addLine("the edge you see by watching for the trip.");
                     // Homing has to drive TOWARD the magnet, so the sign follows
                     // whichever side of center the magnet turned out to be on.
-                    telemetryM.addData("HOMING_DIRECTION",
-                            homeAngle < 0 ? -1.0 : 1.0);
+                    telemetryM.addData("HOMING_DIRECTION", homeAngle < 0 ? -1.0 : 1.0);
                 } else {
                     telemetryM.addLine("HOME_SWITCH_ANGLE: sweep past the magnet");
                 }
-            }
 
-            telemetryM.addLine("");
-            telemetryM.addLine("ENCODER_DIRECTION is " + Turret.ENCODER_DIRECTION
-                    + " - angles above use it");
+                // Only when someone is actively arguing with the gear-teeth number.
+                if (TRAVEL_DEG_CHECK > 0.0) {
+                    telemetryM.addLine("");
+                    telemetryM.addLine("=== CROSS-CHECK ===");
+                    telemetryM.addData("if travel really were (deg)", TRAVEL_DEG_CHECK);
+                    telemetryM.addData("  then TICKS_PER_DEGREE is", spanTicks / TRAVEL_DEG_CHECK);
+                    telemetryM.addData("  but the gear teeth say", tpd);
+                }
+            }
 
             telemetryM.update(telemetry);
         }

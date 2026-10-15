@@ -100,17 +100,19 @@ public class Turret {
     public static double MAX_ANGLE = 140.0;
 
     // ---- Homing -------------------------------------------------------------
-    // MEASURED: the magnet sits at -22.1 degrees -- near the MIDDLE of travel,
-    // 120.9 degrees from one hard stop and 165.0 from the other. That is why homing
+    // MEASURED: the magnet sits at -20.2 degrees -- near the MIDDLE of travel,
+    // 122.8 degrees from one hard stop and 163.2 from the other. That is why homing
     // searches both directions instead of driving one fixed way: from a cold start
-    // the turret may be on either side of the magnet, and roughly 42% of starting
+    // the turret may be on either side of the magnet, and roughly 43% of starting
     // positions would otherwise drive away from it into a hard stop.
     //
-    // This is the CENTER of the magnet's trigger band (about 530 ticks, so 6.8 deg),
-    // measured by sweeping through it. Homing trips on whichever edge it reaches
-    // first, which is repeatable because the search always approaches from the same
-    // side.
-    public static double HOME_SWITCH_ANGLE = -22.06;
+    // This is the CENTER of the magnet's trigger band, not an edge of it. Two hand
+    // sweeps crossing the magnet from opposite directions tripped 291 ticks apart
+    // (3.7 deg), which is the band width; the center is the average. Centering
+    // matters because the bidirectional search can arrive from either side, so an
+    // edge value would be off by the full band width half the time. Worst case from
+    // the center is half that, 1.9 deg.
+    public static double HOME_SWITCH_ANGLE = -20.21;
 
     // Which way to search FIRST. The magnet is just below center, so searching
     // negative finds it quickly from most positions. If the first direction stalls
