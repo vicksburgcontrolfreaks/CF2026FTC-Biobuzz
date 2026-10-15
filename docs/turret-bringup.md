@@ -20,7 +20,7 @@ Related files:
 | Gearing | 20T pinion → 69T turret gear = **3.45:1 reduction** |
 | Encoder | REV Through Bore V2 (REV-11-3174) on **its own gear** meshing the ring — *not* the servo pinion. 4-pin cable into the **`rf` drive motor's spare encoder port** |
 | Home sensor | REV magnetic limit switch, digital port |
-| Travel | **234.5°** total (from CAD, 2026-10-15) |
+| Travel | **286°** total (22449 ticks / 78.51 ticks per deg) |
 
 ### Sharing the `rf` motor port
 
@@ -47,7 +47,7 @@ One trap already handled in code: the SDK negates `getCurrentPosition()` for a
 is the only thing that controls turret sign. Don't "fix" turret sign by editing
 `rf`'s direction — that belongs to the drivetrain.
 
-**Why CR mode and not a normal servo:** 234.5° of turret travel × 3.45 = **809°** the
+**Why CR mode and not a normal servo:** 286° of turret travel × 3.45 = **987°** the
 servo shaft has to turn. A standard servo maxes out near 270–300°, so it physically
 cannot reach. CR mode has no travel limit.
 
@@ -138,78 +138,84 @@ it too low and the turret stops short of its target and buzzes forever.
 
 ---
 
-## Step 4 — Range and `TICKS_PER_DEGREE` — **DONE 2026-10-13**
+## Step 4 — `TICKS_PER_DEGREE` and the range — **DONE 2026-10-15**
+
+### The scale factor comes from the gear teeth, not from a sweep
+
+```
+REV Through Bore V2 (REV-11-3174)  = 8192 counts/rev
+encoder gear 20T on the 69T ring   = 3.45 : 1
+8192 × 3.45 / 360                  = 78.51 ticks/deg
+```
+
+Every term is an integer off a spec sheet or a tooth count, so this number carries
+no measurement error at all. Confirmed in CAD on 2026-10-15:
+
+![Turret gear dimensions](images/turret-gear-dims.png)
+
+Both small gears are **OD 44 mm**, the ring is **OD 142 mm**. At module 2 that is
+20T (44 = 2 × (20 + 2)) and 69T (142 = 2 × (69 + 2)).
+
+### The encoder is not on the servo's pinion
+
+![Turret gear train](images/turret-gear-train.png)
+
+Two 20T gears mesh the ring: the **servo pinion** (top left) and the **encoder's own
+gear** (bottom left, beside the REV-11-3174). Same size, so the encoder happens to
+share the drive's 3.45:1 — but it is a separate path, not the servo's. Reading the
+ring directly is the better arrangement anyway: backlash in the servo's gear train
+cannot corrupt the position reading.
+
+### The range, measured by hand
 
 Measured with the **Turret Range Test** op mode (no power; push the turret by hand
 to one hard stop, then slowly to the other, passing the magnet on the way).
 
 | Landmark | Encoder ticks | Angle |
 |---|---|---|
-| Hard stop, clockwise end | **-9617** | -117.25° |
-| Magnet switch (center of band) | **-124** | **-18.1°** |
-| Hard stop, counter-clockwise end | **+12832** | +117.25° |
-
-Travel is **234.5°**, measured in CAD on 2026-10-15. The first draft of this doc
-guessed "about 210°," which is where the old `TICKS_PER_DEGREE = 106.90` came from.
-That guess was low by 24.5°, which made every reported angle read about 12% small.
+| Hard stop, clockwise end | **-9617** | -143.0° |
+| Magnet switch (center of band) | **-124** | **-22.1°** |
+| Hard stop, counter-clockwise end | **+12832** | +143.0° |
 
 ```
-span             = 12832 - (-9617) = 22449 ticks
-TICKS_PER_DEGREE = 22449 / 234.5   = 95.73
+span   = 12832 - (-9617) = 22449 ticks
+travel = 22449 / 78.51   = 286.0 deg
 ```
 
 Ticks **increase counter-clockwise**, which matches `ENCODER_DIRECTION = 1.0`
 (positive angle = counter-clockwise, viewed from above).
 
-### Why the range sweep beats the old protractor method
+### Two earlier values were wrong — recorded here so nobody redoes the work
 
-Pushing to both stops captures the whole 234.5° in one reading, so any slop in where
-you stopped is spread over the full range instead of 90° — roughly twice as accurate,
-and no protractor needed. The stops are a reference the robot already has.
+| Value | Where it came from | Problem |
+|---|---|---|
+| 106.90 | 22449 / a **guessed** 210° | the 210° was never measured |
+| 95.73 | 22449 / a CAD angle read as 234.5°, then 232° | see below |
+| **78.51** | **8192 × 3.45 / 360** | **nothing measured in it** |
 
-### Resolved: do NOT recompute this from the gear teeth
+The CAD travel is a reflex angle, which CAD would not dimension directly, so it was
+read as `360 - 128`. If travel really were 232°, the sweep would have produced
+`78.51 × 232 = 18,214` ticks. The encoder counted **22,449**. An encoder can be
+geared unexpectedly, but it does not miscount by 23%.
 
-The tooth counts and the encoder spec do **not** predict the measured span, and that
-is expected. All three of these are confirmed independently:
+The tape-and-count sweep settles it independently: **~2.6 encoder turns** counted by
+hand, against the **2.74** implied by both 22449 / 8192 and by 286° of travel. A 232°
+travel predicts only 2.22 turns.
 
-- **Encoder: REV Through Bore V2 (REV-11-3174), 8192 counts/rev.** Verified by taping
-  the encoder gear and sweeping stop to stop — about **2.6 turns** counted by hand,
-  against the **2.74** that 22449 / 8192 implies. Match.
-- **Gearing: 69T / 20T = 3.45:1**, from tooth count.
-- **Travel: 234.5°**, from CAD.
-
-Together those predict a span of `8192 × 3.45 × (234.5 / 360) = 18,410` ticks, but
-the encoder counted **22,449** — 22% more. The CAD explains it: **the encoder is not
-on the servo's pinion at all.** It has its own gear meshing the ring independently.
-
-![Turret gear train](images/turret-gear-train.png)
-
-Two small gears mesh the 69T ring: the **20T servo pinion** (top left, under the
-servo block) and the **encoder's own gear** (bottom left, beside the REV-11-3174).
-So 69T / 20T = 3.45:1 describes the *drive* path only — the encoder's path is a
-separate ratio, which the measured span puts at **4.21:1** (an encoder gear of
-roughly 16T). Ø142.00 confirms the ring itself: a module-2, 69T gear has an outside
-diameter of (69 + 2) × 2 = 142 mm.
-
-Reading the encoder off the ring rather than off the servo pinion is the better
-arrangement anyway — backlash in the servo's gear train does not corrupt the
-position reading.
-
-**Why it changes nothing:** `TICKS_PER_DEGREE` is measured ticks over measured
-degrees, so it is right whatever the gear train turns out to be — the tooth counts
-were only ever a cross-check on it. `Turret.gearRatio()` reports the tooth-count
-ratio to telemetry only; nothing in the control path reads it.
+**Sanity check on the robot:** 286° is about four-fifths of a full circle, 232° is
+about two-thirds. If the turret visibly sweeps the smaller of those, stop and reopen
+this — something here is still wrong.
 
 ---
 
 ## Step 5 — The magnet — **DONE 2026-10-13**
 
-The magnet reads `PRESSED` over about a **5.5° band** (roughly 530 ticks), centered at **-18.1°**.
+The magnet reads `PRESSED` over about a **6.8° band** (roughly 530 ticks), centered at **-22.1°**.
 
-**It is near the MIDDLE of travel** — 99.2° from the clockwise stop, 135.3° from
+**It is near the MIDDLE of travel** — 120.9° from the clockwise stop, 165.0° from
 the counter-clockwise one. That is why homing searches both directions (Step 6).
 
-The 5.5° band costs less accuracy than it looks like: homing always approaches from
+The 6.8° band costs less accuracy than it looks like: homing always approaches from
 the same side, so it always trips on the same edge of the band. Width only hurts if
 the approach direction or speed varies, and `HOMING_POWER` is fixed.
 
@@ -231,7 +237,7 @@ homing **searches both ways**:
 3. Switch trips → power cuts instantly, state goes `HOMING` → `READY`.
 4. Turret drives itself to `PARK_ANGLE` (0°, straight ahead) and holds.
 
-Worst case is about 135° of travel to find the magnet, so expect a few seconds.
+Worst case is about 165° of travel to find the magnet, so expect several seconds.
 
 If it goes `FAILED`, read the `Note` line:
 
@@ -268,7 +274,7 @@ enough, that is a conversation, not a quick constant tweak.
 
 Once homed, in JOG mode, hold the trigger toward each end.
 
-Expected: power cuts at ±114° — the soft limits, 3° inside the ±117.25° stops — and `Note` reads `at MAX limit` / `at MIN limit`, and
+Expected: power cuts at ±140° — the soft limits, 3° inside the ±143° stops — and `Note` reads `at MAX limit` / `at MIN limit`, and
 jogging **back** still works. If the turret sails past a limit, `TICKS_PER_DEGREE` is
 wrong — go back to Step 4.
 
@@ -282,15 +288,15 @@ Record what you measured. Anything still blank is a starting guess, not a result
 
 | Constant | Original guess | Measured | In code? |
 |---|---|---|---|
-| `TICKS_PER_DEGREE` | 22.76 | **95.73** | ✅ |
-| `HOME_SWITCH_ANGLE` | -105.0 | **-18.09** | ✅ |
-| `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | stops at ±117.25, limits set **±114** | ✅ |
+| `TICKS_PER_DEGREE` | 22.76 | **78.51** (from gear teeth) | ✅ |
+| `HOME_SWITCH_ANGLE` | -105.0 | **-22.06** | ✅ |
+| `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | stops at ±143, limits set **±140** | ✅ |
 | `HOMING_DIRECTION` | -1.0 | -1.0 (searches both ways now) | ✅ |
 | `ENCODER_DIRECTION` | 1.0 | 1.0 — ticks rise counter-clockwise | ✅ |
 | `MIN_POWER` | 0.12 | *not yet measured* | — |
 | `kP` | 0.010 | *not yet tuned* | — |
 | `TOLERANCE_DEG` | 2.0 | *not yet tuned* | — |
-| `HOMING_TIMEOUT_SEC` | 6.0 | *check against real travel time* | — |
+| `HOMING_TIMEOUT_SEC` | 6.0 | *likely too short — worst case is now 165°* | — |
 
 The measured values are already committed as the defaults in `Turret.java`, so they
 survive a redeploy. The remaining three come out of Steps 3 and 7, which need the
