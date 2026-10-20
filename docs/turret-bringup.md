@@ -2,9 +2,14 @@
 
 How to test the turret subsystem the first time it goes on the robot.
 
-**Status:** code written and compiling. The turret is built, and Steps 4-5 are done
-by hand-turning it, but it has **never run under power** as of 2026-10-15. Nothing
-past Step 5 is confirmed — `MIN_POWER`, `kP` and `TOLERANCE_DEG` are still guesses.
+**Status:** **ran under power for the first time on 2026-10-20.** Steps 6, 7 and 8
+were exercised on the robot: homing completes, the closed loop holds a target, and
+the soft limits do stop the turret. The committed defaults were good enough as they
+stand — no Panels retuning was needed to get this far.
+
+Two things are still open, both written up under "Known open issues" at the bottom:
+the soft limits are **overshot when jogging at full trigger**, and Step 3 (the
+`MIN_POWER` deadband) was never actually measured — 0.12 just turned out to work.
 
 Related files:
 - `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/subsystems/Turret.java`
@@ -124,7 +129,7 @@ Do not rewire anything to fix this. It is a sign flip.
 
 ---
 
-## Step 3 — Find the deadband
+## Step 3 — Find the deadband — **SKIPPED** (0.12 works; margin unmeasured)
 
 Squeeze the right trigger **slowly**. Watch `Jog request` and the turret itself.
 
@@ -255,7 +260,7 @@ magnet away, `PRESSED` with it near.
 
 ---
 
-## Step 6 — Homing
+## Step 6 — Homing — **DONE 2026-10-20**
 
 Finger on stop. Press **`X`**.
 
@@ -304,7 +309,7 @@ isn't moving at all, or `STALL_TICKS` is too tight for how slowly it creeps.
 
 ---
 
-## Step 7 — Tune the closed loop
+## Step 7 — Tune the closed loop — **DONE 2026-10-20** (defaults were fine)
 
 Press **`Y`** for HOLD mode, then D-pad left/right to nudge the target ±10°.
 
@@ -322,13 +327,27 @@ enough, that is a conversation, not a quick constant tweak.
 
 ---
 
-## Step 8 — Soft limits
+## Step 8 — Soft limits — **PARTIAL 2026-10-20** (limits work; overshoot open)
 
 Once homed, in JOG mode, hold the trigger toward each end.
 
-Expected: power cuts at ±140° — the soft limits, 3° inside the ±143° stops — and `Note` reads `at MAX limit` / `at MIN limit`, and
-jogging **back** still works. If the turret sails past a limit, `TICKS_PER_DEGREE` is
-wrong — go back to Step 4.
+Expected: power cuts at ±140° — the soft limits, 3° inside the ±143° stops — `Note`
+reads `at MAX limit` / `at MIN limit`, and jogging **back** still works.
+
+**Result 2026-10-20:** the limits do engage and jogging back out works, but at full
+trigger the turret overshoots the limit. See "Known open issues" below — this is a
+braking-distance problem, not a scale-factor one.
+
+If a limit is overshot, check the *speed dependence* before suspecting anything else:
+
+- **Holds at low speed, overshoots at high speed** → braking distance. `TICKS_PER_DEGREE`
+  is fine. This is the known issue below.
+- **Overshoots by the same amount at every speed** → *now* `TICKS_PER_DEGREE` is
+  suspect, and Step 4 is the place to go.
+
+An earlier version of this step sent you straight to Step 4 for any overshoot. That
+was wrong and cost real time: `TICKS_PER_DEGREE` comes from integer tooth counts and
+was reproduced to ±0.13° across three sweeps. It is the last thing to doubt.
 
 ---
 
@@ -345,19 +364,64 @@ Record what you measured. Anything still blank is a starting guess, not a result
 | `MIN_ANGLE` / `MAX_ANGLE` | -105 / 105 | stops at ±143, limits set **±140** | ✅ |
 | `HOMING_DIRECTION` | -1.0 | -1.0 (searches both ways now) | ✅ |
 | `ENCODER_DIRECTION` | 1.0 | 1.0 — ticks rise counter-clockwise | ✅ |
-| `MIN_POWER` | 0.12 | *not yet measured* | — |
-| `kP` | 0.010 | *not yet tuned* | — |
-| `TOLERANCE_DEG` | 2.0 | *not yet tuned* | — |
-| `HOMING_TIMEOUT_SEC` | 6.0 | *likely too short — worst case is now 163°* | — |
-| `HOMING_BACKOFF_DEG` | 8.0 | *should clear the 12° band; raise if it does not* | — |
-| `HOMING_APPROACH_POWER` | 0.15 | *must end up above `MIN_POWER`* | — |
+| `MIN_POWER` | 0.12 | **0.12 works** — but Step 3 was skipped, so the margin above the deadband is unknown | ✅ |
+| `kP` | 0.010 | **0.010 holds target** — no oscillation seen on 2026-10-20 | ✅ |
+| `TOLERANCE_DEG` | 2.0 | **2.0 does not jitter** | ✅ |
+| `HOMING_TIMEOUT_SEC` | 6.0 | **6.0 was enough** — homing completed, so the 163° worst case fits | ✅ |
+| `HOMING_BACKOFF_DEG` | 8.0 | **8.0 clears the band** — re-approach found the magnet every time | ✅ |
+| `HOMING_APPROACH_POWER` | 0.15 | **0.15 moves the turret** — above `MIN_POWER` as required | ✅ |
 
-The measured values are already committed as the defaults in `Turret.java`, so they
-survive a redeploy. The remaining three come out of Steps 3 and 7, which need the
-turret actually under power.
+Every constant is now a committed default in `Turret.java`, so all of this survives a
+redeploy. Nothing lives only in Panels.
 
-**Only once those are filled in** does this count as tested, and only then is it
-worth opening a PR or wiring the turret into a real TeleOp.
+The three that were guesses — `MIN_POWER`, `kP`, `TOLERANCE_DEG` — were confirmed
+*adequate* rather than *optimized*: the turret homed and held on the first powered
+run without touching a single slider. That is a good outcome, but read the distinction
+carefully. "It worked at 0.12" is not the same as "0.12 is right." Step 3 would tell
+you how much margin you actually have above the servo's deadband, and that margin is
+what decides whether a cold servo on a 40°F competition morning still moves. Worth
+doing before a competition, not worth blocking on now.
+
+---
+
+## Known open issues
+
+### 1. Soft limits are overshot when jogging at full trigger
+
+Found in Step 8 on 2026-10-20. Jogging at full trigger carries the turret past the
+±140° soft limit. **This is not a `TICKS_PER_DEGREE` problem** — do not go re-measure
+Step 4 over it. The old wording of Step 8 sent people there and it was wrong.
+
+`applySoftLimits()` cuts power *at* the boundary with no stopping distance:
+
+```java
+if (angle >= MAX_ANGLE && power > 0.0) return 0.0;
+```
+
+By the time the angle crosses 140° the turret is already at speed, and two things eat
+the 3° of margin to the hard stop at 143°: the check only runs once per loop, and a
+loaded CR servo does not stop dead when power is removed. Overshoot that grows with
+speed is a braking problem, never a scale-factor problem — jog in slowly and the limit
+holds fine, which is the diagnostic that separates the two.
+
+**Why this is parked:** it is a JOG-mode problem. In HOLD mode `closedLoopPower()`
+scales power with error, so the turret decelerates into its target on its own, and
+`setTargetAngle()` clips to the soft limits before the loop ever sees it. Match code
+drives the turret through `setTargetAngle()`, so auto-aim cannot trigger this.
+
+**What would un-park it:** giving a driver a manual turret jog in TeleOp. Do that and
+this bug is live in a match. Fix it first if that control gets added.
+
+The fix, when it is worth doing, is to taper the allowed power as the limit gets close
+rather than cutting at the edge — down to `MIN_POWER`, not to zero, and only in the
+direction *toward* the limit so jogging back out always works.
+
+### 2. Stall detection does not run outside homing
+
+`isStalled()` is only called from the three homing phases. In JOG and HOLD, nothing
+notices a jammed turret, so the code will keep commanding power into a servo that
+cannot move — cooking the servo and risking teeth on the 69T ring. Combined with
+issue 1, a full-trigger jog into a hard stop is unprotected.
 
 ---
 
