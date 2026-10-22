@@ -78,7 +78,20 @@ import java.util.concurrent.TimeUnit;
  *
  *   - Converges in one or two steps, then sits still and says ON TARGET.
  *   - Moving the robot makes it re-aim in steps and settle again.
- *   - Blocking the camera makes it HOLD its last angle, not wander.
+ *   - Briefly blocking the camera makes it HOLD its last angle, not wander.
+ *   - Blocking it for longer puts Phase into SEARCHING: the turret steps across
+ *     its travel pausing to look, stops the moment it sees any hive, and hands
+ *     back to TRACKING. Cover the camera completely and it finishes the sweep,
+ *     goes PARKED at 0 deg, and waits there.
+ *
+ * TESTING THE SEARCH
+ *
+ * Put a hand over the lens for two seconds. Expect: hold, then stepping. Uncover
+ * it pointed at a different hive and -- with AUTO_CELL on -- it should stop,
+ * rename the cell and aim at the new one.
+ *
+ * The sweep is deliberately steppy. A smooth slew blurs tags badly enough that
+ * the processor stops finding them, so stopping to look actually finds more.
  *
  * WHAT TO DO IF IT MISBEHAVES
  *
@@ -201,11 +214,16 @@ public class TurretAimTest extends LinearOpMode {
 
         if (gamepad1.a && !aPrev) {
             aiming = !aiming;
+            // Do not resume a sweep that was running when aiming was switched
+            // off -- the driver gets a turret that holds still until it has
+            // actually lost the tag again.
+            aim.resetPhase();
         }
         aPrev = gamepad1.a;
 
         if (gamepad1.b && !bPrev) {
             aiming = false;
+            aim.resetPhase();
             if (turret.isHomed()) turret.setTargetAngle(0.0);
         }
         bPrev = gamepad1.b;
@@ -270,6 +288,8 @@ public class TurretAimTest extends LinearOpMode {
                 AUTO_CELL ? "(AUTO)" : "(manual - D-pad picked it)");
         telemetry.addData("Camera sees", seenCell == null
                 ? "no hive tags" : seenCell.displayName);
+        telemetry.addData("Phase", "%s%s", aim.getPhase(),
+                TurretAim.SEARCH_ENABLED ? "" : "  (SEARCH_ENABLED off)");
         telemetry.addData("Aim status", aim.getStatus());
         telemetry.addLine("");
 

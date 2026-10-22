@@ -62,6 +62,33 @@ import java.util.List;
  * arrived", and the turret will sit there doing nothing while the status line
  * claims it is correcting.
  *
+ * WHAT HAPPENS WHEN THE TAG GOES AWAY
+ *
+ * Three phases, in order:
+ *
+ *   TRACKING  - normal. Lose sight and it HOLDS its last angle for
+ *               LOST_HOLD_SEC, because most losses are one blurry frame and
+ *               sweeping the turret over a dropped frame would be much worse
+ *               than waiting a beat.
+ *   SEARCHING - still nothing, so sweep the travel in SEARCH_STEP_DEG steps,
+ *               pausing at each to look. Two legs: out to the nearer end, then
+ *               back across to the far end, which covers the whole range from
+ *               wherever it happened to be. ANY hive tag ends the search --
+ *               finding something is the win, and sorting out which cell it
+ *               belongs to is the caller's job.
+ *   PARKED    - swept everything, found nothing, so sit at Turret.PARK_ANGLE
+ *               (0 deg, straight ahead -- where homing leaves it) and keep
+ *               watching. A tag appearing drops straight back to TRACKING.
+ *
+ * The sweep STEPS AND STARES instead of slewing smoothly, which looks worse but
+ * works better: a tag only has to be seen to end the search, and a moving camera
+ * smears the tag until the processor cannot find it at all. SEARCH_STEP_DEG
+ * wants to stay well under the camera's field of view so two neighbouring looks
+ * overlap and nothing hides in between.
+ *
+ * Searching only happens while the caller passes enabled = true. Nothing here
+ * moves the turret when aiming is switched off.
+ *
  * The bearing math is lifted from AprilTagFollow.whereIsTheTag() so both aim the
  * same way. It deliberately does not use ftcPose.bearing -- see bearingOf().
  */
@@ -108,9 +135,40 @@ public class TurretAim {
     public static double MAX_STEP_DEG = 60.0;
 
     // ---- Losing the tag -----------------------------------------------------
-    // The turret HOLDS its last target when the tag disappears -- it does not
-    // hunt. Searching is a separate feature; holding still is always safe.
-    public static double LOST_HOLD_SEC = 0.5;
+    // Hold the last angle this long before doing anything. Most "losses" are a
+    // single blurry frame or a hand passing the lens, and sweeping the turret
+    // every time one frame drops would be far worse than waiting a moment.
+    // Raise it if brief occlusions keep kicking off a search.
+    public static double LOST_HOLD_SEC = 1.0;
+
+    // ---- Searching ----------------------------------------------------------
+    // After LOST_HOLD_SEC with nothing in sight, sweep the travel looking for
+    // ANY hive tag. Set false to go back to just holding the last angle.
+    public static boolean SEARCH_ENABLED = true;
+
+    // How far to move between looks. This wants to be comfortably SMALLER than
+    // the camera's horizontal field of view (roughly 55-70 deg on a usual
+    // webcam) so consecutive looks overlap and a hive cannot hide in the gap.
+    // Bigger = faster sweep, more risk of sweeping straight past something.
+    public static double SEARCH_STEP_DEG = 30.0;
+
+    // How long to sit still at each look. The camera delivers ~30 frames a
+    // second, so this needs to be long enough for a few frames to actually
+    // arrive and get processed. Too short and the sweep blurs past tags that
+    // were right there.
+    public static double SEARCH_DWELL_SEC = 0.25;
+
+    // The sweep steps and stares rather than slewing continuously, on purpose:
+    // a tag only has to be SEEN to end the search, but a moving camera smears
+    // the tag and the processor stops finding it at all. Stopping to look is
+    // slower per degree and far more likely to actually succeed.
+
+    /**
+     * TRACKING aims at the tag. SEARCHING sweeps the travel looking for any
+     * hive. PARKED means the sweep found nothing and the turret is sitting at
+     * PARK_ANGLE waiting for a tag to turn up.
+     */
+    public enum Phase { TRACKING, SEARCHING, PARKED }
 
     /** Which tags count. Any of them seen at once get averaged together. */
     private int[] targetTagIds;
@@ -129,6 +187,14 @@ public class TurretAim {
     private String status = "idle";
 
     private final ElapsedTime sinceLastSeen = new ElapsedTime();
+
+    // ---- Search state -------------------------------------------------------
+    private Phase phase = Phase.TRACKING;
+    private double searchTarget = 0.0;   // the look we are driving to
+    private double searchDir = 1.0;      // +1 = toward MAX_ANGLE
+    private int searchLeg = 0;           // 0 = out to the near end, 1 = back across
+    private boolean dwelling = false;    // arrived, now letting frames land
+    private final ElapsedTime searchDwell = new ElapsedTime();
 
     public TurretAim(int[] targetTagIds) {
         this.targetTagIds = targetTagIds;
@@ -184,8 +250,41 @@ public class TurretAim {
             }
         }
 
+        tagsUsed = count;
+
+        // Any BIOBUZZ hive tag at all, ours or not. This is what ends a search:
+        // finding SOMETHING is the win, and which cell it belongs to is then the
+        // caller's problem (Turret Aim Test's AUTO_CELL retargets to it).
+        boolean anyHiveTag = (count + otherCount) > 0;
+
+        // --- 2. Searching and giving up --------------------------------------
+        // A sweep commands the turret, so it must stop the instant the caller
+        // stops allowing commands -- otherwise switching aiming off mid-sweep
+        // would leave the turret still marching through its looks.
+        if (!enabled && phase != Phase.TRACKING) {
+            resetPhase();
+            status = "aiming off -- search cancelled, holding";
+            return;
+        }
+
+        if (phase == Phase.SEARCHING) {
+            if (anyHiveTag) {
+                endSearch(turret, "search found tags -- tracking");
+            } else {
+                runSearch(turret);
+                return;
+            }
+        } else if (phase == Phase.PARKED) {
+            if (anyHiveTag) {
+                endSearch(turret, "tags back -- tracking");
+            } else {
+                status = String.format("gave up -- parked at %.1f deg, waiting for tags",
+                        Turret.PARK_ANGLE);
+                return;
+            }
+        }
+
         if (count == 0) {
-            tagsUsed = 0;
             forgetMeasurement();
             if (otherCount > 0) {
                 // Deliberately does NOT auto-switch. Which cell to aim at is a
@@ -194,17 +293,26 @@ public class TurretAim {
                 status = String.format("WRONG CELL? seeing [%s] but aiming at %s"
                                 + " -- D-pad to switch",
                         otherIds, Arrays.toString(targetTagIds));
-            } else {
-                status = sinceLastSeen.seconds() > LOST_HOLD_SEC
-                        ? String.format("tag LOST %.1fs -- holding %.1f deg",
-                                sinceLastSeen.seconds(), turret.getTargetAngle())
-                        : "no tag this frame";
+                return;
             }
+
+            // Nothing visible at all. Hold still first -- most "losses" are one
+            // blurry frame, and sweeping the turret every time a frame drops
+            // would be far worse than waiting a moment. Only once it is properly
+            // gone do we go looking.
+            if (SEARCH_ENABLED && enabled && sinceLastSeen.seconds() > LOST_HOLD_SEC) {
+                beginSearch(turret);
+                return;
+            }
+            status = sinceLastSeen.seconds() > LOST_HOLD_SEC
+                    ? String.format("tag LOST %.1fs -- holding %.1f deg%s",
+                            sinceLastSeen.seconds(), turret.getTargetAngle(),
+                            SEARCH_ENABLED ? "" : " (search off)")
+                    : "no tag this frame";
             return;
         }
 
         sinceLastSeen.reset();
-        tagsUsed = count;
         // Plain average is fine: the four tags on one cell are a few degrees
         // apart at most, so there is no wrap-around to worry about. Averaging is
         // the cheapest noise reduction available -- four tags roughly halves it.
@@ -274,6 +382,89 @@ public class TurretAim {
                 : String.format("committed %.1f deg (step %+.1f)", desired, step);
     }
 
+    // ---- Searching ----------------------------------------------------------
+
+    /** Start sweeping. Heads for the NEARER end first, so the first new look comes soonest. */
+    private void beginSearch(Turret turret) {
+        double here = turret.getAngle();
+        double roomUp = Math.abs(Turret.MAX_ANGLE - here);
+        double roomDown = Math.abs(here - Turret.MIN_ANGLE);
+
+        phase = Phase.SEARCHING;
+        searchDir = (roomUp <= roomDown) ? 1.0 : -1.0;
+        searchLeg = 0;
+        searchTarget = here;
+        dwelling = false;
+        forgetMeasurement();
+        stepSearch(turret);
+    }
+
+    /** One loop of the sweep: sit still long enough to look, then move on. */
+    private void runSearch(Turret turret) {
+        if (turret.isOnTarget()) {
+            if (!dwelling) {
+                dwelling = true;
+                searchDwell.reset();
+            }
+            if (searchDwell.seconds() >= SEARCH_DWELL_SEC) {
+                dwelling = false;
+                stepSearch(turret);
+            }
+        } else {
+            // Still travelling. A moving camera smears tags, so there is no
+            // point looking hard until it stops.
+            dwelling = false;
+        }
+
+        if (phase == Phase.SEARCHING) {
+            status = String.format("SEARCHING leg %d -- at %.0f, looking at %.0f",
+                    searchLeg + 1, turret.getAngle(), searchTarget);
+        }
+    }
+
+    /**
+     * Move to the next look, turn around at the first end, and give up after the
+     * second. Two legs cover the whole travel wherever the turret started.
+     */
+    private void stepSearch(Turret turret) {
+        double limit = (searchDir > 0) ? Turret.MAX_ANGLE : Turret.MIN_ANGLE;
+
+        if (Math.abs(searchTarget - limit) < 0.5) {
+            if (searchLeg == 0) {
+                searchLeg = 1;
+                searchDir = -searchDir;
+                limit = (searchDir > 0) ? Turret.MAX_ANGLE : Turret.MIN_ANGLE;
+            } else {
+                // Swept everything and found nothing. Park rather than sit at a
+                // limit: 0 deg is straight ahead, which is where homing leaves
+                // the turret and the least surprising place to find it.
+                phase = Phase.PARKED;
+                turret.setTargetAngle(Turret.PARK_ANGLE);
+                forgetMeasurement();
+                status = String.format("searched all %.0f deg of travel, no tags -- parking at %.1f",
+                        Turret.MAX_ANGLE - Turret.MIN_ANGLE, Turret.PARK_ANGLE);
+                return;
+            }
+        }
+
+        searchTarget += searchDir * SEARCH_STEP_DEG;
+        searchTarget = (searchDir > 0)
+                ? Math.min(searchTarget, limit)
+                : Math.max(searchTarget, limit);
+        turret.setTargetAngle(searchTarget);
+    }
+
+    /** A tag turned up. Stop where we are and let tracking take it from here. */
+    private void endSearch(Turret turret, String why) {
+        // Command the CURRENT angle so the sweep halts promptly instead of
+        // coasting on to a look it no longer needs.
+        turret.setTargetAngle(turret.getAngle());
+        phase = Phase.TRACKING;
+        dwelling = false;
+        forgetMeasurement();
+        status = why;
+    }
+
     /**
      * Horizontal bearing to one tag, in degrees. Positive = the tag is to the
      * CAMERA's left.
@@ -310,6 +501,23 @@ public class TurretAim {
     /** What this class is doing and why -- put it on the Driver Station. */
     public String getStatus() {
         return status;
+    }
+
+    /** TRACKING, SEARCHING or PARKED. */
+    public Phase getPhase() {
+        return phase;
+    }
+
+    /**
+     * Abandon a search or a park and go back to tracking. Call this when the
+     * driver re-enables aiming or re-parks the turret by hand, so a sweep that
+     * was in progress does not resume and fight them for the turret.
+     */
+    public void resetPhase() {
+        phase = Phase.TRACKING;
+        dwelling = false;
+        forgetMeasurement();
+        sinceLastSeen.reset();
     }
 
     /** Smoothed degrees off target. This is what a commit decision is made on. */
