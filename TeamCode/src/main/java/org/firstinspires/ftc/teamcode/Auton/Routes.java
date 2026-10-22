@@ -93,6 +93,21 @@ public final class Routes {
                 .driveTo(park.spot);
     }
 
+    // A short auto that stays out of our partner's way. Start against the far
+    // wall, back straight off it (LEAVE) and launch the preloads, slide over
+    // under the flower into the red/far wall corner, wait there until the
+    // "yield until" time, then park. Launching is a PLACEHOLDER (see RouteAuto).
+    public static Route farWallYield(Park park) {
+        Route route = Route.startAt(FAR_WALL_START)
+                .launchFrom(FAR_WALL_EXIT)   // straight off the wall, then launch
+                .driveTo(PAST_FAR_FLOWER)    // sideways, staying well below the flower
+                .yieldAt(FAR_CORNER);        // wait here for our partner
+        if (park == Park.NONE) {
+            return route;
+        }
+        return route.driveTo(park.spot);     // straight down the red wall
+    }
+
     // The no-park versions, for the old one-route OpModes (RedStartUp etc.).
     public static final Route START_UP_GARDEN_WALL = startUpGardenWall(Park.NONE);
     public static final Route START_UP_FAR_WALL    = startUpFarWall(Park.NONE);

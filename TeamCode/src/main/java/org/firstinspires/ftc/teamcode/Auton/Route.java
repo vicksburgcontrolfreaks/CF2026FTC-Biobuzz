@@ -31,6 +31,8 @@ public final class Route {
         COLLECT,  // run the collector when close to the point, stop on arrival
         LAUNCH,   // on arrival, launch into the hive. PLACEHOLDER until the
                   // launcher is built -- see RouteAuto.startLaunch()
+        YIELD,    // on arrival, hold still until the "yield until" time, to
+                  // stay out of our alliance partner's way
     }
 
     public static final class Step {
@@ -65,6 +67,11 @@ public final class Route {
 
     public Route launchFrom(Pose target) {
         return then(target, Action.LAUNCH);
+    }
+
+    // ("yield" by itself is a Java keyword, so this is yieldAt.)
+    public Route yieldAt(Pose target) {
+        return then(target, Action.YIELD);
     }
 
     private Route then(Pose target, Action action) {

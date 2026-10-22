@@ -30,6 +30,7 @@ import java.util.List;
  *      - COLLECT steps: collector on once within COLLECT_RADIUS of the
  *        point, off when we get there
  *      - LAUNCH steps: on arrival, launch, wait LAUNCH_SECONDS, move on
+ *      - YIELD steps: on arrival, hold still until yieldUntilSeconds
  *   3. Say "Done" on the Driver Station, and show how long the run took
  *
  * "abstract" means you can't run this class by itself -- only the tiny files
@@ -69,6 +70,11 @@ public abstract class RouteAuto extends OpMode {
     private Timer runTimer;               // seconds since Start
     private double finishedSeconds = -1;  // when the last step finished, -1 = not yet
 
+    // A YIELD step holds still until this many seconds after Start.
+    // 0 = don't wait at all. SelectAuto sets it from the menu.
+    private double yieldUntilSeconds = 0;
+    private boolean yielding = false;     // just for telemetry
+
     private Pose startPose;                              // for OUR alliance
     private final List<Pose> targets = new ArrayList<>(); // targets.get(i) = where step i ends, for OUR alliance
     private final List<Path> paths = new ArrayList<>();   // paths.get(i) = how step i gets there
@@ -99,6 +105,12 @@ public abstract class RouteAuto extends OpMode {
         warnings.clear();
         buildPaths();
         checkPaths();
+    }
+
+    // How long (seconds after Start) a YIELD step waits. Only matters for
+    // routes that have a YIELD step.
+    protected void setYieldUntil(double seconds) {
+        yieldUntilSeconds = seconds;
     }
 
     private void buildPaths() {
@@ -166,6 +178,14 @@ public abstract class RouteAuto extends OpMode {
                 }
                 stopLaunch();
                 launching = false;
+            }
+
+            // YIELD step: we've arrived, so hold still until the yield time.
+            if (route.steps.get(step).action == Route.Action.YIELD) {
+                yielding = runTimer.getElapsedTimeSeconds() < yieldUntilSeconds;
+                if (yielding) {
+                    return; // stay out of our partner's way -- check again next loop
+                }
             }
 
             if (step + 1 < paths.size()) {
@@ -256,6 +276,7 @@ public abstract class RouteAuto extends OpMode {
         telemetry.addData("Step", (step + 1) + " of " + paths.size());
         telemetry.addData("Collector", collectorOn ? "ON" : "off");
         if (launching) telemetry.addLine("LAUNCHING (placeholder -- nothing moves)");
+        if (yielding) telemetry.addLine(String.format("YIELDING until %.0f sec", yieldUntilSeconds));
         telemetry.addData("X", follower.getPose().getX());
         telemetry.addData("Y", follower.getPose().getY());
         telemetry.addData("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));

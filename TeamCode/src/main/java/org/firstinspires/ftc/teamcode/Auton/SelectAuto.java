@@ -22,7 +22,8 @@ public class SelectAuto extends RouteAuto {
     enum AutoRoute {
         GARDEN_WALL("Garden Wall"),
         FAR_WALL("Far Wall"),
-        GARDEN_WALL_LAUNCH("Garden Wall + Launch");
+        GARDEN_WALL_LAUNCH("Garden Wall + Launch"),
+        FAR_WALL_YIELD("Far Wall + Yield");
 
         final String label;
 
@@ -35,6 +36,7 @@ public class SelectAuto extends RouteAuto {
                 case GARDEN_WALL:        return Routes.startUpGardenWall(park);
                 case FAR_WALL:           return Routes.startUpFarWall(park);
                 case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
+                case FAR_WALL_YIELD:     return Routes.farWallYield(park);
                 default: throw new IllegalStateException("No route for " + this);
             }
         }
@@ -50,15 +52,20 @@ public class SelectAuto extends RouteAuto {
     private final AutoMenu.Choice<Alliance> alliance =
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
     private final AutoMenu.Choice<AutoRoute> autoRoute =
-            menu.add("Route", AutoRoute.GARDEN_WALL, AutoRoute.FAR_WALL, AutoRoute.GARDEN_WALL_LAUNCH);
+            menu.add("Route", AutoRoute.GARDEN_WALL, AutoRoute.FAR_WALL,
+                    AutoRoute.GARDEN_WALL_LAUNCH, AutoRoute.FAR_WALL_YIELD);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8);
     private final AutoMenu.Choice<Routes.Park> park =
             menu.add("Park", Routes.Park.GARDEN_SIDE, Routes.Park.FAR_SIDE, Routes.Park.NONE);
+    // Only used by routes with a yield step (Far Wall + Yield). Seconds after Start.
+    private final AutoMenu.Choice<Integer> yieldUntil =
+            menu.add("Yield until (sec)", 15, 18, 20, 22, 25);
 
     // Hand the menu's current picks to RouteAuto.
     private void applyMenu() {
         useRoute(alliance.get(), autoRoute.get().route(park.get()), startWait.get());
+        setYieldUntil(yieldUntil.get());
     }
 
     @Override

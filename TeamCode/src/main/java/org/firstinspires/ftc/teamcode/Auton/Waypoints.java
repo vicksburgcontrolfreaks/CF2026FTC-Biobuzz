@@ -134,4 +134,23 @@ public final class Waypoints {
     public static final double FAR_WALL_EXIT_DISTANCE = 12; // inches straight off the wall
     public static final Pose FAR_WALL_EXIT = new Pose(FAR_WALL_START.getX(),
             ON_FAR_WALL_Y - FAR_WALL_EXIT_DISTANCE, FACING_RED_WALL);
+
+    // ---------------- Red / far wall corner (yield spot) ----------------
+
+    // Same height as FAR_WALL_EXIT, just past the far-wall flower. Sliding
+    // over to here keeps the robot's top edge ~6 in. below the flower the
+    // whole way. (A straight diagonal from the exit to the corner only
+    // misses it by ~1.5 in. -- too close once the robot slips a little.)
+    public static final double PAST_FLOWER_CLEARANCE = 3;
+    public static final Pose PAST_FAR_FLOWER = new Pose(
+            FieldConstants.FLOWER_FAR_WALL.minX - HALF_LENGTH - PAST_FLOWER_CLEARANCE,
+            FAR_WALL_EXIT.getY(), FACING_RED_WALL);
+
+    // Tucked into the corner where the red wall meets the far wall, a little
+    // off both walls so we don't push on them. Out of our partner's way, and
+    // right next to the loading zone for parking.
+    public static final double CORNER_WALL_GAP = 4;
+    public static final Pose FAR_CORNER = new Pose(
+            HALF_LENGTH + CORNER_WALL_GAP,
+            ON_FAR_WALL_Y - CORNER_WALL_GAP, FACING_RED_WALL);
 }
