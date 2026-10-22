@@ -31,11 +31,18 @@ import java.util.concurrent.TimeUnit;
  * commanding anything. That is how you check the sign before the turret is
  * allowed to move. Only press A once that line looks right.
  *
+ * WHICH HIVE IT AIMS AT IS WORKED OUT FOR YOU. Point the camera at a hive and
+ * the "Aiming at" line names it -- "Blue audience [38, 39, 40, 41] (AUTO)". No
+ * need to remember which IDs belong to which cell, and no D-pad hunting. The
+ * D-pad is still there to force a specific cell, and using it switches to manual
+ * so auto-detect cannot pull you back; set AUTO_CELL in Panels to hand control
+ * back to the camera.
+ *
  * Controls (gamepad1):
  *   X             - start homing. Nothing else works until this finishes.
  *   A             - toggle aiming ON / OFF (starts OFF)
  *   B             - aiming OFF and send the turret back to 0 (straight ahead)
- *   D-pad L/R     - pick which hive cell to aim at
+ *   D-pad L/R     - force a specific hive cell (turns AUTO_CELL off)
  *
  * BRING-UP ORDER
  *
@@ -45,10 +52,12 @@ import java.util.concurrent.TimeUnit;
  *    Note line and go back to docs/turret-bringup.md Step 6 -- aiming cannot work
  *    before this does, because "getAngle() + bearing" needs a real angle.
  *
- * 3. Point the camera somewhere it can see a cell. Check "Tags used" goes above
- *    0 and "Frame age" is a sane number of milliseconds. If "Tags used" stays 0
- *    while you can see tags in the camera stream, you have the wrong cell
- *    selected -- D-pad to the right one.
+ * 3. Point the camera somewhere it can see a cell. "Aiming at" should name the
+ *    hive you are looking at, "Camera sees" should agree with it, and "Tags used"
+ *    should go above 0. Check "Frame age" is a sane number of milliseconds.
+ *
+ *    If "Aiming at" says (manual) and disagrees with "Camera sees", someone has
+ *    pressed the D-pad -- turn AUTO_CELL back on in Panels.
  *
  * 4. WITH AIMING STILL OFF, hold the turret so the tag is off to one side and
  *    read the "would aim" line.
@@ -103,6 +112,18 @@ public class TurretAimTest extends LinearOpMode {
     // small (3.25 in.), so drop to 1 if it cannot find them from across the tile.
     public static int DECIMATION = 2;
 
+    // Work out which hive cell we are looking at from the tags in frame, instead
+    // of making someone remember that 38-41 is the Blue audience hive. Point the
+    // camera at a hive and it names it and aims at it.
+    //
+    // Touching the D-pad turns this OFF, because an explicit request for a cell
+    // should not get silently overridden a moment later.
+    //
+    // MATCH CODE SHOULD NOT DO THIS. There, set the cell from the alliance you
+    // are actually on, before the match starts. Retargeting to whichever hive
+    // wanders into frame is a great way to score for the other alliance.
+    public static boolean AUTO_CELL = true;
+
     private final Turret turret = new Turret();
     private TurretAim aim;
 
@@ -112,16 +133,9 @@ public class TurretAimTest extends LinearOpMode {
 
     // Which cell to aim at. Hive tags come in clusters of four; TurretAim
     // averages whichever of them it can see, which roughly halves the noise.
-    private static final int[][] CELLS = {
-            FieldAprilTags.RED_FAR_CELL,
-            FieldAprilTags.RED_AUDIENCE_CELL,
-            FieldAprilTags.BLUE_AUDIENCE_CELL,
-            FieldAprilTags.BLUE_FAR_CELL,
-    };
-    private static final String[] CELL_NAMES = {
-            "RED far", "RED audience", "BLUE audience", "BLUE far",
-    };
-    private int cellIndex = 0;
+    private FieldAprilTags.Cell cell = FieldAprilTags.Cell.RED_FAR;
+    /** The cell the camera can actually see right now, or null if it sees none. */
+    private FieldAprilTags.Cell seenCell = null;
 
     private boolean aiming = false;
     private boolean aPrev, bPrev, xPrev, dpadLeftPrev, dpadRightPrev;
@@ -129,7 +143,7 @@ public class TurretAimTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         turret.init(hardwareMap);
-        aim = new TurretAim(CELLS[cellIndex]);
+        aim = new TurretAim(cell.tagIds);
 
         initCamera();
 
@@ -140,8 +154,10 @@ public class TurretAimTest extends LinearOpMode {
 
         telemetry.addLine("TURRET AIM TEST");
         telemetry.addLine("X = home  |  A = aiming on/off  |  B = park at 0");
-        telemetry.addLine("D-pad L/R = pick hive cell");
+        telemetry.addLine("D-pad L/R = force a hive cell (otherwise automatic)");
         telemetry.addLine("");
+        telemetry.addLine("The hive is identified from the tags in frame --");
+        telemetry.addLine("just point the camera at it and read 'Aiming at'.");
         telemetry.addLine("Aiming starts OFF. Home first (X), then watch the");
         telemetry.addLine("'would aim' line to check BEARING_SIGN before pressing A.");
         telemetry.addLine("Camera view: 3 dots menu > Camera Stream");
@@ -154,6 +170,14 @@ public class TurretAimTest extends LinearOpMode {
             handleButtons();
 
             List<AprilTagDetection> detections = aprilTag.getDetections();
+
+            // Name the hive in front of us, and adopt it unless someone has made
+            // an explicit choice with the D-pad.
+            seenCell = dominantCell(detections);
+            if (AUTO_CELL && seenCell != null && seenCell != cell) {
+                cell = seenCell;
+                aim.setTargetTagIds(cell.tagIds);
+            }
 
             // Order matters: decide the target first, then let the turret act on
             // it in the same loop. TurretAim only ever calls setTargetAngle();
@@ -186,17 +210,51 @@ public class TurretAimTest extends LinearOpMode {
         }
         bPrev = gamepad1.b;
 
-        if (gamepad1.dpad_right && !dpadRightPrev) {
-            cellIndex = (cellIndex + 1) % CELLS.length;
-            aim.setTargetTagIds(CELLS[cellIndex]);
-        }
+        if (gamepad1.dpad_right && !dpadRightPrev) selectCell(+1);
         dpadRightPrev = gamepad1.dpad_right;
 
-        if (gamepad1.dpad_left && !dpadLeftPrev) {
-            cellIndex = (cellIndex + CELLS.length - 1) % CELLS.length;
-            aim.setTargetTagIds(CELLS[cellIndex]);
-        }
+        if (gamepad1.dpad_left && !dpadLeftPrev) selectCell(-1);
         dpadLeftPrev = gamepad1.dpad_left;
+    }
+
+    /**
+     * Manual cell choice. Turns AUTO_CELL off: if you have asked for a specific
+     * hive, auto-detect must not quietly pull you back to whatever is in frame.
+     * Flip AUTO_CELL back on in Panels to hand control back to the camera.
+     */
+    private void selectCell(int step) {
+        FieldAprilTags.Cell[] all = FieldAprilTags.Cell.values();
+        cell = all[(cell.ordinal() + step + all.length) % all.length];
+        aim.setTargetTagIds(cell.tagIds);
+        AUTO_CELL = false;
+    }
+
+    /**
+     * Which hive cell the camera is mostly looking at, or null if it sees none.
+     *
+     * Counts tags per cell and takes the winner rather than trusting the first
+     * detection in the list, so one stray tag from the next hive over at the
+     * edge of frame cannot steal the aim.
+     */
+    private FieldAprilTags.Cell dominantCell(List<AprilTagDetection> detections) {
+        FieldAprilTags.Cell[] all = FieldAprilTags.Cell.values();
+        int[] counts = new int[all.length];
+
+        for (AprilTagDetection tag : detections) {
+            if (tag.metadata == null) continue;   // not a BIOBUZZ tag, no pose
+            FieldAprilTags.Cell found = FieldAprilTags.Cell.forTag(tag.id);
+            if (found != null) counts[found.ordinal()]++;
+        }
+
+        FieldAprilTags.Cell best = null;
+        int bestCount = 0;
+        for (int i = 0; i < all.length; i++) {
+            if (counts[i] > bestCount) {
+                bestCount = counts[i];
+                best = all[i];
+            }
+        }
+        return best;
     }
 
     private void showTelemetry(int totalDetections) {
@@ -207,8 +265,11 @@ public class TurretAimTest extends LinearOpMode {
         telemetry.addLine("");
 
         telemetry.addData("AIMING", aiming ? ">>> ON <<<" : "off (press A)");
-        telemetry.addData("Cell", "%s  %s", CELL_NAMES[cellIndex],
-                java.util.Arrays.toString(CELLS[cellIndex]));
+        telemetry.addData("Aiming at", "%s %s  %s", cell.displayName,
+                java.util.Arrays.toString(cell.tagIds),
+                AUTO_CELL ? "(AUTO)" : "(manual - D-pad picked it)");
+        telemetry.addData("Camera sees", seenCell == null
+                ? "no hive tags" : seenCell.displayName);
         telemetry.addData("Aim status", aim.getStatus());
         telemetry.addLine("");
 
