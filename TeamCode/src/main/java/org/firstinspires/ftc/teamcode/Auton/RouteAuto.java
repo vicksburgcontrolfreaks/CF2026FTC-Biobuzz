@@ -21,7 +21,9 @@ import java.util.List;
  * code; the route itself comes from Routes.
  *
  * Each Driver Station entry (RedStartUp, BlueStartUp, ...) is a tiny file
- * that picks an alliance and a route, then lets this class do everything:
+ * that picks an alliance and a route, then lets this class do everything.
+ * (SelectAuto instead lets the drive team pick them on the gamepad during
+ * INIT, by calling useRoute().)
  *
  *   1. Start at the route's start (after WAIT_SECONDS, 0 = go right away)
  *   2. Drive to each step's point, stopping at each one
@@ -40,15 +42,16 @@ public abstract class RouteAuto extends OpMode {
     // (inches) to the step's point.
     private static final double COLLECT_RADIUS = 22;
 
-    // How long to wait before starting. 0 = go right away. (Handy to raise in a
-    // match if our alliance partner needs us to stay out of their way at first.)
+    // How long to wait before starting, for the tiny files. 0 = go right away.
+    // (SelectAuto picks its own wait on the gamepad.)
     private static final double WAIT_SECONDS = 0;
 
     // Top speed while testing (1.0 = full speed). Raise it once the robot stops where it should.
     private static final double MAX_POWER = 0.85;
 
-    private final Alliance alliance;
-    private final Route route;
+    private Alliance alliance;
+    private Route route;
+    private double waitSeconds = WAIT_SECONDS;
 
     private Follower follower;
     private DcMotorEx collector;
@@ -67,6 +70,24 @@ public abstract class RouteAuto extends OpMode {
     protected RouteAuto(Alliance alliance, Route route) {
         this.alliance = alliance;
         this.route = route;
+    }
+
+    // For an auto that picks its route later (SelectAuto). It MUST call
+    // useRoute() in init().
+    protected RouteAuto() {}
+
+    // Switch to a different alliance/route/wait. Rebuilds the paths and reruns
+    // the path check, so the INIT screen always matches what will really run.
+    // Call it during init / init_loop only -- never after Start.
+    protected void useRoute(Alliance alliance, Route route, double waitSeconds) {
+        this.alliance = alliance;
+        this.route = route;
+        this.waitSeconds = waitSeconds;
+        targets.clear();
+        paths.clear();
+        warnings.clear();
+        buildPaths();
+        checkPaths();
     }
 
     private void buildPaths() {
@@ -96,7 +117,7 @@ public abstract class RouteAuto extends OpMode {
     private void autonomousPathUpdate() {
         if (step == -1) {
             // Sitting at the start. After the wait (if any), start the first step.
-            if (pathTimer.getElapsedTimeSeconds() > WAIT_SECONDS) {
+            if (pathTimer.getElapsedTimeSeconds() > waitSeconds) {
                 startStep(0);
             }
             return;
@@ -143,17 +164,24 @@ public abstract class RouteAuto extends OpMode {
         collector = hardwareMap.get(DcMotorEx.class, "collector");
         collector.setDirection(DcMotorSimple.Direction.REVERSE); // same as RobotHardware
 
-        buildPaths();
         follower = Constants.createFollower(hardwareMap);
-        follower.setStartingPose(startPose); // tell the robot where it is at the beginning
         follower.setMaxPower(MAX_POWER);
-        checkPaths();
+        if (route != null) {
+            useRoute(alliance, route, waitSeconds);
+        }
     }
 
     // Runs over and over after INIT is pressed, until Start
     @Override
     public void init_loop() {
-        telemetry.addLine(String.format("%s start: (%.1f, %.1f)", alliance, startPose.getX(), startPose.getY()));
+        addRouteTelemetry();
+        telemetry.update();
+    }
+
+    // Where we start, the wait, and what the path check found.
+    protected void addRouteTelemetry() {
+        telemetry.addLine(String.format("%s start: (%.1f, %.1f)   wait %.0f sec",
+                alliance, startPose.getX(), startPose.getY(), waitSeconds));
         if (warnings.isEmpty()) {
             telemetry.addLine("Path check: OK");
         } else {
@@ -162,11 +190,13 @@ public abstract class RouteAuto extends OpMode {
                 telemetry.addLine("  " + warning);
             }
         }
-        telemetry.update();
     }
 
     @Override
     public void start() {
+        // Set here, not in init, because SelectAuto can change the start
+        // right up until Start is pressed.
+        follower.setStartingPose(startPose); // tell the robot where it is at the beginning
         step = -1;
         pathTimer.resetTimer();
     }
