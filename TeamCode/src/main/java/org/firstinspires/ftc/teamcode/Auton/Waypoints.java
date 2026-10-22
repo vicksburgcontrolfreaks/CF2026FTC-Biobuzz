@@ -124,4 +124,14 @@ public final class Waypoints {
 
     // At the far wall start, next to the far-wall flower.
     public static final Pose LAUNCH_FAR_WALL = FAR_WALL_START;
+
+    // ---------------- Leaving the far wall ----------------
+
+    // At the far wall the robot is only ~1 in. from the flower, so ANY move
+    // that heads toward the red wall right away swings the robot's corner
+    // into the flower (it hit it on the robot, 2026-10-22). Drive straight
+    // off the wall to here first, then go wherever.
+    public static final double FAR_WALL_EXIT_DISTANCE = 12; // inches straight off the wall
+    public static final Pose FAR_WALL_EXIT = new Pose(FAR_WALL_START.getX(),
+            ON_FAR_WALL_Y - FAR_WALL_EXIT_DISTANCE, FACING_RED_WALL);
 }

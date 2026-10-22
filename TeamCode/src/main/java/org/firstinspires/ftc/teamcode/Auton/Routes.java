@@ -87,7 +87,10 @@ public final class Routes {
         if (park == Park.NONE) {
             return route;
         }
-        return route.driveTo(HIVE_LEFT_HIGH).driveTo(park.spot);
+        return route
+                .driveTo(FAR_WALL_EXIT)     // straight off the wall first, or we hit the flower
+                .driveTo(HIVE_LEFT_HIGH)
+                .driveTo(park.spot);
     }
 
     // The no-park versions, for the old one-route OpModes (RedStartUp etc.).
