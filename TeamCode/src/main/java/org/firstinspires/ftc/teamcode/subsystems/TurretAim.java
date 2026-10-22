@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -160,10 +161,22 @@ public class TurretAim {
         int count = 0;
         long newestFrame = 0;
 
+        StringBuilder otherIds = new StringBuilder();
+        int otherCount = 0;
+
         for (AprilTagDetection tag : detections) {
             // metadata == null means the tag is not in FieldAprilTags, so the SDK
             // does not know its size and ftcPose is not filled in at all.
-            if (tag.metadata == null || !isTargetTag(tag.id)) continue;
+            if (tag.metadata == null) continue;
+            if (!isTargetTag(tag.id)) {
+                // Worth remembering. Looking straight at a cell we are not aiming
+                // at is the most likely cause of "lost", and reporting it as lost
+                // sends you hunting for a camera problem that is not there.
+                if (otherCount > 0) otherIds.append(", ");
+                otherIds.append(tag.id);
+                otherCount++;
+                continue;
+            }
             bearingSum += bearingOf(tag);
             count++;
             if (tag.frameAcquisitionNanoTime > newestFrame) {
@@ -174,10 +187,19 @@ public class TurretAim {
         if (count == 0) {
             tagsUsed = 0;
             forgetMeasurement();
-            status = sinceLastSeen.seconds() > LOST_HOLD_SEC
-                    ? String.format("tag LOST %.1fs -- holding %.1f deg",
-                            sinceLastSeen.seconds(), turret.getTargetAngle())
-                    : "no tag this frame";
+            if (otherCount > 0) {
+                // Deliberately does NOT auto-switch. Which cell to aim at is a
+                // game decision; picking whatever wandered into frame would be a
+                // great way to score on the wrong alliance's hive.
+                status = String.format("WRONG CELL? seeing [%s] but aiming at %s"
+                                + " -- D-pad to switch",
+                        otherIds, Arrays.toString(targetTagIds));
+            } else {
+                status = sinceLastSeen.seconds() > LOST_HOLD_SEC
+                        ? String.format("tag LOST %.1fs -- holding %.1f deg",
+                                sinceLastSeen.seconds(), turret.getTargetAngle())
+                        : "no tag this frame";
+            }
             return;
         }
 
