@@ -29,6 +29,8 @@ public final class Route {
     public enum Action {
         DRIVE,    // just drive there
         COLLECT,  // run the collector when close to the point, stop on arrival
+        LAUNCH,   // on arrival, launch into the hive. PLACEHOLDER until the
+                  // launcher is built -- see RouteAuto.startLaunch()
     }
 
     public static final class Step {
@@ -59,6 +61,10 @@ public final class Route {
 
     public Route collectTo(Pose target) {
         return then(target, Action.COLLECT);
+    }
+
+    public Route launchFrom(Pose target) {
+        return then(target, Action.LAUNCH);
     }
 
     private Route then(Pose target, Action action) {

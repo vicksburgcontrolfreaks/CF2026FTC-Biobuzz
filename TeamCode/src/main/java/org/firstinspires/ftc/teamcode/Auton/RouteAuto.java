@@ -29,7 +29,8 @@ import java.util.List;
  *   2. Drive to each step's point, stopping at each one
  *      - COLLECT steps: collector on once within COLLECT_RADIUS of the
  *        point, off when we get there
- *   3. Say "Done" on the Driver Station
+ *      - LAUNCH steps: on arrival, launch, wait LAUNCH_SECONDS, move on
+ *   3. Say "Done" on the Driver Station, and show how long the run took
  *
  * "abstract" means you can't run this class by itself -- only the tiny files
  * that pick an alliance and a route.
@@ -46,6 +47,10 @@ public abstract class RouteAuto extends OpMode {
     // (SelectAuto picks its own wait on the gamepad.)
     private static final double WAIT_SECONDS = 0;
 
+    // How long a LAUNCH step sits still. A GUESS for now (8 pollen tips the
+    // hive) -- the launcher isn't built yet. Time the real one and fix this.
+    private static final double LAUNCH_SECONDS = 3;
+
     // Top speed while testing (1.0 = full speed). Raise it once the robot stops where it should.
     private static final double MAX_POWER = 0.85;
 
@@ -57,6 +62,12 @@ public abstract class RouteAuto extends OpMode {
     private DcMotorEx collector;
     private Timer pathTimer;
     private boolean collectorOn = false;
+
+    private Timer launchTimer;
+    private boolean launching = false;
+
+    private Timer runTimer;               // seconds since Start
+    private double finishedSeconds = -1;  // when the last step finished, -1 = not yet
 
     private Pose startPose;                              // for OUR alliance
     private final List<Pose> targets = new ArrayList<>(); // targets.get(i) = where step i ends, for OUR alliance
@@ -142,13 +153,39 @@ public abstract class RouteAuto extends OpMode {
                 collector.setPower(0);
                 collectorOn = false;
             }
+
+            // LAUNCH step: we've arrived, so launch, and stay put until it's done.
+            if (route.steps.get(step).action == Route.Action.LAUNCH) {
+                if (!launching) {
+                    launching = true;
+                    launchTimer.resetTimer();
+                    startLaunch();
+                }
+                if (launchTimer.getElapsedTimeSeconds() < LAUNCH_SECONDS) {
+                    return; // still launching -- check again next loop
+                }
+                stopLaunch();
+                launching = false;
+            }
+
             if (step + 1 < paths.size()) {
                 startStep(step + 1);
             } else {
                 step = paths.size();
+                finishedSeconds = runTimer.getElapsedTimeSeconds();
                 telemetry.speak("Done"); // spoken by the Driver Station
             }
         }
+    }
+
+    // PLACEHOLDER: the launcher isn't built yet, so these do nothing. The robot
+    // just sits for LAUNCH_SECONDS, so timing tests still count the launch.
+    // When the launcher works: spin it up / feed pollen in startLaunch(),
+    // turn it all off in stopLaunch().
+    private void startLaunch() {
+    }
+
+    private void stopLaunch() {
     }
 
     private void startStep(int newStep) {
@@ -160,6 +197,8 @@ public abstract class RouteAuto extends OpMode {
     @Override
     public void init() {
         pathTimer = new Timer();
+        launchTimer = new Timer();
+        runTimer = new Timer();
 
         collector = hardwareMap.get(DcMotorEx.class, "collector");
         collector.setDirection(DcMotorSimple.Direction.REVERSE); // same as RobotHardware
@@ -199,6 +238,7 @@ public abstract class RouteAuto extends OpMode {
         follower.setStartingPose(startPose); // tell the robot where it is at the beginning
         step = -1;
         pathTimer.resetTimer();
+        runTimer.resetTimer();
     }
 
     @Override
@@ -206,9 +246,16 @@ public abstract class RouteAuto extends OpMode {
         follower.update();       // must run every loop or the robot won't move/hold
         autonomousPathUpdate();
 
+        // Auto is 30 seconds -- this shows how much of it the route uses.
+        if (finishedSeconds >= 0) {
+            telemetry.addLine(String.format("DONE in %.1f sec (of 30)", finishedSeconds));
+        } else {
+            telemetry.addData("Time (sec)", "%.1f", runTimer.getElapsedTimeSeconds());
+        }
         telemetry.addData("Path check problems", warnings.size());
         telemetry.addData("Step", (step + 1) + " of " + paths.size());
         telemetry.addData("Collector", collectorOn ? "ON" : "off");
+        if (launching) telemetry.addLine("LAUNCHING (placeholder -- nothing moves)");
         telemetry.addData("X", follower.getPose().getX());
         telemetry.addData("Y", follower.getPose().getY());
         telemetry.addData("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));

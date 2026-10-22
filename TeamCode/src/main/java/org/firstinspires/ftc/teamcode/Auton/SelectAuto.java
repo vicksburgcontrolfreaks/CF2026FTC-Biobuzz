@@ -5,7 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import org.firstinspires.ftc.teamcode.field.Alliance;
 
 /*
- * ONE auto for every match: pick the alliance, start position, and wait on
+ * ONE auto for every match: pick the alliance, route, wait, and park on
  * gamepad 1 during INIT (see AutoMenu for the buttons), lock it in with A,
  * then press Start.
  *
@@ -13,22 +13,30 @@ import org.firstinspires.ftc.teamcode.field.Alliance;
  *   1. Add a line to the menu below.
  *   2. Use its .get() in applyMenu().
  *
- * Adding a start position: add it to StartPosition with its route from Routes.
+ * Adding a route: write it in Routes, then add it to AutoRoute below.
  */
 @Autonomous(name = "Select Auto", group = "Autonomous")
 public class SelectAuto extends RouteAuto {
 
-    // Where the robot is placed, and which route it runs from there.
-    enum StartPosition {
-        GARDEN_WALL("Garden Wall", Routes.START_UP_GARDEN_WALL),
-        FAR_WALL("Far Wall", Routes.START_UP_FAR_WALL);
+    // The routes you can pick. Each one knows where it starts.
+    enum AutoRoute {
+        GARDEN_WALL("Garden Wall"),
+        FAR_WALL("Far Wall"),
+        GARDEN_WALL_LAUNCH("Garden Wall + Launch");
 
         final String label;
-        final Route route;
 
-        StartPosition(String label, Route route) {
+        AutoRoute(String label) {
             this.label = label;
-            this.route = route;
+        }
+
+        Route route(Routes.Park park) {
+            switch (this) {
+                case GARDEN_WALL:        return Routes.startUpGardenWall(park);
+                case FAR_WALL:           return Routes.startUpFarWall(park);
+                case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
+                default: throw new IllegalStateException("No route for " + this);
+            }
         }
 
         @Override
@@ -41,14 +49,16 @@ public class SelectAuto extends RouteAuto {
     private final AutoMenu menu = new AutoMenu();
     private final AutoMenu.Choice<Alliance> alliance =
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
-    private final AutoMenu.Choice<StartPosition> startPosition =
-            menu.add("Start", StartPosition.GARDEN_WALL, StartPosition.FAR_WALL);
+    private final AutoMenu.Choice<AutoRoute> autoRoute =
+            menu.add("Route", AutoRoute.GARDEN_WALL, AutoRoute.FAR_WALL, AutoRoute.GARDEN_WALL_LAUNCH);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8);
+    private final AutoMenu.Choice<Routes.Park> park =
+            menu.add("Park", Routes.Park.GARDEN_SIDE, Routes.Park.FAR_SIDE, Routes.Park.NONE);
 
     // Hand the menu's current picks to RouteAuto.
     private void applyMenu() {
-        useRoute(alliance.get(), startPosition.get().route, startWait.get());
+        useRoute(alliance.get(), autoRoute.get().route(park.get()), startWait.get());
     }
 
     @Override

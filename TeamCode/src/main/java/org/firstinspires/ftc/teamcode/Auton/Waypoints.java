@@ -86,4 +86,42 @@ public final class Waypoints {
 
     // Above the hive, lined up with the far wall start so that leg is straight.
     public static final Pose HIVE_TOP = new Pose(FAR_WALL_START.getX(), ABOVE_HIVE_Y, FACING_RED_WALL);
+
+    // ---------------- Parking (end of auto) ----------------
+    //
+    // PARK = robot at least PARTLY in the loading zone at the end of auto.
+    // The zone is only 24 in. long, so two 18 in. robots can't both fit all
+    // the way in. Each park spot puts PARK_OVERLAP inches of the robot in the
+    // zone at one end, with the rest hanging out. Then we and our partner
+    // can both park, one at each end, with a gap between us.
+    //
+    // LEAVE = not touching the wall at the end of auto, so we park
+    // PARK_WALL_GAP inches off the wall to get both.
+
+    public static final double PARK_OVERLAP  = 8; // inches of robot inside the zone
+    public static final double PARK_WALL_GAP = 2; // inches between robot and wall
+
+    private static final double PARK_X = HALF_LENGTH + PARK_WALL_GAP;
+
+    // End of the loading zone nearer our garden.
+    public static final Pose PARK_GARDEN_SIDE = new Pose(PARK_X,
+            FieldConstants.RED_LOADING_ZONE.minY + PARK_OVERLAP - HALF_WIDTH, FACING_RED_WALL);
+    // End of the loading zone nearer the far wall.
+    public static final Pose PARK_FAR_SIDE = new Pose(PARK_X,
+            FieldConstants.RED_LOADING_ZONE.maxY - PARK_OVERLAP + HALF_WIDTH, FACING_RED_WALL);
+
+    // ---------------- Launch spots (PLACEHOLDERS) ----------------
+    //
+    // The launcher isn't built yet, so nobody knows where it shoots well
+    // from. These are just sensible places along the route. Once it works,
+    // move them to wherever it actually hits the cell.
+
+    // A few inches off the garden wall from the start. (Not exactly AT the
+    // start: a path with zero length can confuse the path follower.)
+    public static final double LAUNCH_OFF_WALL = 6;
+    public static final Pose LAUNCH_GARDEN_WALL = new Pose(GARDEN_WALL_START_X,
+            ON_GARDEN_WALL_Y + LAUNCH_OFF_WALL, FACING_RED_WALL);
+
+    // At the far wall start, next to the far-wall flower.
+    public static final Pose LAUNCH_FAR_WALL = FAR_WALL_START;
 }
