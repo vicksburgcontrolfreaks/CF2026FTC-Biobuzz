@@ -108,6 +108,34 @@ public final class Routes {
         return route.driveTo(park.spot);     // straight down the red wall
     }
 
+    // BACKUP autos: just LEAVE + PARK (about 8 points), no launching or
+    // collecting. For when the launcher is broken, or a partner needs us to
+    // stay out of the way. Use the Wait setting to start later.
+    //
+    // Unlike the other routes, "Don't park" makes no sense here, so these
+    // always park -- on the garden side if Park is set to "Don't park".
+
+    // Along the wall to beside the hive, straight up, then park.
+    // (A straight diagonal from the start would clip the hive.)
+    public static Route gardenWallLeavePark(Park park) {
+        return Route.startAt(GARDEN_WALL_START)
+                .driveTo(GARDEN_APPROACH)
+                .driveTo(HIVE_LEFT_LOW)
+                .driveTo(parkSpot(park));
+    }
+
+    // Straight off the wall, slide under the flower, then park.
+    public static Route farWallLeavePark(Park park) {
+        return Route.startAt(FAR_WALL_START)
+                .driveTo(FAR_WALL_EXIT)      // straight off the wall, or we hit the flower
+                .driveTo(PAST_FAR_FLOWER)
+                .driveTo(parkSpot(park));
+    }
+
+    private static Pose parkSpot(Park park) {
+        return park == Park.NONE ? PARK_GARDEN_SIDE : park.spot;
+    }
+
     // The no-park versions, for the old one-route OpModes (RedStartUp etc.).
     public static final Route START_UP_GARDEN_WALL = startUpGardenWall(Park.NONE);
     public static final Route START_UP_FAR_WALL    = startUpFarWall(Park.NONE);

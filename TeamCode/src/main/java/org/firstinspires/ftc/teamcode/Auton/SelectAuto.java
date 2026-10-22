@@ -23,7 +23,9 @@ public class SelectAuto extends RouteAuto {
         GARDEN_WALL("Garden Wall"),
         FAR_WALL("Far Wall"),
         GARDEN_WALL_LAUNCH("Garden Wall + Launch"),
-        FAR_WALL_YIELD("Far Wall + Yield");
+        FAR_WALL_YIELD("Far Wall + Yield"),
+        GARDEN_WALL_LEAVE_PARK("Garden Wall: Leave + Park"),
+        FAR_WALL_LEAVE_PARK("Far Wall: Leave + Park");
 
         final String label;
 
@@ -37,6 +39,8 @@ public class SelectAuto extends RouteAuto {
                 case FAR_WALL:           return Routes.startUpFarWall(park);
                 case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
                 case FAR_WALL_YIELD:     return Routes.farWallYield(park);
+                case GARDEN_WALL_LEAVE_PARK: return Routes.gardenWallLeavePark(park);
+                case FAR_WALL_LEAVE_PARK:    return Routes.farWallLeavePark(park);
                 default: throw new IllegalStateException("No route for " + this);
             }
         }
@@ -53,7 +57,8 @@ public class SelectAuto extends RouteAuto {
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
     private final AutoMenu.Choice<AutoRoute> autoRoute =
             menu.add("Route", AutoRoute.GARDEN_WALL, AutoRoute.FAR_WALL,
-                    AutoRoute.GARDEN_WALL_LAUNCH, AutoRoute.FAR_WALL_YIELD);
+                    AutoRoute.GARDEN_WALL_LAUNCH, AutoRoute.FAR_WALL_YIELD,
+                    AutoRoute.GARDEN_WALL_LEAVE_PARK, AutoRoute.FAR_WALL_LEAVE_PARK);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8);
     private final AutoMenu.Choice<Routes.Park> park =
