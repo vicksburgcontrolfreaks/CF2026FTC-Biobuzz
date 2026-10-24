@@ -136,8 +136,4 @@ public final class Routes {
     private static Pose parkSpot(Park park) {
         return park == Park.NONE ? PARK_GARDEN_SIDE : park.spot;
     }
-
-    // The no-park versions, for the old one-route OpModes (RedStartUp etc.).
-    public static final Route START_UP_GARDEN_WALL = startUpGardenWall(Park.NONE);
-    public static final Route START_UP_FAR_WALL    = startUpFarWall(Park.NONE);
 }

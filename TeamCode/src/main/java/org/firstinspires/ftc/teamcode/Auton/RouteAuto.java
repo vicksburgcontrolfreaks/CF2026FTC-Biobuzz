@@ -20,10 +20,10 @@ import java.util.List;
  * Drives any Route, for either alliance. Every route auto uses this same
  * code; the route itself comes from Routes.
  *
- * Each Driver Station entry (RedStartUp, BlueStartUp, ...) is a tiny file
- * that picks an alliance and a route, then lets this class do everything.
- * (SelectAuto instead lets the drive team pick them on the gamepad during
- * INIT, by calling useRoute().)
+ * SelectAuto is the one Driver Station entry: the drive team picks the
+ * alliance and route on the gamepad during INIT, and it calls useRoute().
+ * (A tiny file can also pass a fixed alliance and route to the constructor
+ * -- see the old RedStartUp etc. in legacy/.)
  *
  *   1. Start at the route's start (after WAIT_SECONDS, 0 = go right away)
  *   2. Drive to each step's point, stopping at each one
@@ -33,8 +33,8 @@ import java.util.List;
  *      - YIELD steps: on arrival, hold still until yieldUntilSeconds
  *   3. Say "Done" on the Driver Station, and show how long the run took
  *
- * "abstract" means you can't run this class by itself -- only the tiny files
- * that pick an alliance and a route.
+ * "abstract" means you can't run this class by itself -- only an OpMode
+ * built on it, like SelectAuto.
  */
 public abstract class RouteAuto extends OpMode {
 

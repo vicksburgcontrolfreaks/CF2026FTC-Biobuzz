@@ -1,6 +1,7 @@
-package org.firstinspires.ftc.teamcode.Auton;
+package org.firstinspires.ftc.teamcode.legacy;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
@@ -9,15 +10,14 @@ import com.pedropathing.paths.Path;
 import com.pedropathing.paths.PathChain;
 import com.pedropathing.util.Timer;
 import org.firstinspires.ftc.teamcode.Auton.AutonConstants;
-
-import java.net.PasswordAuthentication;
 // import com.bylazar.field.FieldManager; // Uncomment if available
 // import com.bylazar.field.PanelsField; // Uncomment if available
 // import com.bylazar.field.Style; // Uncomment if available
 // import org.firstinspires.ftc.teamcode.pedroPathing.Constants; // Uncomment if you have this class
 
-@Autonomous(name = "BlueShortShot", group = "Autonomous")
-public class BlueShortShot extends OpMode {
+@Disabled
+@Autonomous(name = "RedShortShot", group = "Autonomous")
+public class RedShortShot extends OpMode {
     private Follower follower;
     private Timer pathTimer, opmodeTimer;
     private int pathState;
@@ -36,25 +36,24 @@ public class BlueShortShot extends OpMode {
         // Drawing.init();
 
         telemetry.update();
-
     }
     private Path scorePreload;
-    private Path blueSpike3Load;
-    private Path blueShortScore1;
-    private Path blueSpike2load;
-
+    private Path redSpike3Load;
+    private Path redShortScore1;
+    private Path redSpike2Load;
     private void buildPaths() {
-        scorePreload = new Path(new BezierLine(AutonConstants.blueShortStart, AutonConstants.blueSpike3));
-        scorePreload.setLinearHeadingInterpolation(AutonConstants.blueShortStart.getHeading(), AutonConstants.blueSpike3.getHeading());
 
-        blueSpike3Load = new Path(new BezierLine(AutonConstants.blueSpike3, AutonConstants.blueShortScore));
-        blueSpike3Load.setLinearHeadingInterpolation(AutonConstants.blueSpike3.getHeading(), AutonConstants.blueShortScore.getHeading());
+        scorePreload = new Path(new BezierLine(AutonConstants.redShortStart, AutonConstants.redSpike3));
+        scorePreload.setLinearHeadingInterpolation(AutonConstants.redShortStart.getHeading(), AutonConstants.redSpike3.getHeading());
 
-        blueShortScore1 = new Path(new BezierLine(AutonConstants.blueShortScore, AutonConstants.blueSpike2));
-        blueShortScore1.setLinearHeadingInterpolation(AutonConstants.blueShortScore.getHeading(), AutonConstants.blueSpike2.getHeading());
+        redSpike3Load = new Path(new BezierLine(AutonConstants.redSpike3, AutonConstants.redShortScore));
+        redSpike3Load.setLinearHeadingInterpolation(AutonConstants.redSpike3.getHeading(), AutonConstants.redShortScore.getHeading());
 
-        blueSpike2load = new Path(new BezierLine(AutonConstants.blueSpike2, AutonConstants.blueShortScore));
-        blueSpike2load.setLinearHeadingInterpolation(AutonConstants.blueSpike2.getHeading(), AutonConstants.blueShortScore.getHeading());
+        redShortScore1 = new Path(new BezierLine(AutonConstants.redShortScore, AutonConstants.redSpike2));
+        redShortScore1.setLinearHeadingInterpolation(AutonConstants.redShortScore.getHeading(), AutonConstants.redSpike2.getHeading());
+
+        redSpike2Load = new Path(new BezierLine(AutonConstants.redSpike2, AutonConstants.redShortScore));
+        redSpike2Load.setLinearHeadingInterpolation(AutonConstants.redSpike2.getHeading(), AutonConstants.redShortScore.getHeading());
 
     }
 
@@ -85,13 +84,13 @@ public class BlueShortShot extends OpMode {
             case 0:
                 // Shoot from blueLongStart
                 shoot();
-                follower.followPath(preloadToLoad, true); // Hold endpoint
+                follower.followPath(scorePreload, true); // Hold endpoint
                 setPathState(1);
                 break;
             case 1:
                 // Wait until at blueLongLoad
                 if (!follower.isBusy()) {
-                    follower.followPath(loadToScore, true); // Hold endpoint
+                    follower.followPath(redShortScore1, true); // Hold endpoint
                     setPathState(2);
                 }
                 break;

@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.Auton;
+package org.firstinspires.ftc.teamcode.test;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
-@Autonomous(name = "MotorCurrentTest")
+@Autonomous(name = "MotorCurrentTest", group = "Test")
 public class MotorCurrentTest extends LinearOpMode {
 
     private DcMotorEx lf, rf, lr, rr;

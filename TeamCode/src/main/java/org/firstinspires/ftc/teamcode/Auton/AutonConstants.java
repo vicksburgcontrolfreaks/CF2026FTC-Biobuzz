@@ -4,6 +4,9 @@ import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.Path;
 
+// DECODE-era (2025) poses -- NOT used by the BIOBUZZ autos (those use
+// Waypoints). Only legacy/ and vision/AprilTagAuto still use this; move it to
+// legacy/ once vision/AprilTagAuto is retired.
 public class AutonConstants {
     // Blue poses
     public static final Pose blueLongStart = new Pose(88, 8, Math.toRadians(270)); // Start position from long shot
