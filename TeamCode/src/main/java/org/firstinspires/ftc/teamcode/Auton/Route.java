@@ -74,6 +74,15 @@ public final class Route {
         return then(target, Action.YIELD);
     }
 
+    // Does any step do this? (e.g. the menu only shows "Yield until" for
+    // routes that have a YIELD step.)
+    public boolean has(Action action) {
+        for (Step step : steps) {
+            if (step.action == action) return true;
+        }
+        return false;
+    }
+
     private Route then(Pose target, Action action) {
         List<Step> longer = new ArrayList<>(steps);
         longer.add(new Step(target, action));

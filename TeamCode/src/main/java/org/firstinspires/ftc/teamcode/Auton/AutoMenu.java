@@ -7,6 +7,7 @@ import org.firstinspires.ftc.robotcore.external.Telemetry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /*
  * A menu on the Driver Station for picking auto settings during INIT.
@@ -21,6 +22,13 @@ import java.util.List;
  *     Choice<Integer> wait = menu.add("Wait (sec)", 0, 3, 5, 10);
  *
  * then use wait.get() wherever you need the value.
+ *
+ * Optional extras, chained on the end of add():
+ *
+ *     .summary("Wait %ds")          how it reads in the one-line summary
+ *                                   (%d / %s = the value). Default: just the value.
+ *     .showWhen(() -> someCheck())  hide the row unless someCheck() is true,
+ *                                   for settings only some routes use.
  */
 public final class AutoMenu {
 
@@ -30,6 +38,10 @@ public final class AutoMenu {
         private final String name;
         private final List<T> options;
         private int index = 0;
+        private String summaryFormat = "%s";
+        // A BooleanSupplier is a tiny function that answers true/false when
+        // asked. () -> true means "always show".
+        private BooleanSupplier shown = () -> true;
 
         private Choice(String name, List<T> options) {
             this.name = name;
@@ -38,6 +50,24 @@ public final class AutoMenu {
 
         public T get() {
             return options.get(index);
+        }
+
+        public Choice<T> summary(String format) {
+            summaryFormat = format;
+            return this;
+        }
+
+        public Choice<T> showWhen(BooleanSupplier condition) {
+            shown = condition;
+            return this;
+        }
+
+        private boolean isShown() {
+            return shown.getAsBoolean();
+        }
+
+        private String summaryText() {
+            return String.format(summaryFormat, get());
         }
 
         // Step left (-1) or right (+1), wrapping around at the ends.
@@ -74,8 +104,10 @@ public final class AutoMenu {
             locked = true;
             return false;
         }
-        if (gamepad.dpadUpWasPressed())   selectedRow = Math.max(0, selectedRow - 1);
-        if (gamepad.dpadDownWasPressed()) selectedRow = Math.min(rows.size() - 1, selectedRow + 1);
+        // If the row we were on just got hidden, hop up to one that's showing.
+        if (!rows.get(selectedRow).isShown()) moveSelection(-1);
+        if (gamepad.dpadUpWasPressed())   moveSelection(-1);
+        if (gamepad.dpadDownWasPressed()) moveSelection(+1);
 
         Choice<?> row = rows.get(selectedRow);
         if (gamepad.dpadLeftWasPressed())  { row.step(-1); return true; }
@@ -83,12 +115,24 @@ public final class AutoMenu {
         return false;
     }
 
+    // Move up (-1) or down (+1) to the next row that's showing, skipping
+    // hidden ones. Stays put if there isn't one.
+    private void moveSelection(int direction) {
+        for (int i = selectedRow + direction; i >= 0 && i < rows.size(); i += direction) {
+            if (rows.get(i).isShown()) {
+                selectedRow = i;
+                return;
+            }
+        }
+    }
+
     public void show(Telemetry telemetry) {
         // One line the drive team can check at a glance before the match.
         StringBuilder summary = new StringBuilder();
         for (Choice<?> row : rows) {
+            if (!row.isShown()) continue;
             if (summary.length() > 0) summary.append(" · ");
-            summary.append(row.get());
+            summary.append(row.summaryText());
         }
         telemetry.addLine(">>> " + summary + " <<<");
 
@@ -101,6 +145,7 @@ public final class AutoMenu {
 
         for (int i = 0; i < rows.size(); i++) {
             Choice<?> row = rows.get(i);
+            if (!row.isShown()) continue;
             String pointer = (!locked && i == selectedRow) ? "> " : "   ";
             telemetry.addLine(pointer + row.name + ":  < " + row.get() + " >");
         }

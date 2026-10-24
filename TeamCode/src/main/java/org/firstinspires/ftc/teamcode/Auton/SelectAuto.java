@@ -60,12 +60,16 @@ public class SelectAuto extends RouteAuto {
                     AutoRoute.GARDEN_WALL_LAUNCH, AutoRoute.FAR_WALL_YIELD,
                     AutoRoute.GARDEN_WALL_LEAVE_PARK, AutoRoute.FAR_WALL_LEAVE_PARK);
     private final AutoMenu.Choice<Integer> startWait =
-            menu.add("Wait (sec)", 0, 3, 5, 8);
+            menu.add("Wait (sec)", 0, 3, 5, 8)
+                    .summary("Wait %ds");
     private final AutoMenu.Choice<Routes.Park> park =
             menu.add("Park", Routes.Park.GARDEN_SIDE, Routes.Park.FAR_SIDE, Routes.Park.NONE);
-    // Only used by routes with a yield step (Far Wall + Yield). Seconds after Start.
+    // Seconds after Start (a clock time, not a length like Wait). Only shown
+    // for routes with a YIELD step, since the others ignore it.
     private final AutoMenu.Choice<Integer> yieldUntil =
-            menu.add("Yield until (sec)", 15, 18, 20, 22, 25);
+            menu.add("Yield until (sec)", 15, 18, 20, 22, 25)
+                    .summary("Yield until %ds")
+                    .showWhen(() -> autoRoute.get().route(park.get()).has(Route.Action.YIELD));
 
     // Hand the menu's current picks to RouteAuto.
     private void applyMenu() {
