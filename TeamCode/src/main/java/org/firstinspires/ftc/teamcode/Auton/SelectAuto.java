@@ -18,19 +18,22 @@ import org.firstinspires.ftc.teamcode.field.Alliance;
 @Autonomous(name = "Select Auto", group = "Autonomous")
 public class SelectAuto extends RouteAuto {
 
-    // The routes you can pick. Each one knows where it starts.
+    // The routes you can pick. Each one knows where it starts, and whether it
+    // always parks (if so, the menu won't offer "Don't park" for it).
     enum AutoRoute {
-        GARDEN_WALL("Garden Wall"),
-        FAR_WALL("Far Wall"),
-        GARDEN_WALL_LAUNCH("Garden Wall + Launch"),
-        FAR_WALL_YIELD("Far Wall + Yield"),
-        GARDEN_WALL_LEAVE_PARK("Garden Wall: Leave + Park"),
-        FAR_WALL_LEAVE_PARK("Far Wall: Leave + Park");
+        GARDEN_WALL("Garden Wall", false),
+        FAR_WALL("Far Wall", false),
+        GARDEN_WALL_LAUNCH("Garden Wall + Launch", false),
+        FAR_WALL_YIELD("Far Wall + Yield", false),
+        GARDEN_WALL_LEAVE_PARK("Garden Wall: Leave + Park", true),
+        FAR_WALL_LEAVE_PARK("Far Wall: Leave + Park", true);
 
         final String label;
+        final boolean alwaysParks;
 
-        AutoRoute(String label) {
+        AutoRoute(String label, boolean alwaysParks) {
             this.label = label;
+            this.alwaysParks = alwaysParks;
         }
 
         Route route(Routes.Park park) {
@@ -63,7 +66,8 @@ public class SelectAuto extends RouteAuto {
             menu.add("Wait (sec)", 0, 3, 5, 8)
                     .summary("Wait %ds");
     private final AutoMenu.Choice<Routes.Park> park =
-            menu.add("Park", Routes.Park.GARDEN_SIDE, Routes.Park.FAR_SIDE, Routes.Park.NONE);
+            menu.add("Park", Routes.Park.GARDEN_SIDE, Routes.Park.FAR_SIDE, Routes.Park.NONE)
+                    .allowWhen(p -> p != Routes.Park.NONE || !autoRoute.get().alwaysParks);
     // Seconds after Start (a clock time, not a length like Wait). Only shown
     // for routes with a YIELD step, since the others ignore it.
     private final AutoMenu.Choice<Integer> yieldUntil =

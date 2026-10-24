@@ -113,7 +113,8 @@ public final class Routes {
     // stay out of the way. Use the Wait setting to start later.
     //
     // Unlike the other routes, "Don't park" makes no sense here, so these
-    // always park -- on the garden side if Park is set to "Don't park".
+    // always park. SelectAuto doesn't offer "Don't park" for them; if
+    // something else passes Park.NONE anyway, they park on the garden side.
 
     // Along the wall to beside the hive, straight up, then park.
     // (A straight diagonal from the start would clip the hive.)

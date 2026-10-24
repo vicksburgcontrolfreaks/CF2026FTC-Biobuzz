@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 
 /*
  * A menu on the Driver Station for picking auto settings during INIT.
@@ -29,6 +30,10 @@ import java.util.function.BooleanSupplier;
  *                                   (%d / %s = the value). Default: just the value.
  *     .showWhen(() -> someCheck())  hide the row unless someCheck() is true,
  *                                   for settings only some routes use.
+ *     .allowWhen(x -> check(x))     only let you pick options where check(x)
+ *                                   is true; others are skipped. If the current
+ *                                   pick stops being allowed, it jumps to the
+ *                                   first allowed option.
  */
 public final class AutoMenu {
 
@@ -42,6 +47,9 @@ public final class AutoMenu {
         // A BooleanSupplier is a tiny function that answers true/false when
         // asked. () -> true means "always show".
         private BooleanSupplier shown = () -> true;
+        // A Predicate is the same idea, but it's handed one option to judge.
+        // option -> true means "every option is allowed".
+        private Predicate<T> allowed = option -> true;
 
         private Choice(String name, List<T> options) {
             this.name = name;
@@ -62,6 +70,11 @@ public final class AutoMenu {
             return this;
         }
 
+        public Choice<T> allowWhen(Predicate<T> condition) {
+            allowed = condition;
+            return this;
+        }
+
         private boolean isShown() {
             return shown.getAsBoolean();
         }
@@ -70,9 +83,25 @@ public final class AutoMenu {
             return String.format(summaryFormat, get());
         }
 
-        // Step left (-1) or right (+1), wrapping around at the ends.
+        // Step left (-1) or right (+1), wrapping around at the ends and
+        // skipping options that aren't allowed right now.
         private void step(int direction) {
-            index = (index + direction + options.size()) % options.size();
+            for (int tries = 0; tries < options.size(); tries++) {
+                index = (index + direction + options.size()) % options.size();
+                if (allowed.test(get())) return;
+            }
+        }
+
+        // If the current pick isn't allowed anymore (another row changed),
+        // jump to the first option that is.
+        private void snapToAllowed() {
+            if (allowed.test(get())) return;
+            for (int i = 0; i < options.size(); i++) {
+                if (allowed.test(options.get(i))) {
+                    index = i;
+                    return;
+                }
+            }
         }
     }
 
@@ -110,9 +139,17 @@ public final class AutoMenu {
         if (gamepad.dpadDownWasPressed()) moveSelection(+1);
 
         Choice<?> row = rows.get(selectedRow);
-        if (gamepad.dpadLeftWasPressed())  { row.step(-1); return true; }
-        if (gamepad.dpadRightWasPressed()) { row.step(+1); return true; }
+        if (gamepad.dpadLeftWasPressed())  { row.step(-1); snapAllToAllowed(); return true; }
+        if (gamepad.dpadRightWasPressed()) { row.step(+1); snapAllToAllowed(); return true; }
         return false;
+    }
+
+    // One row changing can make another row's pick not allowed anymore
+    // (e.g. switching to a route that always parks while Park is "Don't park").
+    private void snapAllToAllowed() {
+        for (Choice<?> row : rows) {
+            row.snapToAllowed();
+        }
     }
 
     // Move up (-1) or down (+1) to the next row that's showing, skipping
