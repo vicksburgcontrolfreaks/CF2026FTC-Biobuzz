@@ -18,21 +18,24 @@ import org.firstinspires.ftc.teamcode.field.Alliance;
 @Autonomous(name = "Select Auto", group = "Autonomous")
 public class SelectAuto extends RouteAuto {
 
-    // The routes you can pick. Each one knows where it starts, and whether it
-    // always parks (if so, the menu won't offer "Don't park" for it).
+    // The routes you can pick. Each one knows where it starts, where it parks
+    // unless you change it (picking the route sets Park to this), and whether
+    // it always parks (if so, the menu won't offer "Don't park" for it).
     enum AutoRoute {
-        GARDEN_WALL("Garden Wall", false),
-        FAR_WALL("Far Wall", false),
-        GARDEN_WALL_LAUNCH("Garden Wall + Launch", false),
-        FAR_WALL_YIELD("Far Wall + Yield", false),
-        GARDEN_WALL_LEAVE_PARK("Garden Wall: Leave + Park", true),
-        FAR_WALL_LEAVE_PARK("Far Wall: Leave + Park", true);
+        GARDEN_WALL("Garden Wall", Routes.Park.GARDEN_SIDE, false),
+        FAR_WALL("Far Wall", Routes.Park.GARDEN_SIDE, false),
+        GARDEN_WALL_LAUNCH("Garden Wall + Launch", Routes.Park.GARDEN_SIDE, false),
+        FAR_WALL_YIELD("Far Wall + Yield", Routes.Park.FAR_SIDE, false),
+        GARDEN_WALL_LEAVE_PARK("Garden Wall: Leave + Park", Routes.Park.GARDEN_SIDE, true),
+        FAR_WALL_LEAVE_PARK("Far Wall: Leave + Park", Routes.Park.FAR_SIDE, true);
 
         final String label;
+        final Routes.Park defaultPark;
         final boolean alwaysParks;
 
-        AutoRoute(String label, boolean alwaysParks) {
+        AutoRoute(String label, Routes.Park defaultPark, boolean alwaysParks) {
             this.label = label;
+            this.defaultPark = defaultPark;
             this.alwaysParks = alwaysParks;
         }
 
@@ -75,6 +78,9 @@ public class SelectAuto extends RouteAuto {
                     .summary("Yield until %ds")
                     .showWhen(() -> autoRoute.get().route(park.get()).has(Route.Action.YIELD));
 
+    // So we can tell when the route changes and set its default park.
+    private AutoRoute lastRoute = autoRoute.get();
+
     // Hand the menu's current picks to RouteAuto.
     private void applyMenu() {
         useRoute(alliance.get(), autoRoute.get().route(park.get()), startWait.get());
@@ -90,6 +96,10 @@ public class SelectAuto extends RouteAuto {
     @Override
     public void init_loop() {
         if (menu.update(gamepad1)) {
+            if (autoRoute.get() != lastRoute) {
+                lastRoute = autoRoute.get();
+                park.set(lastRoute.defaultPark); // you can still change it after
+            }
             applyMenu(); // something changed -- rebuild the paths and recheck them
         }
         menu.show(telemetry);

@@ -60,6 +60,13 @@ public final class AutoMenu {
             return options.get(index);
         }
 
+        // Pick this option from code (does nothing if it isn't in the list
+        // or isn't allowed right now).
+        public void set(T value) {
+            int i = options.indexOf(value);
+            if (i >= 0 && allowed.test(value)) index = i;
+        }
+
         public Choice<T> summary(String format) {
             summaryFormat = format;
             return this;
