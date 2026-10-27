@@ -3,6 +3,10 @@ repositories {
     google() // Needed for androidx
     maven { url = 'https://maven.pedropathing.com' }
     maven { url = "https://mymaven.bylazar.com/releases" }
+    // Sloth: a transitive dependency of fullpanels 1.0.18+ (via opmodecontrol
+    // and configurables). Not on bylazar's maven, so without this the build
+    // fails with "Could not find dev.frozenmilk.sinister:Sloth".
+    maven { url = "https://repo.dairy.foundation/releases" }
 }
 
 dependencies {
@@ -18,7 +22,7 @@ dependencies {
 
     implementation 'com.pedropathing:ftc:2.0.2'
     implementation 'com.pedropathing:telemetry:0.0.6'
-    implementation 'com.bylazar:fullpanels:1.0.7'
+    implementation 'com.bylazar:fullpanels:1.0.18'
     //https://panels.bylazar.com/docs/com.bylazar.fullpanels/
 }
 
