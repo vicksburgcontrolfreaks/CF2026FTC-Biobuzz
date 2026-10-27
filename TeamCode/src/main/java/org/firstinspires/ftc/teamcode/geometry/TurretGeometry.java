@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.geometry;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.geometry.Pose;
 
 /*
@@ -33,7 +34,11 @@ import com.pedropathing.geometry.Pose;
  * ---------------------------------------------------------------------------
  *
  * See the design doc "Turret, Camera & Shooting: Design Plan", Phase 1.
+ *
+ * @Configurable so the measurements can be typed into Panels on the robot.
+ * forRobot() reads them fresh, so a live edit takes effect on the next loop.
  */
+@Configurable
 public class TurretGeometry {
 
     // ---- Robot measurements -------------------------------------------------
