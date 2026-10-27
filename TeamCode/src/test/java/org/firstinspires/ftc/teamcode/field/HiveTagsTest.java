@@ -67,6 +67,16 @@ public class HiveTagsTest {
         assertTrue(HiveTags.tagPose(Cell.RED_FAR.tagIds[0], Tilt.FAR_UP).axis(1)[1] < 0);
     }
 
+    @Test public void stickerRowMatchesManualFigure915() {
+        // Read from the manual by Evan 10/27: 6.5 in. from centerline to each end
+        // tag, 3.75 in. between the two tags on the same side.
+        assertEquals(-6.5,  HiveTags.rowOffset(0), EPS);
+        assertEquals(-2.75, HiveTags.rowOffset(1), EPS);
+        assertEquals(+2.75, HiveTags.rowOffset(2), EPS);
+        assertEquals(+6.5,  HiveTags.rowOffset(3), EPS);
+        assertEquals(13.0, HiveTags.rowOffset(3) - HiveTags.rowOffset(0), EPS);
+    }
+
     private static double dot(double[] a, double[] b) {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     }

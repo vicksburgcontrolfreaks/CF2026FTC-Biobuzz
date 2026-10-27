@@ -21,8 +21,9 @@ import org.firstinspires.ftc.teamcode.geometry.Rigid3;
  *     raises the +y side. The tags ride along, so a tag's pose is the level
  *     pose rotated about the pivot axis.
  *   - Each cell's 4 tags are one sticker, in a single ROW (not 2 x 2), lowest
- *     ID on the left, TAG_SPACING apart, "bottom edge oriented towards the
- *     center of the FIELD" (Figures 9-15/9-16/9-17; row layout read by Evan 10/27).
+ *     ID on the left, two tags each side of the centerline, NOT evenly spaced
+ *     (see TAG_OUTER_OFFSET), "bottom edge oriented towards the center of the
+ *     FIELD" (Figures 9-15/9-16/9-17; row layout read by Evan 10/27).
  *
  * Coordinates: Pedro field inches, z = up from the tiles. Tag frames follow
  * the SDK: x = right, y = down (toward the sticker's bottom edge), z = INTO
@@ -41,13 +42,24 @@ public final class HiveTags {
     public static double CELL_ARM = 9.4;          // MADE-UP: half of the manual's ~18.8 in. cell spacing
     public static double CELL_DROP = 10.0;        // MADE-UP: bottom face, inches below the pivot (hive level)
     public static double HIVE_SWING_DEG = 40.0;   // MADE-UP: degrees between the two resting positions
-    public static double TAG_SPACING = 3.75;      // Manual Fig. 9-15 (read by Evan 10/27): tag center to tag center; 3.25 in. tags, 0.5 in. gap
+    // Manual Fig. 9-15 (read by Evan 10/27). 3.25 in. tags; layout along the row:
+    //   [38]      [39]   |   [40]      [41]
+    //   -6.5     -2.75   0   +2.75     +6.5     in. from the sticker centerline
+    public static double TAG_OUTER_OFFSET = 6.5;  // centerline to the center of an end tag (end to end = 13)
+    public static double TAG_SPACING = 3.75;      // center to center of the two tags on the SAME side (0.5 in. gap)
 
-    // Where each of a cell's tag IDs sits along the sticker's row, in TAG_SPACINGs
-    // to the right of the sticker's center, in the order Cell.tagIds lists them.
+    // Which end of the row each of a cell's tag IDs is toward (-1 left, +1 right)
+    // and whether it is the outer one, in the order Cell.tagIds lists them.
     // Figure 9-17 (read by Evan 10/27): 38, 39, 40, 41 left to right. Assumed the
     // figure shows the camera's view and every cell follows the same pattern.
-    private static final double[] ROW_STEPS = {-1.5, -0.5, +0.5, +1.5};
+    private static final int[] ROW_SIDE = {-1, -1, +1, +1};
+    private static final boolean[] ROW_OUTER = {true, false, false, true};
+
+    /** Inches right of the sticker centerline for the tag at this index in Cell.tagIds. */
+    static double rowOffset(int index) {
+        double fromCenter = ROW_OUTER[index] ? TAG_OUTER_OFFSET : TAG_OUTER_OFFSET - TAG_SPACING;
+        return ROW_SIDE[index] * fromCenter;
+    }
 
     /**
      * The tilt the SDK's tag library is built for (FieldAprilTags.getLocalizationLibrary).
@@ -95,7 +107,7 @@ public final class HiveTags {
         Rigid3 sticker = Rigid3.fromAxes(cx, cy, cz, xAxis, yAxis, zAxis);
 
         int index = indexInCell(cell, id);
-        Rigid3 levelTag = sticker.times(Rigid3.translation(ROW_STEPS[index] * TAG_SPACING, 0, 0));
+        Rigid3 levelTag = sticker.times(Rigid3.translation(rowOffset(index), 0, 0));
 
         Rigid3 tipped = Rigid3.rotXAbout(PIVOT_Y, FieldConstants.HIVE_PIVOT_HEIGHT, tiltRadians(tilt));
         return tipped.times(levelTag);
