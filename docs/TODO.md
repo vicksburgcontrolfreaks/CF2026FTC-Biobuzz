@@ -87,3 +87,28 @@ against an unreliable zero.
 - **Indexer direction is a guess.** `RobotHardware` sets it `FORWARD`; flip it if
   a ball goes the wrong way. Confirm in **Collection System Test** before trusting
   any firing sequence
+- **Decide how one codebase runs both robots before this branch merges.** The
+  2025 and 2026 robots should drive the same but have different mechanisms.
+  `RobotHardware.init()` looks up all 12 devices with `hardwareMap.get()`, so
+  one missing device crashes INIT (2026-10-27: `indexer` on the 2025 robot).
+  Once this merges to `main`, **no TeleOp on `main` will run on the 2025 robot,
+  not even drive.** First question: will the 2025 robot keep being used for
+  drive practice or auto testing after the 2026 robot drives? Options:
+  1. **Retire it.** Tag the last commit that works on the 2025 robot and move on.
+  2. **Drive-only TeleOp (recommended).** Use only the Pedro follower
+     (`startTeleopDrive()` / `setTeleOpDrive()`), nothing from `RobotHardware`,
+     so it runs on either robot. Do it together with the two cleanups below.
+  3. **Optional mechanisms.** Each subsystem uses `hardwareMap.tryGet()` and
+     turns itself off if its devices are missing, with a loud warning on the
+     Driver Station. Most robust, most work, and a quietly disabled mechanism
+     at competition is worse than a crash at INIT.
+
+  Two cleanups whichever option is picked:
+  - **Delete the drive `setDirection()` calls in `RobotHardware.init()`.**
+    `Constants.createFollower()` runs afterward and Pedro's `Mecanum` sets all
+    four directions from `Constants.java`, so these do nothing and contradict
+    it. Drive directions live only in `pedroPathing/Constants.java`.
+  - **Check drive directions on the 2026 robot once** (stick forward / strafe
+    right / turn clockwise). `connor/drive-motor-directions` fixed and tested
+    them on the 2025 robot only. Same Constants should work if the motors and
+    Pinpoint pods are mounted the same way, but that has not been checked.
