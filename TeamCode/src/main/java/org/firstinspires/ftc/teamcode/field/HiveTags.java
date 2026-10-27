@@ -20,8 +20,9 @@ import org.firstinspires.ftc.teamcode.geometry.Rigid3;
  *   - A real hive rests tipped by +-HIVE_SWING_DEG / 2 from level: FAR_UP
  *     raises the +y side. The tags ride along, so a tag's pose is the level
  *     pose rotated about the pivot axis.
- *   - Each cell's 4 tags are one sticker, 2 x 2, TAG_SPACING apart, "bottom
- *     edge oriented towards the center of the FIELD" (Figure 9-16).
+ *   - Each cell's 4 tags are one sticker, in a single ROW (not 2 x 2), lowest
+ *     ID on the left, TAG_SPACING apart, "bottom edge oriented towards the
+ *     center of the FIELD" (Figures 9-15/9-16/9-17; row layout read by Evan 10/27).
  *
  * Coordinates: Pedro field inches, z = up from the tiles. Tag frames follow
  * the SDK: x = right, y = down (toward the sticker's bottom edge), z = INTO
@@ -42,10 +43,11 @@ public final class HiveTags {
     public static double HIVE_SWING_DEG = 40.0;   // MADE-UP: degrees between the two resting positions
     public static double TAG_SPACING = 3.75;      // Manual Fig. 9-15 (read by Evan 10/27): tag center to tag center; 3.25 in. tags, 0.5 in. gap
 
-    // MADE-UP: which corner of the 2x2 sticker each of a cell's tag IDs sits in,
-    // as {right, down} steps (each -1 or +1), in the order Cell.tagIds lists them.
-    // Figure 9-17 shows the real order.
-    private static final int[][] CORNERS = {{-1, -1}, {+1, -1}, {-1, +1}, {+1, +1}};
+    // Where each of a cell's tag IDs sits along the sticker's row, in TAG_SPACINGs
+    // to the right of the sticker's center, in the order Cell.tagIds lists them.
+    // Figure 9-17 (read by Evan 10/27): 38, 39, 40, 41 left to right. Assumed the
+    // figure shows the camera's view and every cell follows the same pattern.
+    private static final double[] ROW_STEPS = {-1.5, -0.5, +0.5, +1.5};
 
     /**
      * The tilt the SDK's tag library is built for (FieldAprilTags.getLocalizationLibrary).
@@ -93,8 +95,7 @@ public final class HiveTags {
         Rigid3 sticker = Rigid3.fromAxes(cx, cy, cz, xAxis, yAxis, zAxis);
 
         int index = indexInCell(cell, id);
-        double half = TAG_SPACING / 2;
-        Rigid3 levelTag = sticker.times(Rigid3.translation(CORNERS[index][0] * half, CORNERS[index][1] * half, 0));
+        Rigid3 levelTag = sticker.times(Rigid3.translation(ROW_STEPS[index] * TAG_SPACING, 0, 0));
 
         Rigid3 tipped = Rigid3.rotXAbout(PIVOT_Y, FieldConstants.HIVE_PIVOT_HEIGHT, tiltRadians(tilt));
         return tipped.times(levelTag);
