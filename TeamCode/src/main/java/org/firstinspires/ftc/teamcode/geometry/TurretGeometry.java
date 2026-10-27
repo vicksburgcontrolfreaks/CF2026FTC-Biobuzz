@@ -54,7 +54,7 @@ public class TurretGeometry {
      * above), -1 if clockwise. Check it on the robot: jog the turret, watch
      * Turret.getAngle() and which way it turns.
      */
-    public static double TURRET_CCW_SIGN = Double.NaN;
+    public static double TURRET_CCW_SIGN = 1.0;  // turret-bringup.md range test: ticks rise CCW, ENCODER_DIRECTION = 1.0
 
     /** The geometry of OUR robot, from the constants above. */
     public static TurretGeometry forRobot() {
