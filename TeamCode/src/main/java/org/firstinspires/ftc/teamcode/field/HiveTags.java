@@ -50,8 +50,8 @@ public final class HiveTags {
 
     // Which end of the row each of a cell's tag IDs is toward (-1 left, +1 right)
     // and whether it is the outer one, in the order Cell.tagIds lists them.
-    // Figure 9-17 (read by Evan 10/27): 38, 39, 40, 41 left to right. Assumed the
-    // figure shows the camera's view and every cell follows the same pattern.
+    // Figure 9-17 (read by Evan 10/27): looking UP from underneath (the camera's
+    // view), every cell's IDs run lowest to highest, left to right.
     private static final int[] ROW_SIDE = {-1, -1, +1, +1};
     private static final boolean[] ROW_OUTER = {true, false, false, true};
 
