@@ -92,8 +92,10 @@ public class TurretGeometry {
      *   190 -> -170,   -190 -> 170,   540 -> 180,   -180 -> 180,   45 -> 45
      */
     public static double wrapDegrees(double degrees) {
-        // TODO(student)
-        throw new UnsupportedOperationException("TODO: wrapDegrees");
+        double d = degrees % 360.0;
+        if (d <= -180) d += 360;
+        if (d > 180) d -= 360;
+        return d;
     }
 
     /**
@@ -104,8 +106,10 @@ public class TurretGeometry {
      * robot's heading to get FIELD directions, then add the robot's position.
      */
     public Pose turretPosition(Pose robot) {
-        // TODO(student)
-        throw new UnsupportedOperationException("TODO: turretPosition");
+        double h = robot.getHeading();
+        double x = robot.getX() + offsetX * Math.cos(h) - offsetY * Math.sin(h);
+        double y = robot.getY() + offsetX * Math.sin(h) + offsetY * Math.cos(h);
+        return new Pose(x, y, h);
     }
 
     /**
@@ -118,14 +122,15 @@ public class TurretGeometry {
      * positive. Wrap it (step 1).
      */
     public double aimAngle(Pose robot, double targetX, double targetY) {
-        // TODO(student)
-        throw new UnsupportedOperationException("TODO: aimAngle");
+        Pose t = turretPosition(robot);
+        double field = Math.toDegrees(Math.atan2(targetY - t.getY(), targetX - t.getX()));
+        return wrapDegrees(ccwSign * wrapDegrees(field - Math.toDegrees(robot.getHeading()) - zeroDeg));
     }
 
     /** STEP 4. Flat (x,y) distance in inches from the turret axis to a target. Feeds the shooter speed table. */
     public double distanceTo(Pose robot, double targetX, double targetY) {
-        // TODO(student)
-        throw new UnsupportedOperationException("TODO: distanceTo");
+        Pose t = turretPosition(robot);
+        return Math.hypot(targetX - t.getX(), targetY - t.getY());
     }
 
     /**
@@ -133,8 +138,7 @@ public class TurretGeometry {
      * direction is the turret pointing? Radians, any range is fine.
      */
     public double turretFieldHeading(Pose robot, double turretDeg) {
-        // TODO(student)
-        throw new UnsupportedOperationException("TODO: turretFieldHeading");
+        return robot.getHeading() + Math.toRadians(zeroDeg + ccwSign * turretDeg);
     }
 
     /**
@@ -146,7 +150,9 @@ public class TurretGeometry {
      * the offset and subtract it (undo step 2).
      */
     public Pose robotPoseFromTurret(double turretX, double turretY, double turretFieldHeadingRad, double turretDeg) {
-        // TODO(student)
-        throw new UnsupportedOperationException("TODO: robotPoseFromTurret");
+        double h = turretFieldHeadingRad - Math.toRadians(zeroDeg + ccwSign * turretDeg);
+        double x = turretX - (offsetX * Math.cos(h) - offsetY * Math.sin(h));
+        double y = turretY - (offsetX * Math.sin(h) + offsetY * Math.cos(h));
+        return new Pose(x, y, h);
     }
 }

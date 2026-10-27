@@ -71,8 +71,14 @@ public class VisionPoseFilter {
     public static Verdict check(boolean turretSettled, double speed, double turnRate,
                                 double frameAgeMs, double tagRange,
                                 Pose odometry, Pose vision) {
-        // TODO(student)
-        throw new UnsupportedOperationException("TODO: check");
+        if (!turretSettled) return Verdict.TURRET_MOVING;
+        if (speed > MAX_ROBOT_SPEED || Math.abs(turnRate) > MAX_ROBOT_TURN_RATE) return Verdict.ROBOT_MOVING;
+        if (frameAgeMs > MAX_FRAME_AGE_MS) return Verdict.FRAME_TOO_OLD;
+        if (tagRange < MIN_TAG_RANGE || tagRange > MAX_TAG_RANGE) return Verdict.TAG_OUT_OF_RANGE;
+        double jump = Math.hypot(vision.getX() - odometry.getX(), vision.getY() - odometry.getY());
+        double headingJump = TurretGeometry.wrapDegrees(Math.toDegrees(vision.getHeading() - odometry.getHeading()));
+        if (jump > MAX_JUMP || Math.abs(headingJump) > MAX_HEADING_JUMP) return Verdict.TOO_FAR_FROM_ODOMETRY;
+        return Verdict.ACCEPT;
     }
 
     /**
@@ -83,7 +89,9 @@ public class VisionPoseFilter {
      * 10 deg is 0 deg, NOT 180. Blend the SHORT way around the circle.
      */
     public static Pose blend(Pose odometry, Pose vision, double fraction) {
-        // TODO(student)
-        throw new UnsupportedOperationException("TODO: blend");
+        double x = odometry.getX() + fraction * (vision.getX() - odometry.getX());
+        double y = odometry.getY() + fraction * (vision.getY() - odometry.getY());
+        double dh = Math.toRadians(TurretGeometry.wrapDegrees(Math.toDegrees(vision.getHeading() - odometry.getHeading())));
+        return new Pose(x, y, odometry.getHeading() + fraction * dh);
     }
 }
