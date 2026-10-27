@@ -48,7 +48,7 @@ public class TurretGeometry {
      * Which way turret 0 deg points, in degrees counter-clockwise from the
      * robot's front. Turret on the back, facing backward at 0 deg = 180.
      */
-    public static double TURRET_ZERO_DEG = Double.NaN;
+    public static double TURRET_ZERO_DEG = 0.0;  // Evan: faces front, per the build team.
     /**
      * +1 if a BIGGER turret angle turns the turret counter-clockwise (seen from
      * above), -1 if clockwise. Check it on the robot: jog the turret, watch
