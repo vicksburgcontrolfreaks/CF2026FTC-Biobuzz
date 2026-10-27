@@ -30,4 +30,8 @@ android {
 
 dependencies {
     implementation project(':FtcRobotController')
+
+    // Laptop-only unit tests in src/test/java -- no robot needed.
+    // Run with: gradlew :TeamCode:testDebugUnitTest
+    testImplementation 'junit:junit:4.13.2'
 }

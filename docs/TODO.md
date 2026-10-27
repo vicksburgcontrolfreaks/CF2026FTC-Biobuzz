@@ -64,6 +64,16 @@ Run **Shooter Pivot Home Test** and follow the steps in its header:
 Until step 2 passes, do not bother with step 3 — the offsets would be measured
 against an unreliable zero.
 
+### 4. Bring up the non-blocking Shooter
+**Why:** `subsystems/Shooter` (+ `shooting/ShooterLogic`) replaces the
+`sleep()`-based `ShootAprilTag.shoot()` so TeleOp and auto keep running while it
+fires. Its logic is laptop-tested; nothing about the real mechanism is.
+
+Run **Shooter Test** and follow the four checks in its header: wheels agree,
+READY comes on, one shot launches (tune `FEED_SEC`), a 3-volley goes 3 times the
+same distance. It also settles the PULSE vs CONTINUOUS feed question below.
+Needs item 1's indexer direction confirmed first.
+
 ---
 
 ## Needs a decision, not the robot
