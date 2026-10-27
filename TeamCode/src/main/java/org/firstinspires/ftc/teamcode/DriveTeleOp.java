@@ -1,13 +1,28 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.bylazar.configurables.PanelsConfigurables;
+import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
+@Configurable
 @TeleOp(name = "DriveTeleOp", group = "TeleOp")
 public class DriveTeleOp extends OpMode {
+    // ---- Driving knobs: change live in Panels (panels.bylazar.com), no redeploy ----
+    // 1.0 = full power. 0.5 for practice.
+    public static double DRIVE_SPEED = 0.5;
+    // Robot-centric = "forward" is wherever the robot's front points. Simpler,
+    // and doesn't depend on odometry heading. Field-centric = "forward" is always
+    // away from the driver, however the robot is turned.
+    public static boolean FIELD_CENTRIC = false;
+    // If a stick drives the wrong way, flip ONLY the one that's wrong.
+    public static boolean REVERSE_FORWARD = false;  // left stick up/down
+    public static boolean REVERSE_STRAFE = false;   // left stick left/right
+    public static boolean REVERSE_TURN = false;     // right stick
+
     private RobotHardware hardware;
     private ShootAprilTag shooter;
     private Follower follower;
@@ -15,6 +30,7 @@ public class DriveTeleOp extends OpMode {
 
     @Override
     public void init() {
+        PanelsConfigurables.refreshClass(DriveTeleOp.class);
         hardware = new RobotHardware();
         hardware.init(hardwareMap);
         shooter = new ShootAprilTag(hardware);
@@ -43,21 +59,25 @@ public class DriveTeleOp extends OpMode {
 
     @Override
     public void loop() {
-        // Field-centric drive
-        double y = -gamepad1.left_stick_y;
-        double x = gamepad1.left_stick_x;
-        double rx = gamepad1.right_stick_x;
+        double y = -gamepad1.left_stick_y * (REVERSE_FORWARD ? -1 : 1);
+        double x = gamepad1.left_stick_x * (REVERSE_STRAFE ? -1 : 1);
+        double rx = gamepad1.right_stick_x * (REVERSE_TURN ? -1 : 1);
 
-        double heading = follower.getPose().getHeading();
-        double rotX = x * Math.cos(heading) - y * Math.sin(heading);
-        double rotY = x * Math.sin(heading) + y * Math.cos(heading);
+        // Field-centric: rotate the stick by MINUS the robot's heading. (This used
+        // to rotate by +heading, which is right at 0 and 180 deg but flips the
+        // sticks when the robot is turned sideways.) Heading 0 = however the robot
+        // faced at INIT -- nothing sets a starting pose here.
+        double heading = (FIELD_CENTRIC && follower != null) ? follower.getPose().getHeading() : 0.0;
+        double rotX = x * Math.cos(-heading) - y * Math.sin(-heading);
+        double rotY = x * Math.sin(-heading) + y * Math.cos(-heading);
 
         double den = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1);
+        double scale = DRIVE_SPEED / den;
 
-        hardware.lf.setPower((rotY + rotX + rx) / den);
-        hardware.rf.setPower((rotY - rotX - rx) / den);
-        hardware.lr.setPower((rotY - rotX + rx) / den);
-        hardware.rr.setPower((rotY + rotX - rx) / den);
+        hardware.lf.setPower((rotY + rotX + rx) * scale);
+        hardware.rf.setPower((rotY - rotX - rx) * scale);
+        hardware.lr.setPower((rotY - rotX + rx) * scale);
+        hardware.rr.setPower((rotY + rotX - rx) * scale);
 
         // Collect: Gamepad2 A - run collector while held.
         // The three magazine beam breaks were removed 2026-10-27, so there is no
@@ -79,9 +99,11 @@ public class DriveTeleOp extends OpMode {
         }
 
         // Update localizer
-        follower.update();
+        if (follower != null) follower.update();
 
-        telemetry.addData("Heading", Math.toDegrees(heading));
+        telemetry.addData("Drive", (FIELD_CENTRIC ? "field-centric" : "robot-centric")
+                + " at " + Math.round(DRIVE_SPEED * 100) + "%");
+        telemetry.addData("Heading", follower != null ? Math.toDegrees(follower.getPose().getHeading()) : 0);
         telemetry.addData("Tag ID", tagId);
         telemetry.update();
     }
