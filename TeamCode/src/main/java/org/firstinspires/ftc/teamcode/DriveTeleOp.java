@@ -8,6 +8,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @TeleOp(name = "DriveTeleOp", group = "TeleOp")
 public class DriveTeleOp extends OpMode {
+    private static final double DRIVE_SPEED = 0.5; // 1.0 = full power; 0.5 for practice
     private RobotHardware hardware;
     private ShootAprilTag shooter;
     private Follower follower;
@@ -54,10 +55,10 @@ public class DriveTeleOp extends OpMode {
 
         double den = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1);
 
-        hardware.lf.setPower((rotY + rotX + rx) / den);
-        hardware.rf.setPower((rotY - rotX - rx) / den);
-        hardware.lr.setPower((rotY - rotX + rx) / den);
-        hardware.rr.setPower((rotY + rotX - rx) / den);
+        hardware.lf.setPower((rotY + rotX + rx) / den * DRIVE_SPEED);
+        hardware.rf.setPower((rotY - rotX - rx) / den * DRIVE_SPEED);
+        hardware.lr.setPower((rotY - rotX + rx) / den * DRIVE_SPEED);
+        hardware.rr.setPower((rotY + rotX - rx) / den * DRIVE_SPEED);
 
         // Collect: Gamepad2 A - run collector while held.
         // The three magazine beam breaks were removed 2026-10-27, so there is no
