@@ -12,6 +12,10 @@ import org.firstinspires.ftc.teamcode.field.HiveTags;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /*
  * TagLocalizer: one AprilTag detection -> where the ROBOT is on the field.
  *
@@ -120,20 +124,35 @@ public class TagLocalizer {
         return best;
     }
 
+    // ---- Combining the tags in one frame (solveFrame) ------------------------
+    // A fix farther than this from the group's median is dropped as a bad tag
+    // (usually the single-tag "pose flip"). Starting guesses -- tune in Phase 3.
+    public static double OUTLIER_DISTANCE = 3.0;     // in
+    public static double OUTLIER_HEADING_DEG = 5.0;
+
     /** One camera position fix, ready for VisionPoseFilter. */
     public static class Fix {
         public final Pose robot;
-        public final TurretFix turret;
-        public final int tagId;
-        public final double tagRange;      // in, for VisionPoseFilter's range rule
+        public final TurretFix turret;     // combined fix: the kept tag nearest the average
+        public final int tagId;            // combined fix: that same tag
+        public final double tagRange;      // in, for VisionPoseFilter's range rule (combined: the mean)
         public final long frameNanos;      // when the frame was captured
+        public final int tagsUsed;         // 1 from solve(); how many survived in solveFrame()
+        public final double spread;        // in, farthest kept fix from the average; 0 for one tag
 
         Fix(Pose robot, TurretFix turret, int tagId, double tagRange, long frameNanos) {
+            this(robot, turret, tagId, tagRange, frameNanos, 1, 0.0);
+        }
+
+        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, long frameNanos,
+            int tagsUsed, double spread) {
             this.robot = robot;
             this.turret = turret;
             this.tagId = tagId;
             this.tagRange = tagRange;
             this.frameNanos = frameNanos;
+            this.tagsUsed = tagsUsed;
+            this.spread = spread;
         }
     }
 
@@ -146,10 +165,7 @@ public class TagLocalizer {
     /**
      * The robot's pose from one detection, or null if the SDK had no pose for
      * it (not a hive tag) or neither hive tilt comes out level and on the floor.
-     * A frame usually shows all 4 of a cell's tags: that's 4 fixes, so average
-     * them or keep the one with the best decisionMargin.
-     *
-     * Needs TurretGeometry step 6 (a student TODO) before it returns anything.
+     * Prefer solveFrame(): a frame usually shows all 4 of a cell's tags.
      */
     public Fix solve(AprilTagDetection detection, double turretDegAtFrame) {
         if (detection.robotPose == null) return null;
@@ -163,5 +179,101 @@ public class TagLocalizer {
 
         Pose robot = turret.robotPoseFromTurret(fix.x, fix.y, fix.headingRad, turretDegAtFrame);
         return new Fix(robot, fix, detection.id, detection.ftcPose.range, detection.frameAcquisitionNanoTime);
+    }
+
+    /**
+     * One fix from every hive tag in a frame (pass getDetections() straight in),
+     * or null if none solve or the tags can't agree. See combine().
+     */
+    public Fix solveFrame(List<AprilTagDetection> detections, double turretDegAtFrame) {
+        List<Fix> fixes = new ArrayList<>();
+        for (AprilTagDetection d : detections) {
+            Fix f = solve(d, turretDegAtFrame);
+            if (f != null) fixes.add(f);
+        }
+        return combine(fixes);
+    }
+
+    /**
+     * Average several fixes of the same frame, after dropping outliers.
+     *
+     * Why not just keep the tag with the best decisionMargin? decisionMargin
+     * says how cleanly the tag's ID decoded, not how accurate its POSE is. The
+     * pose error that actually bites is a single tag "flipping" to a mirror-image
+     * solution inches away. A median sees that one tag as the odd one out; a plain
+     * average would be dragged by it; "best margin" might pick it.
+     *
+     *   1. Median x and y of all fixes. The fix nearest it is the reference.
+     *   2. Drop fixes more than OUTLIER_DISTANCE from the median, or more than
+     *      OUTLIER_HEADING_DEG from the reference's heading.
+     *   3. Average what's left (heading the short way round the circle).
+     *
+     * Two tags that disagree leave the median halfway between, and both get
+     * dropped: null. That's on purpose -- a frame that argues with itself
+     * shouldn't move odometry.
+     *
+     * The 4 tags of one cell share the camera-mount and hive errors, so averaging
+     * cuts corner-detection noise but NOT calibration error. Don't expect 2x.
+     */
+    static Fix combine(List<Fix> fixes) {
+        if (fixes.isEmpty()) return null;
+        if (fixes.size() == 1) return fixes.get(0);
+
+        double[] xs = new double[fixes.size()];
+        double[] ys = new double[fixes.size()];
+        for (int i = 0; i < fixes.size(); i++) {
+            xs[i] = fixes.get(i).robot.getX();
+            ys[i] = fixes.get(i).robot.getY();
+        }
+        double medX = median(xs), medY = median(ys);
+
+        Fix reference = fixes.get(0);
+        for (Fix f : fixes) {
+            if (distance(f.robot, medX, medY) < distance(reference.robot, medX, medY)) reference = f;
+        }
+
+        List<Fix> kept = new ArrayList<>();
+        for (Fix f : fixes) {
+            double headingOff = TurretGeometry.wrapDegrees(
+                    Math.toDegrees(f.robot.getHeading() - reference.robot.getHeading()));
+            if (distance(f.robot, medX, medY) <= OUTLIER_DISTANCE
+                    && Math.abs(headingOff) <= OUTLIER_HEADING_DEG) {
+                kept.add(f);
+            }
+        }
+        if (kept.isEmpty()) return null;
+
+        // Heading: average the offsets from the reference, so 359 and 1 average to 0.
+        double sumX = 0, sumY = 0, sumHeadingOff = 0, sumRange = 0;
+        for (Fix f : kept) {
+            sumX += f.robot.getX();
+            sumY += f.robot.getY();
+            sumHeadingOff += TurretGeometry.wrapDegrees(
+                    Math.toDegrees(f.robot.getHeading() - reference.robot.getHeading()));
+            sumRange += f.tagRange;
+        }
+        int n = kept.size();
+        Pose mean = new Pose(sumX / n, sumY / n,
+                reference.robot.getHeading() + Math.toRadians(sumHeadingOff / n));
+
+        double spread = 0;
+        Fix nearest = kept.get(0);
+        for (Fix f : kept) {
+            double d = distance(f.robot, mean.getX(), mean.getY());
+            spread = Math.max(spread, d);
+            if (d < distance(nearest.robot, mean.getX(), mean.getY())) nearest = f;
+        }
+        return new Fix(mean, nearest.turret, nearest.tagId, sumRange / n, nearest.frameNanos, n, spread);
+    }
+
+    private static double distance(Pose p, double x, double y) {
+        return Math.hypot(p.getX() - x, p.getY() - y);
+    }
+
+    private static double median(double[] values) {
+        double[] v = values.clone();
+        Arrays.sort(v);
+        int mid = v.length / 2;
+        return v.length % 2 == 1 ? v[mid] : (v[mid - 1] + v[mid]) / 2.0;
     }
 }
