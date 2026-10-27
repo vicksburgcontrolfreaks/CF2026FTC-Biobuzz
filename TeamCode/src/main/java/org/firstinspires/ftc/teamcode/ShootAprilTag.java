@@ -6,41 +6,64 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 public class ShootAprilTag {
     private RobotHardware hardware;
     private double SHOOTER_VELOCITY_RPM = 2000; // RPM, tune with testing
-    private double COLLECTOR_VELOCITY_RPM = 1000; // RPM for flywheel mode
-    private double FLIP_POSITION_LAUNCH = 0.5; // Servo pos for launch
-    private double FLIP_POSITION_RESET = 0.0; // Reset pos
-    private double REVERSE_TIME = 0.5; // Sec to reverse collector
     private static final double TICKS_PER_REV = 28; // REV HD Hex Motor shaft
-    private static final double COLLECTOR_GEAR_RATIO = 20.0; // Collector 20:1
-    private static final double SHOOTER_GEAR_RATIO = 1.0; // Shooter no gearbox
+    // TODO(gear ratio): this says the shooter is direct drive, but Elliott's
+    // ShooterVelocityTest assumes 3:1. Both cannot be right -- measure the real
+    // ratio and make the two files agree before trusting any RPM number here.
+    private static final double SHOOTER_GEAR_RATIO = 1.0;
+
+    // Firing sequence timings. Every one of these is a starting guess until
+    // somebody watches the real shooter -- see the TODO on shoot().
+    private static final int BALLS_PER_VOLLEY = 3;
+    private static final double SPINUP_TIME = 1.0;        // sec to reach speed before feeding
+    private static final double INDEXER_FEED_TIME = 0.25; // sec of indexer run per ball
+    private static final double SHOT_RECOVERY_TIME = 0.4; // sec for flywheels to recover
+    private static final double INDEXER_FEED_POWER = 1.0;
 
     public ShootAprilTag(RobotHardware hardware) {
         this.hardware = hardware;
     }
 
+    /**
+     * Align, spin up, and fire a volley.
+     *
+     * TODO(mechanism): this is a direct translation of the old flipper-based
+     * sequence onto the new hardware -- "flipper flicks a ball in" became
+     * "indexer motor feeds a ball in". Nobody has confirmed that is how the
+     * real shooter loads, so treat the whole sequence as a first draft:
+     *   - Does the indexer need to run continuously instead of pulsing per ball?
+     *   - Should the collector keep feeding the indexer during a volley?
+     *   - Does the pivot need to be at pollen/nectar spacing before firing?
+     * Fix the sequence before tuning any of the timing constants.
+     */
     public void shoot(int tagId) {
         // Step 1: Align to AprilTag (ID 20 or 24, center in view)
         alignToTag(tagId);
 
-        // Step 2: Shooting sequence for 3 balls
+        // Step 2: Spin both flywheels up to the distance-derived speed
         double distance = getDistanceToTag(tagId);
         SHOOTER_VELOCITY_RPM = calculateVelocity(distance);
         double shooterTicksPerSec = SHOOTER_VELOCITY_RPM * TICKS_PER_REV * SHOOTER_GEAR_RATIO / 60.0;
-        hardware.shooter.setVelocity(shooterTicksPerSec);
+        hardware.shooterLeft.setVelocity(shooterTicksPerSec);
+        hardware.shooterRight.setVelocity(shooterTicksPerSec);
 
-        for (int i = 0; i < 3; i++) {
-            double collectorTicksPerSec = COLLECTOR_VELOCITY_RPM * TICKS_PER_REV * COLLECTOR_GEAR_RATIO / 60.0;
-            hardware.collector.setVelocity(collectorTicksPerSec);
-            hardware.flipper.setPosition(FLIP_POSITION_LAUNCH);
-            waitSec(0.5);
-            hardware.collector.setPower(-0.3);
-            waitSec(REVERSE_TIME);
-            hardware.collector.setPower(0);
-            hardware.flipper.setPosition(FLIP_POSITION_RESET);
-            waitSec(0.2);
+        // Step 3: Let them actually get there. Feeding a ball into a
+        // still-accelerating flywheel is the classic cause of one good shot
+        // followed by two short ones.
+        waitSec(SPINUP_TIME);
+
+        // Step 4: Pulse the indexer once per ball, pausing in between so the
+        // flywheels recover the speed each ball steals on its way out.
+        for (int i = 0; i < BALLS_PER_VOLLEY; i++) {
+            hardware.indexer.setPower(INDEXER_FEED_POWER);
+            waitSec(INDEXER_FEED_TIME);
+            hardware.indexer.setPower(0);
+            waitSec(SHOT_RECOVERY_TIME);
         }
 
-        hardware.shooter.setPower(0);
+        hardware.shooterLeft.setPower(0);
+        hardware.shooterRight.setPower(0);
+        hardware.indexer.setPower(0);
         hardware.collector.setPower(0);
     }
 

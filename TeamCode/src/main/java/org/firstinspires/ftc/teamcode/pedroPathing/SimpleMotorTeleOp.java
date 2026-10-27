@@ -13,18 +13,20 @@ import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 @TeleOp(name = "Simple Motor TeleOp", group = "Prototypes")
 public class SimpleMotorTeleOp extends OpMode {
 
-    private DcMotorEx collector;  // Our test motor
-    private DcMotorEx shooter;  // Our test motor
-//    private CRServo   ;
+    private DcMotorEx collector;
+    private DcMotorEx indexer;
+    private DcMotorEx shooterLeft, shooterRight;
 
 
     @Override
     public void init() {
-        // Grab the motor and servo from hardware config
-//        indexer = hardwareMap.get(DcMotorEx.class, "indexer"); //Indexer CH 0
-        shooter = hardwareMap.get(DcMotorEx.class, "shooter"); //Shooter CH 1
-        collector = hardwareMap.get(DcMotorEx.class, "collector"); //Shooter CH 1
-//        collector = hardwareMap.get(CRServo.class, "collector"); //collector servo CH 0
+        // Grab the motors from hardware config. Names updated 2026-10-27:
+        // the single "shooter" became shooterLeft/shooterRight, and "indexer"
+        // is now a real DcMotorEx instead of a commented-out maybe.
+        indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
+        shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
+        collector = hardwareMap.get(DcMotorEx.class, "collector");
 
         // Optional: Reverse direction if motor spins backward
        //  motor.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -35,20 +37,21 @@ public class SimpleMotorTeleOp extends OpMode {
 
     @Override
     public void loop() {
-        // Indexer momentary gamepad 1 A and Y
-//        if(gamepad1.a){
-//            indexer.setPower(1);
-//        }
-//        else if (gamepad1.y){
-//            indexer.setPower(-1);
-//        }
-//        else{
-//            indexer.setPower(0);
-//        }
+        // Indexer momentary gamepad 1 A (feed) and Y (unjam)
+        if (gamepad1.a) {
+            indexer.setPower(1);
+        } else if (gamepad1.y) {
+            indexer.setPower(-1);
+        } else {
+            indexer.setPower(0);
+        }
 
-        // Shooter momentary control gamepad 1 Left Stick Y
+        // Shooter momentary control gamepad 1 Left Stick Y.
+        // Both wheels take the same power; shooterRight is reversed in the
+        // hardware config, not here, so this stays a single value.
         double power = -gamepad1.left_stick_y;  // Flip sign so up = forward
-        shooter.setPower(power);
+        shooterLeft.setPower(power);
+        shooterRight.setPower(power);
 
         // Collector continuous rotation servo control
         if (gamepad1.dpad_up) {
@@ -60,9 +63,10 @@ public class SimpleMotorTeleOp extends OpMode {
         }
 
         // Telemetry for debugging
-        telemetry.addData("Motor Power", power);
-//        telemetry.addData("Collector Servo Position", collector.setPower());
-        // telemetry.addData("Current Draw (Amps)", indexer.getCurrent(CurrentUnit.AMPS));
+        telemetry.addData("Shooter Power", power);
+        telemetry.addData("Collector Power", collector.getPower());
+        telemetry.addData("Indexer Power", indexer.getPower());
+        telemetry.addData("Indexer Current (Amps)", indexer.getCurrent(CurrentUnit.AMPS));
         telemetry.update();
     }
 

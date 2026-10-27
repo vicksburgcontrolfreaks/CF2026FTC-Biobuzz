@@ -59,14 +59,11 @@ public class DriveTeleOp extends OpMode {
         hardware.lr.setPower((rotY - rotX + rx) / den);
         hardware.rr.setPower((rotY + rotX - rx) / den);
 
-        // Collect: Gamepad2 A - run collector until full
+        // Collect: Gamepad2 A - run collector while held.
+        // The three magazine beam breaks were removed 2026-10-27, so there is no
+        // longer an automatic "stop when full" -- the driver decides.
         if (gamepad2.a) {
-            if (!hardware.isMagazineFull()) {
-                hardware.collector.setPower(0.5);
-            } else {
-                hardware.collector.setPower(0);
-                telemetry.addData("Magazine", "Full");
-            }
+            hardware.collector.setPower(0.5);
         } else {
             hardware.collector.setPower(0);
         }

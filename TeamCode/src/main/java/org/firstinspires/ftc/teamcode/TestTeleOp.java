@@ -16,9 +16,15 @@ public class TestTeleOp extends OpMode {
     private boolean collectorOn = false; // Toggle for collector
     private boolean shooterOn = false; // Toggle for shooter
     private int tagId = 20; // Default to blue alliance (ID 20)
-    private static final double TICKS_PER_REV = 28; // REV HD Hex Motor shaft
-    private static final double COLLECTOR_GEAR_RATIO = 4.0; // Collector 20:1
-    private static final double SHOOTER_GEAR_RATIO = 1.0; // Shooter no gearbox
+    private static final double TICKS_PER_REV = RobotHardware.TICKS_PER_MOTOR_REV;
+    // This was hardcoded 4.0 while its own comment said 20:1. The collector is
+    // 20:1 (confirmed 2026-10-27), so every "Collector Actual RPM" this op mode
+    // printed before today was wrong by 5x. Sourced from RobotHardware now so
+    // there is exactly one place to fix it.
+    private static final double COLLECTOR_GEAR_RATIO = RobotHardware.COLLECTOR_GEAR_RATIO;
+    // TODO(gear ratio): matches the TODO in ShootAprilTag -- this says direct
+    // drive, ShooterVelocityTest says 3:1. Measure it and make them agree.
+    private static final double SHOOTER_GEAR_RATIO = 1.0;
     private Timer debounceTimer = new Timer();
     private boolean lastA = false, lastB = false;
     private static final double DEBOUNCE_TIME = 0.2; // Seconds
@@ -34,7 +40,6 @@ public class TestTeleOp extends OpMode {
         } catch (Exception e) {
             telemetry.addData("Error", "Follower failed: " + e.getMessage());
         }
-        hardware.flipper.setPosition(0.0); // Reset servo
         debounceTimer.resetTimer();
 
         // Alliance selection (Gamepad2)
@@ -50,7 +55,7 @@ public class TestTeleOp extends OpMode {
         // Telemetry instructions
         telemetry.addLine("Gamepad1: Left Stick (Move/Strafe), Right Stick (Rotate), Y (Auto-Align)");
         telemetry.addLine("Gamepad2: DPAD Up/Down (Collector RPM +/-), A (Collector On/Off)");
-        telemetry.addLine("Gamepad2: Right/Left Bumper (Shooter RPM +/-), B (Shooter On/Off), X (Flipper)");
+        telemetry.addLine("Gamepad2: Right/Left Bumper (Shooter RPM +/-), B (Shooter On/Off), X (Indexer Feed)");
         telemetry.update();
     }
 
@@ -112,16 +117,19 @@ public class TestTeleOp extends OpMode {
         lastB = gamepad2.b;
         if (shooterOn) {
             double shooterTicksPerSec = shooterRPM * TICKS_PER_REV * SHOOTER_GEAR_RATIO / 60.0;
-            hardware.shooter.setVelocity(shooterTicksPerSec);
+            hardware.shooterLeft.setVelocity(shooterTicksPerSec);
+            hardware.shooterRight.setVelocity(shooterTicksPerSec);
         } else {
-            hardware.shooter.setPower(0.0);
+            hardware.shooterLeft.setPower(0.0);
+            hardware.shooterRight.setPower(0.0);
         }
 
-        // Flipper servo: X momentary (launch while held, reset when released)
+        // Indexer: X momentary -- feeds a ball into the flywheels while held.
+        // Replaces the flipper servo, removed 2026-10-27.
         if (gamepad2.x) {
-            hardware.flipper.setPosition(0.5); // Launch pos
+            hardware.indexer.setPower(1.0);
         } else {
-            hardware.flipper.setPosition(0.0); // Reset pos
+            hardware.indexer.setPower(0.0);
         }
 
         // Update localizer
@@ -130,14 +138,15 @@ public class TestTeleOp extends OpMode {
         // Telemetry
         telemetry.addLine("Gamepad1: Left Stick (Move/Strafe), Right Stick (Rotate), Y (Auto-Align)");
         telemetry.addLine("Gamepad2: DPAD Up/Down (Collector RPM +/-), A (Collector On/Off)");
-        telemetry.addLine("Gamepad2: Right/Left Bumper (Shooter RPM +/-), B (Shooter On/Off), X (Flipper)");
+        telemetry.addLine("Gamepad2: Right/Left Bumper (Shooter RPM +/-), B (Shooter On/Off), X (Indexer Feed)");
         telemetry.addData("Heading", Math.toDegrees(heading));
         telemetry.addData("Tag ID", tagId);
         telemetry.addData("Collector RPM", collectorRPM + " (On: " + collectorOn + ")");
         telemetry.addData("Collector Actual RPM", (hardware.collector.getVelocity() / (TICKS_PER_REV * COLLECTOR_GEAR_RATIO)) * 60.0);
         telemetry.addData("Shooter RPM", shooterRPM + " (On: " + shooterOn + ")");
-        telemetry.addData("Shooter Actual RPM", (hardware.shooter.getVelocity() / (TICKS_PER_REV * SHOOTER_GEAR_RATIO)) * 60.0);
-        telemetry.addData("Servo Pos", hardware.flipper.getPosition());
+        telemetry.addData("Shooter L Actual RPM", (hardware.shooterLeft.getVelocity() / (TICKS_PER_REV * SHOOTER_GEAR_RATIO)) * 60.0);
+        telemetry.addData("Shooter R Actual RPM", (hardware.shooterRight.getVelocity() / (TICKS_PER_REV * SHOOTER_GEAR_RATIO)) * 60.0);
+        telemetry.addData("Indexer Power", hardware.indexer.getPower());
         telemetry.update();
     }
 }
