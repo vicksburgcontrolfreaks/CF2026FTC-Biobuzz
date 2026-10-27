@@ -23,26 +23,26 @@ import com.qualcomm.robotcore.util.Range;
  * Driver Station config names this expects:
  *   "turret"     - CRServo (Continuous Rotation Servo) on a servo port
  *   "turretHome" - REV Touch Sensor (the magnetic limit switch), digital port
- *   "rf"         - the RIGHT FRONT DRIVE MOTOR. The turret encoder is plugged into
+ *   "lf"         - the LEFT FRONT DRIVE MOTOR. The turret encoder is plugged into
  *                  that motor port's spare encoder connector, so there is no
  *                  separate encoder device to configure. Read the warning below.
  *
- * SHARING THE "rf" MOTOR PORT
- * The drivetrain owns "rf". This class only ever READS its encoder -- it never
+ * SHARING THE "lf" MOTOR PORT
+ * The drivetrain owns "lf". This class only ever READS its encoder -- it never
  * sets power, direction, run mode, or resets the encoder on it. Two rules keep
  * that safe, and breaking either one breaks the turret:
  *
- *   1. "rf" must stay in RUN_WITHOUT_ENCODER (the default). If anything puts it
+ *   1. "lf" must stay in RUN_WITHOUT_ENCODER (the default). If anything puts it
  *      in RUN_USING_ENCODER or RUN_TO_POSITION, the hub's velocity PID would try
  *      to regulate the drive wheel using the TURRET's position. Nothing in this
  *      repo does that today, and Pedro Pathing's Mecanum class does not either.
- *   2. Nobody calls STOP_AND_RESET_ENCODER on "rf", which would zero the turret's
+ *   2. Nobody calls STOP_AND_RESET_ENCODER on "lf", which would zero the turret's
  *      position mid-match.
  *
  * Direction is handled for us: the SDK negates getCurrentPosition() when a motor
- * is REVERSE (DcMotorImpl.adjustPosition), and this repo sets rf's direction
- * differently in different op modes -- Pedro's Constants says REVERSE while
- * RobotHardware says FORWARD. readRawTicks() divides that out so turret angles
+ * is REVERSE (DcMotorImpl.adjustPosition), and this repo sets lf's direction
+ * differently in different op modes -- Pedro's Constants says FORWARD while
+ * RobotHardware says REVERSE. readRawTicks() divides that out so turret angles
  * mean the same thing everywhere, and ENCODER_DIRECTION stays the only sign knob.
  *
  * Call init() once, then update() every loop. Nothing moves unless update() runs.
@@ -80,12 +80,12 @@ public class Turret {
 
     // Set to -1 if positive servo power makes the reported angle go DOWN.
     // You will find this out in the first 10 seconds of testing. This is the ONLY
-    // place turret sign should be adjusted -- do not "fix" it by changing rf's
+    // place turret sign should be adjusted -- do not "fix" it by changing lf's
     // direction, which belongs to the drivetrain.
     public static double ENCODER_DIRECTION = 1.0;
 
     // The drive motor whose spare encoder port the turret encoder is wired into.
-    private static final String ENCODER_MOTOR_NAME = "rf";
+    private static final String ENCODER_MOTOR_NAME = "lf";
 
     // ---- Travel limits ------------------------------------------------------
     // Travel works out to 286 degrees, so the hard stops sit at -143.0 and +143.0
@@ -210,7 +210,7 @@ public class Turret {
 
     /**
      * Same as init(hardwareMap) but reuses a drive motor handle the caller already
-     * has. Use this from RobotHardware so there is one rf object, not two.
+     * has. Use this from RobotHardware so there is one lf object, not two.
      */
     public void init(HardwareMap hardwareMap, DcMotorEx sharedEncoderMotor) {
         servo = hardwareMap.get(CRServo.class, "turret");
@@ -445,11 +445,11 @@ public class Turret {
      * Encoder ticks with the drive motor's direction setting cancelled out.
      *
      * The SDK runs getCurrentPosition() through DcMotorImpl.adjustPosition(), which
-     * negates the value when the motor is REVERSE. rf's direction is the
+     * negates the value when the motor is REVERSE. lf's direction is the
      * drivetrain's business and is not consistent across op modes, so undoing it
      * here keeps a given turret angle meaning the same thing in TeleOp and in auto.
      * Re-read every call rather than cached at init, in case something changes
-     * rf's direction while the op mode is running.
+     * lf's direction while the op mode is running.
      */
     private int readRawTicks() {
         int ticks = encoderMotor.getCurrentPosition();

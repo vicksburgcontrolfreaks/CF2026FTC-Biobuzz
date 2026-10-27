@@ -27,7 +27,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *
  * Config needed:
  *   "turretHome" - REV Touch Sensor (the magnetic limit switch), digital port
- *   "rf"         - optional. The right front drive motor, whose spare encoder port
+ *   "lf"         - optional. The left front drive motor, whose spare encoder port
  *                  carries the turret encoder. If it is configured, this op mode
  *                  also measures how wide the magnet's trigger zone is. Without
  *                  it, everything except the zone measurement still works.
@@ -48,7 +48,7 @@ public class MagneticSensorTest extends LinearOpMode {
 
         // tryGet returns null instead of throwing, so this op mode still runs on a
         // bench setup where the drivetrain is not configured.
-        encoderMotor = hardwareMap.tryGet(DcMotorEx.class, "rf");
+        encoderMotor = hardwareMap.tryGet(DcMotorEx.class, "lf");
 
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
 
@@ -56,8 +56,8 @@ public class MagneticSensorTest extends LinearOpMode {
         telemetry.addLine("Nothing moves. Turn the turret by hand.");
         telemetry.addLine("A = reset counters");
         telemetry.addLine(encoderMotor != null
-                ? "rf encoder found: zone width will be measured"
-                : "rf not configured: zone width unavailable (everything else works)");
+                ? "lf encoder found: zone width will be measured"
+                : "lf not configured: zone width unavailable (everything else works)");
         telemetry.update();
 
         waitForStart();
@@ -138,7 +138,7 @@ public class MagneticSensorTest extends LinearOpMode {
             telemetryM.addLine("");
             telemetryM.addLine("=== TRIGGER ZONE ===");
             if (encoderMotor == null) {
-                telemetryM.addLine("rf not configured - skipped");
+                telemetryM.addLine("lf not configured - skipped");
             } else if (!haveZone) {
                 telemetryM.addData("encoder ticks", readRawTicks());
                 telemetryM.addLine("Swing the magnet through to measure.");
@@ -161,7 +161,7 @@ public class MagneticSensorTest extends LinearOpMode {
     /**
      * Encoder ticks with the drive motor's direction cancelled out, matching what
      * Turret.readRawTicks() does -- the SDK negates getCurrentPosition() on a
-     * REVERSE motor, and rf's direction is set inconsistently across op modes.
+     * REVERSE motor, and lf's direction is set inconsistently across op modes.
      */
     private int readRawTicks() {
         int ticks = encoderMotor.getCurrentPosition();

@@ -35,7 +35,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *
  * Config needed:
  *   "turretHome" - REV Touch Sensor (magnetic limit switch)
- *   "rf"         - right front drive motor, carrying the turret encoder on its
+ *   "lf"         - left front drive motor, carrying the turret encoder on its
  *                  spare encoder port
  *   "turret"     - optional. Only fetched so it can be explicitly stopped.
  */
@@ -59,7 +59,7 @@ public class TurretRangeTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        encoderMotor = hardwareMap.get(DcMotorEx.class, "rf");
+        encoderMotor = hardwareMap.get(DcMotorEx.class, "lf");
         homeSwitch = hardwareMap.get(TouchSensor.class, "turretHome");
 
         // Fetched only to guarantee it is not driving while hands are on the turret.
@@ -205,7 +205,7 @@ public class TurretRangeTest extends LinearOpMode {
     /**
      * Encoder ticks with the drive motor's direction cancelled out, matching
      * Turret.readRawTicks(). The SDK negates getCurrentPosition() on a REVERSE
-     * motor, and rf's direction is set inconsistently across op modes.
+     * motor, and lf's direction is set inconsistently across op modes.
      */
     private int readRawTicks() {
         int ticks = encoderMotor.getCurrentPosition();

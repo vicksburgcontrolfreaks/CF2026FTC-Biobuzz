@@ -33,8 +33,8 @@ public class Constants {
             .yVelocity(40.318533829 )
             .rightFrontMotorName("rf") //EH1
             .rightRearMotorName("rr") //EH0
-            .leftRearMotorName("lr") //EH3
-            .leftFrontMotorName("lf") //EH2
+            .leftRearMotorName("lr") //CH0
+            .leftFrontMotorName("lf") //CH1 - also carries the turret encoder
             .leftFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
@@ -44,7 +44,7 @@ public class Constants {
             .forwardPodY(6.89) //175mm 6.89in
             .strafePodX(0) // 0
             .distanceUnit(DistanceUnit.INCH)
-            .hardwareMapName("pinpoint") //EH I2C Bus 0
+            .hardwareMapName("pinpoint") //CH I2C Bus 0
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);

@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.teamcode.subsystems.Turret;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
@@ -22,6 +23,8 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
  * NAMING NOTE: "indexer" used to be a Servo on Jade's branches -- the one that sets the
  * gap between the two flywheels. That servo is now "shooterPivot", and "indexer" is the
  * collection-system MOTOR. If an op mode asks for a Servo named "indexer" it is stale.
+ *
+ * There is no "turretEncoder" device, and there cannot be -- see init().
  */
 public class RobotHardware {
 
@@ -46,16 +49,22 @@ public class RobotHardware {
     /** IR beam break the pivot homes against. See ShooterPivot for why. */
     public DigitalChannel pivotHome;
 
+    // ---- Turret -------------------------------------------------------------
+    /** Owns the "turret" CR servo, the "turretHome" switch, and lf's encoder. */
+    public Turret turret = new Turret();
+
     // ---- Vision -------------------------------------------------------------
     public VisionPortal visionPortal;
     public AprilTagProcessor aprilTagProcessor;
 
     public void init(HardwareMap hardwareMap) {
-        // Drive motors (mecanum, match Constants naming)
-        rf = hardwareMap.get(DcMotorEx.class, "rf"); // EH1
+        // Drive motors (mecanum, match Constants naming).
+        // Port map confirmed 2026-10-27: the left side lives on the Control Hub
+        // now, which is why these comments no longer all say EH.
         rr = hardwareMap.get(DcMotorEx.class, "rr"); // EH0
-        lr = hardwareMap.get(DcMotorEx.class, "lr"); // EH3
-        lf = hardwareMap.get(DcMotorEx.class, "lf"); // EH2
+        rf = hardwareMap.get(DcMotorEx.class, "rf"); // EH1
+        lr = hardwareMap.get(DcMotorEx.class, "lr"); // CH0
+        lf = hardwareMap.get(DcMotorEx.class, "lf"); // CH1, carries the turret encoder
         // Directions from Constants
         lf.setDirection(DcMotorSimple.Direction.REVERSE);
         lr.setDirection(DcMotorSimple.Direction.FORWARD);
@@ -63,25 +72,50 @@ public class RobotHardware {
         rr.setDirection(DcMotorSimple.Direction.REVERSE);
 
         // Collection system
-        collector = hardwareMap.get(DcMotorEx.class, "collector");
-        indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        collector = hardwareMap.get(DcMotorEx.class, "collector"); // CH3
+        indexer = hardwareMap.get(DcMotorEx.class, "indexer");     // EH3
         collector.setDirection(DcMotorSimple.Direction.REVERSE);
         // TODO(on-robot): confirm which way the indexer has to spin to feed the
         // shooter, and flip this if a ball goes the wrong direction.
         indexer.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        colorSensor = hardwareMap.get(NormalizedColorSensor.class, "colorSensor");
+        colorSensor = hardwareMap.get(NormalizedColorSensor.class, "colorSensor"); // EH I2C1
 
         // Shooter: wheels face each other, so one side is physically reversed and
-        // both take the same commanded velocity.
-        shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
-        shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
+        // both take the same commanded velocity. Note the two motors are on
+        // DIFFERENT hubs (EH2 and CH2) -- each hub runs its own velocity PIDF
+        // locally so each wheel regulates itself fine, but if the two ever report
+        // speeds that disagree, cross-hub command skew is the first suspect.
+        shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");   // EH2
+        shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight"); // CH2
         shooterRight.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        shooterPivot = hardwareMap.get(Servo.class, "shooterPivot");
+        shooterPivot = hardwareMap.get(Servo.class, "shooterPivot"); // CH servo 0
 
-        pivotHome = hardwareMap.get(DigitalChannel.class, "pivotHome");
+        pivotHome = hardwareMap.get(DigitalChannel.class, "pivotHome"); // EH digital 0
         pivotHome.setMode(DigitalChannel.Mode.INPUT);
+
+        // Turret. Handed the lf object we already have, so there is one lf in the
+        // whole robot rather than two handles fighting over it.
+        //
+        // WHY THERE IS NO "turretEncoder" IN THE CONFIG: the turret's REV Through
+        // Bore encoder is plugged into lf's spare encoder connector, so the SDK
+        // reads it through the lf MOTOR. There is no separate device to add, and
+        // adding one would not do anything. Two rules keep sharing that port safe,
+        // and breaking either one breaks the turret:
+        //   1. lf stays in RUN_WITHOUT_ENCODER (the default). Put it in
+        //      RUN_USING_ENCODER or RUN_TO_POSITION and the hub's PID would try to
+        //      regulate a drive wheel using the TURRET's position.
+        //   2. Nobody calls STOP_AND_RESET_ENCODER on lf, which would zero the
+        //      turret's position mid-match.
+        // Nothing in this repo breaks either rule today, including Pedro's Mecanum.
+        //
+        // Moved from rf to lf on 2026-10-27: lf is on the Control Hub, so turret
+        // encoder reads no longer cross the RS485 link to the Expansion Hub. The
+        // angle math is unchanged -- readRawTicks() cancels the motor's direction
+        // out either way -- but the cable physically moved, so turret direction
+        // and homing both need re-verifying on the robot.
+        turret.init(hardwareMap, lf); // "turret" = CH servo 2
 
         // AprilTag vision
         aprilTagProcessor = AprilTagProcessor.easyCreateWithDefaults();

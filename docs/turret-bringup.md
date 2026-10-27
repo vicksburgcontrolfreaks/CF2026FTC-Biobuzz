@@ -23,34 +23,34 @@ Related files:
 |---|---|
 | Servo | Dual-mode servo run in **continuous rotation (CR) mode** |
 | Gearing | 20T pinion → 69T turret gear = **3.45:1 reduction** |
-| Encoder | REV Through Bore V2 (REV-11-3174) on **its own gear** meshing the ring — *not* the servo pinion. 4-pin cable into the **`rf` drive motor's spare encoder port** |
+| Encoder | REV Through Bore V2 (REV-11-3174) on **its own gear** meshing the ring — *not* the servo pinion. 4-pin cable into the **`lf` drive motor's spare encoder port** |
 | Home sensor | REV magnetic limit switch, digital port |
 | Travel | **286°** total (22449 ticks / 78.51 ticks per deg) |
 
-### Sharing the `rf` motor port
+### Sharing the `lf` motor port
 
-Every motor port has a motor connector *and* an encoder connector. The right front
+Every motor port has a motor connector *and* an encoder connector. The left front
 drive motor doesn't use its encoder (odometry comes from the goBILDA Pinpoint over
 I2C), so that connector was free and the turret encoder went there. No extra port
 burned — nice.
 
-The cost is coupling, so `Turret` is careful about it. It **only reads** `rf` —
+The cost is coupling, so `Turret` is careful about it. It **only reads** `lf` —
 never power, direction, run mode, or encoder reset. Keep two things true:
 
-1. **`rf` stays in `RUN_WITHOUT_ENCODER`** (the default). Put it in
+1. **`lf` stays in `RUN_WITHOUT_ENCODER`** (the default). Put it in
    `RUN_USING_ENCODER` and the hub would try to regulate the drive wheel's speed
    from the *turret's* position. Nothing does this today, and Pedro Pathing's
    `Mecanum` class doesn't either — verified in the 2.0.3 jar.
-2. **Nobody calls `STOP_AND_RESET_ENCODER` on `rf`**, which would zero the turret
+2. **Nobody calls `STOP_AND_RESET_ENCODER` on `lf`**, which would zero the turret
    mid-match.
 
 One trap already handled in code: the SDK negates `getCurrentPosition()` for a
-`REVERSE` motor (`DcMotorImpl.adjustPosition`), and this repo sets `rf`'s direction
-*inconsistently* — Pedro's `Constants` says `REVERSE`, `RobotHardware` says
-`FORWARD`. Left alone, turret angles would invert between TeleOp and auto.
+`REVERSE` motor (`DcMotorImpl.adjustPosition`), and this repo sets `lf`'s direction
+*inconsistently* — Pedro's `Constants` says `FORWARD`, `RobotHardware` says
+`REVERSE`. Left alone, turret angles would invert between TeleOp and auto.
 `Turret.readRawTicks()` cancels the motor's direction out, so `ENCODER_DIRECTION`
 is the only thing that controls turret sign. Don't "fix" turret sign by editing
-`rf`'s direction — that belongs to the drivetrain.
+`lf`'s direction — that belongs to the drivetrain.
 
 **Why CR mode and not a normal servo:** 286° of turret travel × 3.45 = **987°** the
 servo shaft has to turn. A standard servo maxes out near 270–300°, so it physically
@@ -82,14 +82,15 @@ Add **two** new devices. The names must match exactly:
 | `turretHome` | REV Touch Sensor | digital port |
 
 **There is no separate encoder device.** The turret encoder is wired into the spare
-encoder connector on the **right front drive motor's** port, so the code reads it off
-the existing `rf` motor. Nothing new to configure for it.
+encoder connector on the **left front drive motor's** port, so the code reads it off
+the existing `lf` motor. Nothing new to configure for it.
 
 Two gotchas:
 
 - **The touch sensor shows up on the odd pin.** A REV touch/magnetic switch in
-  digital port pair 0-1 configures as port **1**, not 0. Same as the existing
-  `limitSwitch` device.
+  digital port pair 0-1 configures as port **1**, not 0. (This used to say "same
+  as the existing `limitSwitch`" -- that device was retired 2026-10-27, but the
+  odd-pin behaviour is unchanged and applies to `pivotHome` too.)
 
 ---
 
