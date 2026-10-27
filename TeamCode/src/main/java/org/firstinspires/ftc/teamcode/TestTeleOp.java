@@ -63,8 +63,9 @@ public class TestTeleOp extends OpMode {
 
         // Rotate for field-centric
         double heading = follower.getPose().getHeading();
-        double rotX = x * Math.cos(heading) - y * Math.sin(heading);
-        double rotY = x * Math.sin(heading) + y * Math.cos(heading);
+        // Rotate the stick by -heading (field -> robot frame). Pedro heading is CCW-positive.
+        double rotX = x * Math.cos(-heading) - y * Math.sin(-heading);
+        double rotY = x * Math.sin(-heading) + y * Math.cos(-heading);
 
         // Denominator for wheel powers
         double den = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1);
