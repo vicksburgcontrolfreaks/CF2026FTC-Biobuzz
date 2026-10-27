@@ -100,6 +100,14 @@ public class ShooterPivot {
 
     /** True when something is blocking the IR beam. */
     public boolean isBeamBroken() {
+        return isBeamBroken(beam);
+    }
+
+    /**
+     * Polarity-aware beam read that does not need a ShooterPivot instance, so a
+     * bring-up op mode can check the sensor before the pivot servo is wired.
+     */
+    public static boolean isBeamBroken(DigitalChannel beam) {
         return beam.getState() == BEAM_BROKEN_STATE;
     }
 

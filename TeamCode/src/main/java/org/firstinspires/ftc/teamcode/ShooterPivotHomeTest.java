@@ -7,16 +7,21 @@ import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 
 /**
- * Bring-up op mode for the shooter pivot. Standalone -- the active config only
- * needs "shooterPivot" (Servo) and "pivotHome" (DigitalChannel), so this runs
- * before the rest of the robot is wired.
+ * Bring-up op mode for the shooter pivot, and the quickest way to check the IR
+ * beam break on its own.
+ *
+ * The config needs "pivotHome" (DigitalChannel). "shooterPivot" (Servo) is
+ * OPTIONAL -- tryGet returns null instead of throwing, so this runs on a bench
+ * setup where only the sensor is wired. Without the servo the beam readout still
+ * works; homing and jogging do not, because both need something to move.
  *
  * WHAT TO DO WITH THIS, IN ORDER:
  *
  * 1. CHECK THE BEAM POLARITY FIRST. Before pressing anything, block the beam
  *    with a finger and watch "Beam Broken". If it says false while blocked,
  *    flip ShooterPivot.BEAM_BROKEN_STATE. Homing cannot work until this is
- *    right, and everything after this step depends on it.
+ *    right, and everything after this step depends on it. This step needs only
+ *    the sensor -- you can do it before the pivot servo exists.
  *
  * 2. HOME IT (A). If it fails, the "Home Failure" line says why in words.
  *
@@ -40,18 +45,25 @@ public class ShooterPivotHomeTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        Servo pivotServo = hardwareMap.get(Servo.class, "shooterPivot");
         DigitalChannel beam = hardwareMap.get(DigitalChannel.class, "pivotHome");
-        ShooterPivot pivot = new ShooterPivot(pivotServo, beam);
+        beam.setMode(DigitalChannel.Mode.INPUT);
+
+        // Optional, so the sensor can be tested before the servo is wired.
+        Servo pivotServo = hardwareMap.tryGet(Servo.class, "shooterPivot");
+        ShooterPivot pivot = (pivotServo != null)
+                ? new ShooterPivot(pivotServo, beam)
+                : null;
 
         int homeAttempts = 0;
         double lastZero = Double.NaN;
         double zeroDrift = Double.NaN;
 
         telemetry.addLine("Block the beam with a finger and check 'Beam Broken' BEFORE homing.");
-        telemetry.addData("Beam Broken", pivot.isBeamBroken());
+        telemetry.addData("Beam Broken", ShooterPivot.isBeamBroken(beam));
         telemetry.addLine();
-        telemetry.addLine("A: home   Bumpers: jog   B: pollen   X: nectar");
+        telemetry.addLine(pivot != null
+                ? "shooterPivot found. A: home   Bumpers: jog   B: pollen   X: nectar"
+                : "shooterPivot NOT configured - sensor readout only, homing unavailable");
         telemetry.update();
 
         waitForStart();
@@ -63,39 +75,52 @@ public class ShooterPivotHomeTest extends LinearOpMode {
             boolean b = gamepad1.b;
             boolean x = gamepad1.x;
 
-            if (a && !aPrev) {
-                double previousZero = pivot.isHomed() ? pivot.getZeroPosition() : Double.NaN;
-                boolean ok = pivot.home();
-                homeAttempts++;
-                if (ok) {
-                    if (!Double.isNaN(previousZero)) {
-                        zeroDrift = Math.abs(pivot.getZeroPosition() - previousZero);
+            if (pivot != null) {
+                if (a && !aPrev) {
+                    double previousZero = pivot.isHomed() ? pivot.getZeroPosition() : Double.NaN;
+                    boolean ok = pivot.home();
+                    homeAttempts++;
+                    if (ok) {
+                        if (!Double.isNaN(previousZero)) {
+                            zeroDrift = Math.abs(pivot.getZeroPosition() - previousZero);
+                        }
+                        lastZero = pivot.getZeroPosition();
                     }
-                    lastZero = pivot.getZeroPosition();
                 }
-            }
-            if (b && !bPrev) {
-                pivot.goToPollen();
-            }
-            if (x && !xPrev) {
-                pivot.goToNectar();
-            }
+                if (b && !bPrev) {
+                    pivot.goToPollen();
+                }
+                if (x && !xPrev) {
+                    pivot.goToNectar();
+                }
 
-            // Jog, so the offsets can be measured against a real ball.
-            if (gamepad1.right_bumper) {
-                pivot.setPosition(pivot.getCommandedPosition() + JOG_STEP);
-            }
-            if (gamepad1.left_bumper) {
-                pivot.setPosition(pivot.getCommandedPosition() - JOG_STEP);
+                // Jog, so the offsets can be measured against a real ball.
+                if (gamepad1.right_bumper) {
+                    pivot.setPosition(pivot.getCommandedPosition() + JOG_STEP);
+                }
+                if (gamepad1.left_bumper) {
+                    pivot.setPosition(pivot.getCommandedPosition() - JOG_STEP);
+                }
             }
 
             aPrev = a;
             bPrev = b;
             xPrev = x;
 
+            // Always available: the sensor itself.
+            telemetry.addData("Beam Broken", ShooterPivot.isBeamBroken(beam));
+            telemetry.addData("Raw getState()", beam.getState());
+            telemetry.addLine();
+
+            if (pivot == null) {
+                telemetry.addLine("shooterPivot NOT configured.");
+                telemetry.addLine("Sensor readout works; homing needs the servo.");
+                telemetry.update();
+                continue;
+            }
+
             telemetry.addLine("A: home   Bumpers: jog   B: pollen   X: nectar");
             telemetry.addLine();
-            telemetry.addData("Beam Broken", pivot.isBeamBroken());
             telemetry.addData("Homed", pivot.isHomed());
             telemetry.addData("Home Attempts", homeAttempts);
             if (pivot.getHomeFailure() != null) {
