@@ -14,6 +14,7 @@ import org.firstinspires.ftc.teamcode.field.HiveGeometry;
 import org.firstinspires.ftc.teamcode.geometry.OdometryAim;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+import org.firstinspires.ftc.teamcode.shooting.ShotTable;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 
 /**
@@ -207,6 +208,10 @@ public class TurretOdometryAimTest extends LinearOpMode {
                     ? "OK"
                     : "OUT OF REACH by " + fmt(aim.outOfReachDeg) + " deg - turn the robot");
             telemetryM.addData("Distance (in)", fmt(aim.distance));
+            ShotTable shots = ShotTable.forRobot();
+            telemetryM.addData("Table RPM", !shots.isConfigured() ? "table empty"
+                    : fmt(shots.lookup(aim.distance))
+                      + (shots.inRange(aim.distance) ? "" : " (OUTSIDE TABLE)"));
             telemetryM.addData("Aim error (deg)", fmt(aim.desiredDeg - turret.getAngle()));
         }
         telemetryM.addData("Turret angle (deg)", fmt(turret.getAngle()));
