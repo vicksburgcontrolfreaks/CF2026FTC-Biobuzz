@@ -37,7 +37,7 @@ public final class HiveTags {
 
     private HiveTags() {}
 
-    public static double PIVOT_Y = 72.0;          // MADE-UP: assumes the pivot is on the field's midline
+    public static double PIVOT_Y = 72.0;          // Fig. 9-8 (Evan 10/27): pivot is mid-frame, frame is centered on the field
     public static double RED_HIVE_X = 60.0;       // MADE-UP: red hive center along x; blue is mirrored
     public static double CELL_ARM = 9.4;          // MADE-UP: half of the manual's ~18.8 in. cell spacing
     public static double CELL_DROP = 10.0;        // MADE-UP: bottom face, inches below the pivot (hive level)

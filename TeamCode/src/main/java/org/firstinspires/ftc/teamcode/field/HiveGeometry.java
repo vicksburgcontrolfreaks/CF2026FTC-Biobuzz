@@ -16,7 +16,8 @@ import org.firstinspires.ftc.teamcode.field.FieldAprilTags.Cell;
  *
  * SYMMETRY: we measure ONE cell and get the other three for free.
  *   - Our two cells mirror each other across the middle of the field (y = 72).
- *     TODO(check in CAD): confirm the hive pivot really is at y = 72.
+ *     The pivot is at y = 72: Fig. 9-8 shows it mid-frame and the frame is
+ *     centered on the field (Evan, 10/27; manual drawings are +-1 in.).
  *   - Blue is red spun 180 deg around the field center, like FieldConstants.
  *     Spinning swaps far and audience: red FAR <-> blue AUDIENCE.
  *
