@@ -40,7 +40,7 @@ public final class HiveTags {
     public static double CELL_ARM = 9.4;          // MADE-UP: half of the manual's ~18.8 in. cell spacing
     public static double CELL_DROP = 10.0;        // MADE-UP: bottom face, inches below the pivot (hive level)
     public static double HIVE_SWING_DEG = 40.0;   // MADE-UP: degrees between the two resting positions
-    public static double TAG_SPACING = 4.5;       // MADE-UP: tag center to tag center on the sticker
+    public static double TAG_SPACING = 3.75;      // Manual Fig. 9-15 (read by Evan 10/27): tag center to tag center; 3.25 in. tags, 0.5 in. gap
 
     // MADE-UP: which corner of the 2x2 sticker each of a cell's tag IDs sits in,
     // as {right, down} steps (each -1 or +1), in the order Cell.tagIds lists them.
