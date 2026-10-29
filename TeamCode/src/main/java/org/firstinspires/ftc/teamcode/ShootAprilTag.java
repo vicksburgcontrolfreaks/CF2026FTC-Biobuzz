@@ -6,11 +6,10 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 public class ShootAprilTag {
     private RobotHardware hardware;
     private double SHOOTER_VELOCITY_RPM = 2000; // RPM, tune with testing
-    private static final double TICKS_PER_REV = 28; // REV HD Hex Motor shaft
-    // TODO(gear ratio): this says the shooter is direct drive, but Elliott's
-    // ShooterVelocityTest assumes 3:1. Both cannot be right -- measure the real
-    // ratio and make the two files agree before trusting any RPM number here.
-    private static final double SHOOTER_GEAR_RATIO = 1.0;
+    private static final double TICKS_PER_REV = RobotHardware.TICKS_PER_MOTOR_REV;
+    // Resolved 2026-10-29: 3:1, the HD Hex's internal gearbox. Sourced from
+    // RobotHardware so there is exactly one place to fix it.
+    private static final double SHOOTER_GEAR_RATIO = RobotHardware.SHOOTER_GEAR_RATIO;
 
     // Firing sequence timings. Every one of these is a starting guess until
     // somebody watches the real shooter -- see the TODO on shoot().

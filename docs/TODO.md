@@ -68,9 +68,19 @@ against an unreliable zero.
 
 ## Needs a decision, not the robot
 
-- **The shooter gear ratio is contradictory.** `ShootAprilTag` says direct drive
-  (1:1); `ShooterVelocityTest` on `elliott/shooter-velocity-test` says 3:1. Both
-  cannot be right and every shooter RPM number depends on it. TODO'd in both files
+- **Every shooter RPM number predates the gear ratio fix and is now 3x off.**
+  Resolved 2026-10-29: the ratio is 3:1, the HD Hex's internal gearbox, now in
+  `RobotHardware.SHOOTER_GEAR_RATIO`. `ShootAprilTag` and `TestTeleOp` both said
+  1:1 before, so every RPM either of them commanded was really a THIRD of what it
+  claimed. Anything tuned by feel against the old numbers has to be re-tuned.
+- **Two shooter targets are now physically unreachable.** An HD Hex free-speeds
+  near 6000 RPM at the motor, so through 3:1 the flywheel tops out near 2000 RPM
+  with no load at all. But `ShootAprilTag.SHOOTER_VELOCITY_RPM` defaults to 2000
+  (exactly free speed) and `TestTeleOp` lets you dial 3000 (1.5x past it). Both
+  saturate the motor, and a saturated velocity PID looks exactly like a broken
+  one. Measure the real no-load top speed, then cap both around 85% of it.
+  `ShooterVelocityTest` still hardcodes its own 3.0 and 3000 cap -- fold it into
+  `RobotHardware` when that branch merges.
 - **`ShootAprilTag.shoot()` is a first draft.** The old flipper sequence was
   translated onto the indexer motor, but nobody has confirmed how the real
   shooter loads. Does the indexer pulse per ball or run continuously? Should the

@@ -22,9 +22,9 @@ public class TestTeleOp extends OpMode {
     // printed before today was wrong by 5x. Sourced from RobotHardware now so
     // there is exactly one place to fix it.
     private static final double COLLECTOR_GEAR_RATIO = RobotHardware.COLLECTOR_GEAR_RATIO;
-    // TODO(gear ratio): matches the TODO in ShootAprilTag -- this says direct
-    // drive, ShooterVelocityTest says 3:1. Measure it and make them agree.
-    private static final double SHOOTER_GEAR_RATIO = 1.0;
+    // Resolved 2026-10-29: 3:1, the HD Hex's internal gearbox. Sourced from
+    // RobotHardware so there is exactly one place to fix it.
+    private static final double SHOOTER_GEAR_RATIO = RobotHardware.SHOOTER_GEAR_RATIO;
     private Timer debounceTimer = new Timer();
     private boolean lastA = false, lastB = false;
     private static final double DEBOUNCE_TIME = 0.2; // Seconds

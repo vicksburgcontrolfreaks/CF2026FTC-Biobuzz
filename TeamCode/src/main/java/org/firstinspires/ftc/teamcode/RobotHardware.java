@@ -32,6 +32,12 @@ public class RobotHardware {
     public static final double TICKS_PER_MOTOR_REV = 28;
     public static final double COLLECTOR_GEAR_RATIO = 20.0;
     public static final double INDEXER_GEAR_RATIO = 20.0;
+    // The shooter flywheels are direct-driven off the output shaft, so this 3:1
+    // is the HD Hex motor's own INTERNAL gearbox, not external gearing
+    // (confirmed 2026-10-29). Careful if these are REV UltraPlanetary
+    // cartridges -- their printed ratios are nominal, and the "3:1" cartridge is
+    // really 2.89:1. Use 2.89 if so.
+    public static final double SHOOTER_GEAR_RATIO = 3.0;
 
     // ---- Drive (names match Pedro Pathing's Constants) ----------------------
     public DcMotorEx rf, rr, lr, lf;
