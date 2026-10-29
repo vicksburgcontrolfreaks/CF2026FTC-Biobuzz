@@ -61,8 +61,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
  *    really 2.89:1 -- change it in RobotHardware and every op mode follows.
  */
 @Configurable
-@TeleOp(name = "Shooter Test", group = "Test")
-public class ShooterTest extends LinearOpMode {
+@TeleOp(name = "Shooter Flywheel Test", group = "Test")
+public class ShooterFlywheelTest extends LinearOpMode {
 
     public static double RPM_STEP = 100.0;
     /**
@@ -105,7 +105,7 @@ public class ShooterTest extends LinearOpMode {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         PanelsConfigurables.INSTANCE.refreshClass(this);
 
-        telemetry.addLine("SHOOTER TEST");
+        telemetry.addLine("SHOOTER FLYWHEEL TEST");
         telemetry.addLine("A = on/off | X = power/velocity | RT = power | bumpers = RPM");
         telemetry.addLine("Y = reset peak | B = panic off");
         telemetry.addLine("");
