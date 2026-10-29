@@ -66,6 +66,17 @@ against an unreliable zero.
 
 ---
 
+## Confirmed on the robot 2026-10-29
+
+- Collector and indexer directions are both correct as set in `RobotHardware`
+  (`collector` REVERSE, `indexer` FORWARD). The indexer direction was a guess
+  until now
+- Collector RPM reads sane, so the 20:1 ratio constant is right
+- Still open: a MECHANICAL problem in the collection path, not a code problem
+- Not captured yet: the `Indexer Amps` jam number any future unjam logic needs
+
+---
+
 ## Needs a decision, not the robot
 
 - **Every shooter RPM number predates the gear ratio fix and is now 3x off.**
@@ -94,9 +105,6 @@ against an unreliable zero.
 - **`theo/turret-autoaim` still has no PR to `main`.**
   `elliott/hardware-config-2026` merged the branch directly (same SHAs, so a
   later `main` merge stays clean), but `main` itself is untouched
-- **Indexer direction is a guess.** `RobotHardware` sets it `FORWARD`; flip it if
-  a ball goes the wrong way. Confirm in **Collection System Test** before trusting
-  any firing sequence
 - **Decide how one codebase runs both robots before this branch merges.** The
   2025 and 2026 robots should drive the same but have different mechanisms.
   `RobotHardware.init()` looks up all 12 devices with `hardwareMap.get()`, so

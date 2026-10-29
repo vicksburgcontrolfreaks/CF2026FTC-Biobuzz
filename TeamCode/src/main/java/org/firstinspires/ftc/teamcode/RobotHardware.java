@@ -81,8 +81,7 @@ public class RobotHardware {
         collector = hardwareMap.get(DcMotorEx.class, "collector"); // CH3
         indexer = hardwareMap.get(DcMotorEx.class, "indexer");     // EH3
         collector.setDirection(DcMotorSimple.Direction.REVERSE);
-        // TODO(on-robot): confirm which way the indexer has to spin to feed the
-        // shooter, and flip this if a ball goes the wrong direction.
+        // Confirmed on the robot 2026-10-29: FORWARD feeds up toward the shooter.
         indexer.setDirection(DcMotorSimple.Direction.FORWARD);
 
         colorSensor = hardwareMap.get(NormalizedColorSensor.class, "colorSensor"); // EH I2C1
