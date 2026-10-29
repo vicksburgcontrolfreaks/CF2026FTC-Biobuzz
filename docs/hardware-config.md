@@ -1,7 +1,14 @@
 # Robot hardware configuration — 2026 BIOBUZZ
 
 The authoritative list of what is plugged in where, and what name the code
-expects for it. Last confirmed against the robot **2026-10-27**.
+expects for it. Last confirmed against the robot **2026-10-29**.
+
+Changed 2026-10-29: `shooterPivot` moved from CH servo 0 to **EH servo 0**, and
+`turret` moved from CH servo 2 to **CH servo 0**. The Driver Station config was
+rebuilt to match. No Java changed — `hardwareMap.get()` looks devices up by
+name, so a servo can move ports (or hubs) without touching code. Port numbers
+live here and in `RobotHardware.init()` comments purely so a human can find the
+cable.
 
 **Config names are exact string matches.** `Color Sensor` and `colorSensor` are
 two different devices as far as the SDK is concerned, and the wrong one is a
@@ -23,9 +30,8 @@ character for character.
 ### Servos
 | Port | Name | Type | Notes |
 |---|---|---|---|
-| 0 | `shooterPivot` | Servo | sets the gap between the two flywheels |
+| 0 | `turret` | **Continuous Rotation** Servo | CR, not standard — see `docs/turret-bringup.md` |
 | 1 | `blinkin` | Servo | REV Blinkin LED driver |
-| 2 | `turret` | **Continuous Rotation** Servo | CR, not standard — see `docs/turret-bringup.md` |
 
 ### Digital
 | Port | Name | Notes |
@@ -50,7 +56,9 @@ character for character.
 | 3 | `indexer` | feeds pieces to the shooter, 20:1 |
 
 ### Servos
-_None._
+| Port | Name | Type | Notes |
+|---|---|---|---|
+| 0 | `shooterPivot` | Servo | sets the gap between the two flywheels |
 
 ### Digital
 | Port | Name | Notes |

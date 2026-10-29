@@ -90,7 +90,7 @@ public class RobotHardware {
         shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight"); // CH2
         shooterRight.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        shooterPivot = hardwareMap.get(Servo.class, "shooterPivot"); // CH servo 0
+        shooterPivot = hardwareMap.get(Servo.class, "shooterPivot"); // EH servo 0
 
         pivotHome = hardwareMap.get(DigitalChannel.class, "pivotHome"); // EH digital 0
         pivotHome.setMode(DigitalChannel.Mode.INPUT);
@@ -115,7 +115,7 @@ public class RobotHardware {
         // angle math is unchanged -- readRawTicks() cancels the motor's direction
         // out either way -- but the cable physically moved, so turret direction
         // and homing both need re-verifying on the robot.
-        turret.init(hardwareMap, lf); // "turret" = CH servo 2
+        turret.init(hardwareMap, lf); // "turret" = CH servo 0
 
         // AprilTag vision
         aprilTagProcessor = AprilTagProcessor.easyCreateWithDefaults();
