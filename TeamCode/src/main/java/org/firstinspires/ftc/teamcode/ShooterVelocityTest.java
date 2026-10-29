@@ -26,7 +26,7 @@ public class ShooterVelocityTest extends LinearOpMode {
     private static final double RPM_STEP = 25;
     private static final double MAX_RPM = 3000;
 
-    // Indexer servo positions (adjusts the gap between the two wheels to accommodate
+    // Shooter pivot servo positions (adjusts the gap between the two wheels to accommodate
     // pollen- vs. nectar-sized balls), found by bench-sweeping on 2026-10-01.
     private static final double POLLEN_POSITION = 0.48;
     private static final double NECTAR_POSITION = 0.135;
@@ -44,12 +44,12 @@ public class ShooterVelocityTest extends LinearOpMode {
     // loop happens to be running. The two presets are only 0.345 apart, so this is
     // deliberately slow: roughly 0.012 per quick tap. Raise it live from Panels if
     // you are hunting for a position far from both presets.
-    public static double INDEXER_STEP_PER_SEC = 0.08;
+    public static double PIVOT_STEP_PER_SEC = 0.08;
 
     private DcMotorEx shooterLeft, shooterRight;
-    private Servo indexer;
+    private Servo shooterPivot;
     private double targetRPM = 0.0;
-    private double indexerTarget = POLLEN_POSITION;
+    private double pivotTarget = POLLEN_POSITION;
     private boolean running = false;
 
     private boolean dpadUpPrev, dpadDownPrev, aPrev;
@@ -65,10 +65,10 @@ public class ShooterVelocityTest extends LinearOpMode {
         shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
         shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
         // Optional: tryGet returns null instead of throwing, so the shooter half of
-        // this op mode still runs on a robot that has no indexer servo configured.
-        indexer = hardwareMap.tryGet(Servo.class, "indexer");
-        if (indexer != null) {
-            indexer.setPosition(POLLEN_POSITION);
+        // this op mode still runs on a robot that has no shooterPivot servo configured.
+        shooterPivot = hardwareMap.tryGet(Servo.class, "shooterPivot");
+        if (shooterPivot != null) {
+            shooterPivot.setPosition(POLLEN_POSITION);
         }
 
         // Wheels face each other, so both run off the same commanded velocity
@@ -87,11 +87,11 @@ public class ShooterVelocityTest extends LinearOpMode {
         // Built from RPM_STEP so this line cannot drift out of date again.
         telemetry.addLine(String.format("Dpad Up/Down: target RPM +/- %.0f", RPM_STEP));
         telemetry.addLine("A: toggle shooter on/off");
-        if (indexer != null) {
-            telemetry.addLine("B: indexer to pollen spacing, X: indexer to nectar spacing");
-            telemetry.addLine("Bumpers: hold to fine-tune indexer spacing from there");
+        if (shooterPivot != null) {
+            telemetry.addLine("B: pivot to pollen spacing, X: pivot to nectar spacing");
+            telemetry.addLine("Bumpers: hold to fine-tune pivot spacing from there");
         } else {
-            telemetry.addLine("No 'indexer' servo configured - shooter only");
+            telemetry.addLine("No 'shooterPivot' servo configured - shooter only");
         }
         telemetry.addLine("Tune P/I/D/F live at panels.bylazar.com");
         telemetry.update();
@@ -120,25 +120,25 @@ public class ShooterVelocityTest extends LinearOpMode {
                 running = !running;
             }
             if (gamepad1.b) {
-                indexerTarget = POLLEN_POSITION;
+                pivotTarget = POLLEN_POSITION;
             }
             if (gamepad1.x) {
-                indexerTarget = NECTAR_POSITION;
+                pivotTarget = NECTAR_POSITION;
             }
-            double indexerNudge = INDEXER_STEP_PER_SEC * dt;
+            double pivotNudge = PIVOT_STEP_PER_SEC * dt;
             if (gamepad1.right_bumper) {
-                indexerTarget = Math.min(indexerTarget + indexerNudge, 1.0);
+                pivotTarget = Math.min(pivotTarget + pivotNudge, 1.0);
             }
             if (gamepad1.left_bumper) {
-                indexerTarget = Math.max(indexerTarget - indexerNudge, 0.0);
+                pivotTarget = Math.max(pivotTarget - pivotNudge, 0.0);
             }
 
             dpadUpPrev = dpadUp;
             dpadDownPrev = dpadDown;
             aPrev = a;
 
-            if (indexer != null) {
-                indexer.setPosition(indexerTarget);
+            if (shooterPivot != null) {
+                shooterPivot.setPosition(pivotTarget);
             }
 
             // Re-applied every loop so edits made on the dashboard while running take
@@ -157,8 +157,8 @@ public class ShooterVelocityTest extends LinearOpMode {
             telemetryM.addData("Target RPM", running ? targetRPM : 0.0);
             telemetryM.addData("Left Actual RPM", leftRPM);
             telemetryM.addData("Right Actual RPM", rightRPM);
-            telemetryM.addData("Indexer Position",
-                    indexer != null ? String.valueOf(indexerTarget) : "not configured");
+            telemetryM.addData("Shooter Pivot Position",
+                    shooterPivot != null ? String.valueOf(pivotTarget) : "not configured");
             telemetryM.update(telemetry);
         }
     }
