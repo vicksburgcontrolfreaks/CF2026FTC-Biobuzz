@@ -2,11 +2,7 @@ package org.firstinspires.ftc.teamcode.pedroPathing;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
@@ -27,9 +23,6 @@ public class SimpleMotorTeleOp extends OpMode {
         shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
         shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
         collector = hardwareMap.get(DcMotorEx.class, "collector");
-
-        // Optional: Reverse direction if motor spins backward
-       //  motor.setDirection(DcMotorSimple.Direction.REVERSE);
 
         telemetry.addData("Status", "Motor ready! Plug in and test.");
         telemetry.update();
@@ -53,13 +46,19 @@ public class SimpleMotorTeleOp extends OpMode {
         shooterLeft.setPower(power);
         shooterRight.setPower(power);
 
-        // Collector continuous rotation servo control
+        // Collector: D-pad up = pull in, D-pad down = push out, right bumper
+        // = half speed. The collector is a MOTOR, not the CR servo it used to be.
+        //
+        // The final else matters. Without it the collector latched on at whatever
+        // it was last set to and kept running after you let go of the button.
         if (gamepad1.dpad_up) {
-            collector.setPower(1.0); // Rotate forward (adjust value as needed)
+            collector.setPower(1.0);
         } else if (gamepad1.dpad_down) {
-            collector.setPower(0.0); // Rotate reverse (adjust value as needed)
+            collector.setPower(-1.0);
         } else if (gamepad1.right_bumper) {
-            collector.setPower(0.5); // Stop the servo
+            collector.setPower(0.5);
+        } else {
+            collector.setPower(0.0);
         }
 
         // Telemetry for debugging
@@ -72,7 +71,11 @@ public class SimpleMotorTeleOp extends OpMode {
 
     @Override
     public void stop() {
-        // Safety: Stop motor on OpMode end
-//        motor.setPower(0);
+        // Safety: everything off when the op mode ends. This used to be a
+        // commented-out line referring to a variable that does not exist.
+        shooterLeft.setPower(0);
+        shooterRight.setPower(0);
+        collector.setPower(0);
+        indexer.setPower(0);
     }
 }
