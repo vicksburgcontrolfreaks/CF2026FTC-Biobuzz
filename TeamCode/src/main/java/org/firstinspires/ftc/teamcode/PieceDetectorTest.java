@@ -5,18 +5,18 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import com.qualcomm.robotcore.hardware.Servo;
 
-// Standalone test - only needs "colorSensor" and "indexer" in the active config,
+// Standalone test - only needs "colorSensor" and "shooterPivot" in the active config,
 // not the full RobotHardware map. Holds a game piece in front of the sensor and
-// watches the indexer servo react: yellow -> position 0.0, red/blue -> position 1.0.
+// watches the shooter pivot servo react: yellow -> position 0.0, red/blue -> position 1.0.
 @TeleOp(name = "Piece Detector Test", group = "Test")
 public class PieceDetectorTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         NormalizedColorSensor colorSensor = hardwareMap.get(NormalizedColorSensor.class, "colorSensor");
-        Servo indexer = hardwareMap.get(Servo.class, "indexer");
+        Servo shooterPivot = hardwareMap.get(Servo.class, "shooterPivot");
 
         ColorSensing colorSensing = new ColorSensing(colorSensor);
-        PieceDetector pieceDetector = new PieceDetector(colorSensing, indexer);
+        PieceDetector pieceDetector = new PieceDetector(colorSensing, shooterPivot);
 
         waitForStart();
         while (opModeIsActive()) {
@@ -26,7 +26,7 @@ public class PieceDetectorTest extends LinearOpMode {
             telemetry.addData("Hue", colorSensing.getHue());
             telemetry.addData("Distance (cm)", colorSensing.getDistanceCM());
             telemetry.addData("Reliable?", colorSensing.isReadingReliable());
-            telemetry.addData("Indexer Position", indexer.getPosition());
+            telemetry.addData("Shooter Pivot Position", shooterPivot.getPosition());
             telemetry.update();
         }
     }

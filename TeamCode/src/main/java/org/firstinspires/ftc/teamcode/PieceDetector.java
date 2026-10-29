@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.hardware.Servo;
 
-// Watches a ColorSensing sensor and drives the indexer servo based on what it sees:
+// Watches a ColorSensing sensor and drives the shooter pivot servo based on what it sees:
 // yellow (or nothing reliably detected) -> starting position, red/blue -> wider position.
 public class PieceDetector {
     private static final double STARTING_POSITION = 0.0;

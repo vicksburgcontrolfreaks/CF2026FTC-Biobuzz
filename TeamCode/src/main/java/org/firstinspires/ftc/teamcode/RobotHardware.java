@@ -17,7 +17,7 @@ public class RobotHardware {
     public DcMotorEx collector;
     public DcMotorEx shooter;
     public Servo flipper;
-    public Servo indexer;
+    public Servo shooterPivot;
     // Sensors (beam breaks)
     public DigitalChannel sensor1, sensor2, sensor3;
     // Sensors (REV Color Sensor V2, also reports distance)
@@ -44,7 +44,7 @@ public class RobotHardware {
         collector = hardwareMap.get(DcMotorEx.class, "collector");
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         flipper = hardwareMap.get(Servo.class, "flipper");
-        indexer = hardwareMap.get(Servo.class, "indexer");
+        shooterPivot = hardwareMap.get(Servo.class, "shooterPivot");
 
         collector.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -60,7 +60,7 @@ public class RobotHardware {
         // Color sensor (config name "colorSensor")
         colorSensor = hardwareMap.get(NormalizedColorSensor.class, "colorSensor");
         colorSensing = new ColorSensing(colorSensor);
-        pieceDetector = new PieceDetector(colorSensing, indexer);
+        pieceDetector = new PieceDetector(colorSensing, shooterPivot);
 
         // AprilTag vision
         aprilTagProcessor = AprilTagProcessor.easyCreateWithDefaults();
