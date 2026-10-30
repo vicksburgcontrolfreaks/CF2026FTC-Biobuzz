@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.bylazar.configurables.PanelsConfigurables;
 import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -8,14 +9,42 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 /**
- * Finds the four pivot positions that matter, by hand, with no sensor involved.
+ * Finds the pivot positions that matter, by hand, with no sensor involved.
  *
- * THE BEAM BREAK IS DELIBERATELY NOT USED. It has no power, and a standard servo
- * does not need homing anyway -- setPosition() is absolute, so the servo goes to
- * the same place every boot. The beam was only ever there to detect the
- * mechanism shifting under the servo (a slipped horn, a popped linkage), which
- * is a rarer problem and not worth blocking on. This op mode needs
- * "shooterPivot" and nothing else.
+ * READ THIS FIRST, IT IS THE WHOLE REASON THE OP MODE WORKS THE WAY IT DOES
+ *
+ * Servo.getPosition() IS NOT A SENSOR. A standard servo has no feedback path to
+ * the SDK -- getPosition() only reports the last value commanded through it, and
+ * on a fresh op mode that is usually 0.0 no matter where the pivot physically
+ * is. The first version of this op mode trusted it, believed the pivot was at
+ * 0.0 while it was actually parked wide open, and the first bumper press
+ * commanded 0.002 and slammed the servo across its entire travel into a hard
+ * stop, where it hunted. That is fixed by not asking, and by never moving fast.
+ *
+ * TWO RULES THIS OP MODE FOLLOWS
+ *
+ * 1. NOTHING MOVES UNTIL YOU PRESS Y. Before that the servo is not written to at
+ *    all, so you get to read the numbers and set START_POSITION first.
+ *
+ * 2. EVERY MOVE AFTER THAT IS RATE LIMITED. Jogs and presets both steer a
+ *    TARGET; the commanded position creeps toward it at MAX_RATE per second. So
+ *    a wrong number produces a slow traverse you can hear coming and abort by
+ *    stopping the op mode, instead of a slam.
+ *
+ * THE ONE MOVE THAT CANNOT BE MADE SAFE
+ * Pressing Y commands START_POSITION, and the servo goes there as fast as it
+ * likes, because rate limiting can only smooth changes AFTER the first one.
+ * Nothing in software can prevent that -- it cannot know where the pivot is, so
+ * it cannot creep there from the current position.
+ *
+ * What it can do is land somewhere legal. START_POSITION defaults to 0.30,
+ * which sits inside the band the bench-measured pollen (0.48) and nectar (0.135)
+ * positions used on 2026-10-01, so it should be well clear of either hard stop.
+ * Change it in Panels before pressing Y if you have a better idea of where the
+ * pivot actually is.
+ *
+ * Be ready on the stop button the first time, and listen. A servo pressed
+ * against a stop buzzes.
  *
  * WHAT YOU ARE MEASURING
  *   OPEN END     wide open, where a stuck ball can be pulled out
@@ -23,75 +52,68 @@ import com.qualcomm.robotcore.util.Range;
  *   POLLEN       where a pollen ball is just gripped
  *   NECTAR       where a nectar ball is just gripped
  *
- * The two ends are the important ones. ShooterPivot clips everything to that
- * band, so once they are recorded nothing can drive the pivot into a hard stop
- * -- which is what hunted the servo on 2026-10-30.
+ * The two ends matter most. ShooterPivot clips everything to that band, so once
+ * they are recorded nothing can drive the pivot into a stop again.
  *
  * CONTROLS (gamepad1)
- *
- *   JOG
- *     LB / RB            fine jog, one FINE_STEP per press
- *     L / R trigger      coarse jog, held. Rate-based, so it is steerable
- *
- *   RECORD (face buttons) -- records wherever the pivot is right now
- *     X                  this is the OPEN end
- *     B                  this is the CLOSED end
- *     Y                  this is POLLEN grip
- *     A                  this is NECTAR grip
- *
- *   GO TO (d-pad) -- only works once that spot has been recorded
- *     up                 open        down     closed end
- *     left               pollen      right    nectar
+ *   Y                    take control. Commands START_POSITION. Press once.
+ *   LB / RB              fine jog, one FINE_STEP per press
+ *   L / R trigger        coarse jog, held
+ *   X                    record OPEN end
+ *   B                    record CLOSED end
+ *   D-pad left / right   record POLLEN / NECTAR
+ *   D-pad up / down      go to the recorded open / closed end
  *
  * HOW TO DO IT
+ * 1. Park the pivot where you like, start the op mode, and look at the numbers.
+ *    Nothing has moved yet.
+ * 2. Press Y. Expect one jump to START_POSITION. If it buzzes, stop immediately
+ *    and change START_POSITION.
+ * 3. Jog toward one end until the servo starts to strain, back off two or three
+ *    fine steps, and record that end. The straining sound IS the limit -- do not
+ *    hold it there. Then find the other end.
+ * 4. Then the grips, with a real ball between the flywheels.
+ * 5. The constants to paste are printed at the bottom once both ends are in.
  *
- * 1. LOOK BEFORE YOU TOUCH. "Servo reports" is the position the servo thinks it
- *    is at. Nothing is commanded until your first jog, on purpose -- so if that
- *    number looks wrong, fine-jog ONE step first and watch which way the pivot
- *    actually moves before doing anything else.
- *
- * 2. FIND THE ENDS FIRST, GENTLY. Jog toward one end until you hear the servo
- *    start to strain, then back off two or three fine steps and record that as
- *    the end. The straining sound IS the limit -- do not hold it there. Repeat
- *    for the other end. Record both before you go looking for grip positions,
- *    because after that the op mode will not let you leave the band.
- *
- * 3. THEN THE GRIPS. Put a pollen ball between the flywheels, jog until it is
- *    just held, press Y. Same with nectar, press A.
- *
- * 4. Write the four numbers into ShooterPivot: MIN_SAFE_POSITION,
- *    MAX_SAFE_POSITION, OPEN_POSITION, and the FALLBACK_*_POSITION pair. Or tell
- *    them to Claude and they will be put in with the provenance.
- *
- * WHICH DIRECTION IS "OPEN" IS NOT ASSUMED
- * Two files on this repo disagree about it. ShooterPivot's bench-measured
- * fallbacks put nectar at 0.135 and pollen at 0.48, meaning the LOWER number is
- * the wider gap -- nectar is the bigger ball. Jade's PieceDetector does the
- * opposite, sending nectar to 1.0 and pollen to 0.0. Those cannot both be right,
- * and PieceDetector's values look like untested full-range placeholders. This op
- * mode takes no side: you jog, you look, you label what you see.
+ * WHICH DIRECTION IS "OPEN" IS NOT ASSUMED. ShooterPivot's fallbacks imply the
+ * lower number is the wider gap; Jade's PieceDetector implies the opposite with
+ * what look like untested placeholders. You jog, you look, you label it.
  */
 @Configurable
 @TeleOp(name = "Pivot Jog Test", group = "Test")
 public class PivotJogTest extends LinearOpMode {
 
-    /** One press of a bumper. Small enough that a mistake cannot slam anything. */
+    /**
+     * Where the pivot is commanded when you press Y. Inside the band the
+     * 2026-10-01 pollen/nectar numbers used, so it should clear both stops.
+     */
+    public static double START_POSITION = 0.30;
+
+    /** One bumper press. */
     public static double FINE_STEP = 0.002;
 
-    /** Held-trigger jog, in position units per second at full trigger. */
-    public static double COARSE_RATE = 0.08;
+    /** Held-trigger jog, position units per second at full trigger. */
+    public static double COARSE_RATE = 0.06;
 
-    private double position;
-    private boolean everCommanded = false;
+    /**
+     * How fast the commanded position is allowed to change, per second. Slow on
+     * purpose: a full-range traverse takes about ten seconds, which is long
+     * enough to hear a mistake and stop the op mode.
+     */
+    public static double MAX_RATE = 0.10;
+
+    private double target;
+    private double commanded;
+    private boolean inControl = false;
 
     private double openEnd = Double.NaN;
     private double closedEnd = Double.NaN;
     private double pollenAt = Double.NaN;
     private double nectarAt = Double.NaN;
 
-    private String note = "nothing commanded yet - jog one fine step to begin";
+    private String note = "not in control - press Y when you have read the warning";
 
-    private boolean lbPrev, rbPrev, xPrev, bPrev, yPrev, aPrev;
+    private boolean lbPrev, rbPrev, xPrev, bPrev, yPrev;
     private boolean upPrev, downPrev, leftPrev, rightPrev;
 
     private final ElapsedTime loopTimer = new ElapsedTime();
@@ -99,6 +121,7 @@ public class PivotJogTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         Servo pivot = hardwareMap.tryGet(Servo.class, "shooterPivot");
+        PanelsConfigurables.INSTANCE.refreshClass(this);
 
         if (pivot == null) {
             telemetry.addLine("No \"shooterPivot\" servo in the config - nothing to jog.");
@@ -111,17 +134,19 @@ public class PivotJogTest extends LinearOpMode {
             return;
         }
 
-        // Whatever the servo last had. NOT commanded here -- see step 1.
-        position = Range.clip(pivot.getPosition(), 0.0, 1.0);
+        target = START_POSITION;
+        commanded = START_POSITION;
 
         telemetry.addLine("PIVOT JOG TEST");
-        telemetry.addLine("Beam break not used. Nothing moves until you jog.");
         telemetry.addLine();
-        telemetry.addData("Servo reports", position);
+        telemetry.addLine("NOTHING WILL MOVE until you press Y.");
+        telemetry.addData("Y will command", START_POSITION);
         telemetry.addLine();
-        telemetry.addLine("Bumpers: fine jog   Triggers: coarse jog (held)");
-        telemetry.addLine("Record: X=open end  B=closed end  Y=pollen  A=nectar");
-        telemetry.addLine("FIND THE ENDS FIRST. Back off as soon as it strains.");
+        telemetry.addLine("The servo cannot be read, so that first move cannot be");
+        telemetry.addLine("smoothed - it jumps. 0.30 should clear both hard stops.");
+        telemetry.addLine("If it BUZZES, stop at once and change START_POSITION.");
+        telemetry.addLine();
+        telemetry.addLine("After that every move is rate limited and slow.");
         telemetry.update();
 
         waitForStart();
@@ -131,28 +156,32 @@ public class PivotJogTest extends LinearOpMode {
             double dt = loopTimer.seconds();
             loopTimer.reset();
 
-            handleJog(dt);
-            handleRecord();
-            handleGoTo();
-
-            if (everCommanded) {
-                pivot.setPosition(position);
+            handleTakeControl();
+            if (inControl) {
+                handleJog(dt);
+                handleRecord();
+                handleGoTo();
+                stepTowardTarget(dt);
+                pivot.setPosition(commanded);
             }
 
-            telemetry.addLine("Bumpers: fine   Triggers: coarse (held)");
-            telemetry.addLine("Record: X=open  B=closed  Y=pollen  A=nectar");
-            telemetry.addLine("Go to:  dpad U=open D=closed L=pollen R=nectar");
+            telemetry.addLine(inControl
+                    ? "LB/RB fine | triggers coarse | X open end | B closed end"
+                    : "PRESS Y TO TAKE CONTROL - nothing has moved yet");
+            if (inControl) {
+                telemetry.addLine("dpad L/R record pollen/nectar | dpad U/D go to ends");
+            }
             telemetry.addLine();
-            telemetry.addData("POSITION  <-- write this down", position);
-            telemetry.addData("Commanded yet", everCommanded ? "yes" : "no - nothing has moved");
+            telemetry.addData("POSITION  <-- write this down", commanded);
+            telemetry.addData("Target", target);
+            telemetry.addData("Moving", Math.abs(target - commanded) > 1e-6 ? "yes" : "settled");
             telemetry.addLine();
             telemetry.addData("Open end   (X)", show(openEnd));
             telemetry.addData("Closed end (B)", show(closedEnd));
-            telemetry.addData("Pollen     (Y)", show(pollenAt));
-            telemetry.addData("Nectar     (A)", show(nectarAt));
+            telemetry.addData("Pollen (dpad L)", show(pollenAt));
+            telemetry.addData("Nectar (dpad R)", show(nectarAt));
             telemetry.addLine();
             telemetry.addData("Travel band", bandDescription());
-            telemetry.addLine();
             telemetry.addData("Note", note);
 
             if (bothEndsKnown()) {
@@ -174,75 +203,92 @@ public class PivotJogTest extends LinearOpMode {
         }
     }
 
-    // ---- Input --------------------------------------------------------------
+    private void handleTakeControl() {
+        boolean y = gamepad1.y;
+        if (y && !yPrev && !inControl) {
+            inControl = true;
+            target = START_POSITION;
+            commanded = START_POSITION;
+            note = String.format("took control at %.3f", START_POSITION);
+        }
+        yPrev = y;
+    }
 
+    /** Jogging steers the TARGET. The servo follows it slowly. */
     private void handleJog(double dt) {
         boolean lb = gamepad1.left_bumper;
         boolean rb = gamepad1.right_bumper;
 
         if (rb && !rbPrev) {
-            move(FINE_STEP);
+            nudgeTarget(FINE_STEP);
         }
         if (lb && !lbPrev) {
-            move(-FINE_STEP);
+            nudgeTarget(-FINE_STEP);
         }
         rbPrev = rb;
         lbPrev = lb;
 
-        // Rate-based so a held trigger is steerable rather than a leap.
         double coarse = (gamepad1.right_trigger - gamepad1.left_trigger) * COARSE_RATE * dt;
         if (coarse != 0.0) {
-            move(coarse);
+            nudgeTarget(coarse);
         }
     }
 
-    /** Applies a jog, clamped to whichever ends are known. */
-    private void move(double delta) {
-        double wanted = position + delta;
+    private void nudgeTarget(double delta) {
+        double wanted = target + delta;
         double clamped = clampToKnownBand(wanted);
         if (clamped != wanted) {
-            note = "held at a recorded end - will not jog past it";
-        } else {
-            note = "";
+            note = "held at a recorded end - will not go past it";
         }
-        position = clamped;
-        everCommanded = true;
+        target = clamped;
     }
 
+    /** The rate limit. Nothing else writes `commanded`. */
+    private void stepTowardTarget(double dt) {
+        double maxStep = MAX_RATE * dt;
+        double error = target - commanded;
+        if (Math.abs(error) <= maxStep) {
+            commanded = target;
+        } else {
+            commanded += Math.signum(error) * maxStep;
+        }
+    }
+
+    /** Records where the pivot actually IS, not where it is heading. */
     private void handleRecord() {
         boolean x = gamepad1.x;
         boolean b = gamepad1.b;
-        boolean y = gamepad1.y;
-        boolean a = gamepad1.a;
+        boolean left = gamepad1.dpad_left;
+        boolean right = gamepad1.dpad_right;
 
         if (x && !xPrev) {
-            openEnd = position;
-            note = String.format("OPEN end recorded at %.3f", position);
+            openEnd = commanded;
+            target = commanded;
+            note = String.format("OPEN end recorded at %.3f", commanded);
         }
         if (b && !bPrev) {
-            closedEnd = position;
-            note = String.format("CLOSED end recorded at %.3f", position);
+            closedEnd = commanded;
+            target = commanded;
+            note = String.format("CLOSED end recorded at %.3f", commanded);
         }
-        if (y && !yPrev) {
-            pollenAt = position;
-            note = String.format("POLLEN recorded at %.3f", position);
+        if (left && !leftPrev) {
+            pollenAt = commanded;
+            note = String.format("POLLEN recorded at %.3f", commanded);
         }
-        if (a && !aPrev) {
-            nectarAt = position;
-            note = String.format("NECTAR recorded at %.3f", position);
+        if (right && !rightPrev) {
+            nectarAt = commanded;
+            note = String.format("NECTAR recorded at %.3f", commanded);
         }
 
         xPrev = x;
         bPrev = b;
-        yPrev = y;
-        aPrev = a;
+        leftPrev = left;
+        rightPrev = right;
     }
 
     private void handleGoTo() {
         boolean up = gamepad1.dpad_up;
         boolean down = gamepad1.dpad_down;
-        boolean left = gamepad1.dpad_left;
-        boolean right = gamepad1.dpad_right;
 
         if (up && !upPrev) {
             goTo(openEnd, "open end");
@@ -250,36 +296,22 @@ public class PivotJogTest extends LinearOpMode {
         if (down && !downPrev) {
             goTo(closedEnd, "closed end");
         }
-        if (left && !leftPrev) {
-            goTo(pollenAt, "pollen");
-        }
-        if (right && !rightPrev) {
-            goTo(nectarAt, "nectar");
-        }
 
         upPrev = up;
         downPrev = down;
-        leftPrev = left;
-        rightPrev = right;
     }
 
-    private void goTo(double target, String name) {
-        if (Double.isNaN(target)) {
+    private void goTo(double spot, String name) {
+        if (Double.isNaN(spot)) {
             note = name + " has not been recorded yet";
             return;
         }
-        position = clampToKnownBand(target);
-        everCommanded = true;
-        note = "moved to " + name;
+        target = clampToKnownBand(spot);
+        note = "heading to " + name + " (rate limited)";
     }
 
     // ---- Travel band --------------------------------------------------------
 
-    /**
-     * Clamps to the ends that have been recorded. One end recorded clamps on
-     * that side only, so the ends can be found one at a time without the op
-     * mode fighting the search.
-     */
     private double clampToKnownBand(double wanted) {
         double result = Range.clip(wanted, 0.0, 1.0);
         if (bothEndsKnown()) {
@@ -295,14 +327,14 @@ public class PivotJogTest extends LinearOpMode {
     }
 
     /**
-     * With only one end known, which side is out of bounds is ambiguous -- so
-     * this only blocks going FURTHER past it than the pivot already is.
+     * With one end known, which side is out of bounds is ambiguous, so this only
+     * blocks going FURTHER past it than the pivot already is.
      */
     private double clampAgainstSingleEnd(double wanted, double end) {
-        if (position <= end && wanted > end) {
+        if (commanded <= end && wanted > end) {
             return end;
         }
-        if (position >= end && wanted < end) {
+        if (commanded >= end && wanted < end) {
             return end;
         }
         return wanted;
@@ -322,13 +354,12 @@ public class PivotJogTest extends LinearOpMode {
 
     private String bandDescription() {
         if (bothEndsKnown()) {
-            return String.format("%.3f to %.3f (jogging is limited to this)",
-                    lowEnd(), highEnd());
+            return String.format("%.3f to %.3f (jogging limited to this)", lowEnd(), highEnd());
         }
         if (Double.isNaN(openEnd) && Double.isNaN(closedEnd)) {
-            return "no ends recorded - FULL range allowed, jog gently";
+            return "no ends recorded - full range allowed, jog gently";
         }
-        return "one end recorded - find the other before trusting the band";
+        return "one end recorded - find the other";
     }
 
     private String show(double value) {
