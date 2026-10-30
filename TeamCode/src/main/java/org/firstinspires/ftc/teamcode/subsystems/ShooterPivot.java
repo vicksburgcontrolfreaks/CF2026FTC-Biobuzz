@@ -87,10 +87,11 @@ public class ShooterPivot {
     public static double MIN_SAFE_POSITION = 0.0;
     public static double MAX_SAFE_POSITION = 1.0;
 
-    // TODO(on-robot): the wide-open position, for pulling a stuck ball out.
-    // NaN until measured, and goToOpen() refuses to move while it is NaN rather
-    // than guessing and slamming the mechanism into something.
-    public static double OPEN_POSITION = Double.NaN;
+    // The wide-open position, for pulling a stuck ball out without anyone
+    // forcing the servo by hand. MEASURED ON THE ROBOT 2026-10-30 with Pivot
+    // Jog Test. goToOpen() returns false instead of guessing if this is ever
+    // set back to NaN.
+    public static double OPEN_POSITION = 0.2;
 
     // Used only if homing fails, so a failed home degrades to "the old numbers"
     // instead of "the shooter does not work". Bench-measured as ABSOLUTE servo

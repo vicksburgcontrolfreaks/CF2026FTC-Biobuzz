@@ -37,17 +37,19 @@ import com.qualcomm.robotcore.util.Range;
  * Nothing in software can prevent that -- it cannot know where the pivot is, so
  * it cannot creep there from the current position.
  *
- * What it can do is land somewhere legal. START_POSITION defaults to 0.30,
- * which sits inside the band the bench-measured pollen (0.48) and nectar (0.135)
- * positions used on 2026-10-01, so it should be well clear of either hard stop.
- * Change it in Panels before pressing Y if you have a better idea of where the
- * pivot actually is.
+ * What it CAN do is land where the pivot already is. START_POSITION defaults to
+ * 0.2, the open end measured on the robot 2026-10-30. Park the pivot fully open
+ * before starting and pressing Y commands the position it is already in, so
+ * nothing moves at all and the jump problem disappears.
+ *
+ * Parked somewhere else, Y still sends it to 0.2, which is known to be a legal
+ * position. Change it in Panels if you want a different spot.
  *
  * Be ready on the stop button the first time, and listen. A servo pressed
  * against a stop buzzes.
  *
  * WHAT YOU ARE MEASURING
- *   OPEN END     wide open, where a stuck ball can be pulled out
+ *   OPEN END     wide open, for pulling a stuck ball out. MEASURED: 0.2
  *   CLOSED END   the tightest it goes before the servo strains
  *   POLLEN       where a pollen ball is just gripped
  *   NECTAR       where a nectar ball is just gripped
@@ -84,10 +86,10 @@ import com.qualcomm.robotcore.util.Range;
 public class PivotJogTest extends LinearOpMode {
 
     /**
-     * Where the pivot is commanded when you press Y. Inside the band the
-     * 2026-10-01 pollen/nectar numbers used, so it should clear both stops.
+     * Where the pivot is commanded when you press Y. Defaults to the open end
+     * measured 2026-10-30, so parking the pivot fully open makes Y a no-op.
      */
-    public static double START_POSITION = 0.30;
+    public static double START_POSITION = 0.2;
 
     /** One bumper press. */
     public static double FINE_STEP = 0.002;
@@ -143,7 +145,7 @@ public class PivotJogTest extends LinearOpMode {
         telemetry.addData("Y will command", START_POSITION);
         telemetry.addLine();
         telemetry.addLine("The servo cannot be read, so that first move cannot be");
-        telemetry.addLine("smoothed - it jumps. 0.30 should clear both hard stops.");
+        telemetry.addLine("smoothed - it jumps. Park the pivot OPEN and it will not move.");
         telemetry.addLine("If it BUZZES, stop at once and change START_POSITION.");
         telemetry.addLine();
         telemetry.addLine("After that every move is rate limited and slow.");
@@ -312,32 +314,25 @@ public class PivotJogTest extends LinearOpMode {
 
     // ---- Travel band --------------------------------------------------------
 
+    /**
+     * Clamps ONLY once both ends are known.
+     *
+     * An earlier version tried to clamp against a single recorded end, and it
+     * deadlocked the op mode on the robot 2026-10-30. Recording an end leaves
+     * commanded == end, which satisfied the blocks in both directions at once
+     * and pinned the pivot there with no way to jog off it.
+     *
+     * The real problem is that with one end recorded there is no way to know
+     * WHICH SIDE of it is out of bounds, so the clamp was guessing. It does not
+     * guess any more: jogging stays unrestricted until the second end is in,
+     * which is why the instruction is to find them gently and listen.
+     */
     private double clampToKnownBand(double wanted) {
         double result = Range.clip(wanted, 0.0, 1.0);
         if (bothEndsKnown()) {
             return Range.clip(result, lowEnd(), highEnd());
         }
-        if (!Double.isNaN(openEnd)) {
-            result = clampAgainstSingleEnd(result, openEnd);
-        }
-        if (!Double.isNaN(closedEnd)) {
-            result = clampAgainstSingleEnd(result, closedEnd);
-        }
         return result;
-    }
-
-    /**
-     * With one end known, which side is out of bounds is ambiguous, so this only
-     * blocks going FURTHER past it than the pivot already is.
-     */
-    private double clampAgainstSingleEnd(double wanted, double end) {
-        if (commanded <= end && wanted > end) {
-            return end;
-        }
-        if (commanded >= end && wanted < end) {
-            return end;
-        }
-        return wanted;
     }
 
     private boolean bothEndsKnown() {
@@ -359,7 +354,7 @@ public class PivotJogTest extends LinearOpMode {
         if (Double.isNaN(openEnd) && Double.isNaN(closedEnd)) {
             return "no ends recorded - full range allowed, jog gently";
         }
-        return "one end recorded - find the other";
+        return "one end recorded - still unrestricted until the other is in";
     }
 
     private String show(double value) {
