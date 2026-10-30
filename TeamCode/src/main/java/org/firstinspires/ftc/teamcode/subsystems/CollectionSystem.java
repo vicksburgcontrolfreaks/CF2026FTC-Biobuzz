@@ -129,7 +129,12 @@ public class CollectionSystem {
 
     // ---- Color sensor -------------------------------------------------------
 
-    /** Wrap this in Jade's ColorSensing rather than reading hue here. */
+    /**
+     * Wrap this in Jade's ColorSensing rather than reading hue here.
+     *
+     * MAY BE NULL. The color sensor is not fitted to the robot yet, so a caller
+     * that passed null to the constructor gets null back. Check before wrapping.
+     */
     public NormalizedColorSensor getColorSensor() {
         return colorSensor;
     }

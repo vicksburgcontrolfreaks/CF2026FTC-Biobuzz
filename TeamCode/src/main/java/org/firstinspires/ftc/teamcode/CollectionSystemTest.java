@@ -9,8 +9,10 @@ import org.firstinspires.ftc.teamcode.subsystems.CollectionSystem;
 
 /**
  * Bring-up op mode for the collection system. Standalone -- the active config
- * only needs "collector", "indexer" and "colorSensor", so this runs before the
- * drivetrain or camera are configured.
+ * only needs "collector" and "indexer", so this runs before the drivetrain or
+ * camera are configured. "colorSensor" is OPTIONAL -- it is not fitted to the
+ * robot yet, so tryGet returns null instead of throwing and the colour readout
+ * is simply skipped. Nothing about the collector or indexer depends on it.
  *
  * CLOSED LOOP SINCE 2026-10-29. Both motors now take a target RPM through
  * setVelocity() instead of a raw power level, so a number on the screen is a
@@ -76,7 +78,7 @@ public class CollectionSystemTest extends LinearOpMode {
         DcMotorEx collector = hardwareMap.get(DcMotorEx.class, "collector");
         DcMotorEx indexer = hardwareMap.get(DcMotorEx.class, "indexer");
         NormalizedColorSensor colorSensor =
-                hardwareMap.get(NormalizedColorSensor.class, "colorSensor");
+                hardwareMap.tryGet(NormalizedColorSensor.class, "colorSensor");
 
         CollectionSystem collection = new CollectionSystem(collector, indexer, colorSensor);
         // A braked indexer would crush a piece caught mid-feed.
@@ -85,6 +87,7 @@ public class CollectionSystemTest extends LinearOpMode {
         telemetry.addLine("A: collect   B: eject   RB: feed   LB: unjam");
         telemetry.addLine("D-pad U/D: collector +/-50 RPM   L/R: indexer +/-10 RPM");
         telemetry.addLine("Check directions FIRST -- see the notes on this op mode.");
+        telemetry.addData("Color sensor", colorSensor != null ? "found" : "not fitted (fine)");
         telemetry.update();
 
         waitForStart();
@@ -121,7 +124,12 @@ public class CollectionSystemTest extends LinearOpMode {
             telemetry.addLine();
             // Raw channels only -- piece classification belongs to Jade's
             // ColorSensing, not to this bring-up op mode.
-            telemetry.addData("Color (raw argb)", colorSensor.getNormalizedColors().toColor());
+            if (colorSensor != null) {
+                telemetry.addData("Color (raw argb)",
+                        colorSensor.getNormalizedColors().toColor());
+            } else {
+                telemetry.addLine("Color sensor not fitted - colour readout skipped");
+            }
             telemetry.update();
         }
 
