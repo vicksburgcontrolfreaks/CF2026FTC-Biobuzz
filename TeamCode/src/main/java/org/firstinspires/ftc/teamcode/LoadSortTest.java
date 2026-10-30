@@ -33,6 +33,9 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  * CONTROLS (gamepad1)
  *   A (hold)      feed a ball. Classification happens when you RELEASE.
  *   LB (hold)     reverse the indexer to clear a jam. Not classified.
+ *   Y             open the pivot wide, to pull a stuck ball out. USE THIS
+ *                 rather than moving the pivot by hand -- back-driving a
+ *                 powered servo is what wrecked one on 2026-10-30.
  *   X / B         force the pivot to pollen / nectar by hand, to compare
  *   D-pad up/down feed RPM +/- 10
  *
@@ -48,11 +51,12 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *    rather than nudging the threshold on a hunch.
  *
  * 3. THE PIVOT IS USING FALLBACK POSITIONS. The beam break has no power, so
- *    homing cannot run, so goToPollen/goToNectar fall back to the absolute
- *    positions bench-measured on 2026-10-01 (pollen 0.48, nectar 0.135). That
- *    is working as designed, and "Pivot homed" will read false. Once the beam
- *    break is fixed and the real offsets are measured, this op mode needs no
- *    changes -- ShooterPivot switches to the homed path by itself.
+ *    homing cannot run, so goToPollen/goToNectar use the absolute positions
+ *    measured against real balls on 2026-10-30: pollen 0.539, nectar 0.21,
+ *    inside a safe band of 0.166 to 0.679. That is working as designed, and
+ *    "Pivot homed" will read false. Once the beam break is fixed and the real
+ *    offsets are measured, this op mode needs no changes -- ShooterPivot
+ *    switches to the homed path by itself.
  *
  * WHAT THIS CANNOT DO
  * POLLEN_OR_EMPTY means exactly that. A pollen ball and an empty indexer both
@@ -75,7 +79,7 @@ public class LoadSortTest extends LinearOpMode {
     private int pollenCount, nectarCount, noPassCount;
     private String lastAction = "nothing fed yet";
 
-    private boolean xPrev, bPrev, upPrev, downPrev;
+    private boolean xPrev, bPrev, yPrev, upPrev, downPrev;
 
     @Override
     public void runOpMode() {
@@ -132,7 +136,7 @@ public class LoadSortTest extends LinearOpMode {
             handleRpmAdjust();
 
             // ---- Telemetry ------------------------------------------------
-            telemetry.addLine("A: feed   LB: reverse   X/B: force pollen/nectar");
+            telemetry.addLine("A: feed   LB: reverse   Y: OPEN   X/B: force pollen/nectar");
             telemetry.addLine("Dpad U/D: feed RPM +/-10");
             telemetry.addLine();
             telemetry.addData("Target RPM", targetRpm);
@@ -208,6 +212,7 @@ public class LoadSortTest extends LinearOpMode {
     private void handleManualPivot(ShooterPivot pivot) {
         boolean x = gamepad1.x;
         boolean b = gamepad1.b;
+        boolean y = gamepad1.y;
         if (x && !xPrev && pivot != null) {
             pivot.goToPollen();
             lastAction = "forced to pollen spacing by hand";
@@ -216,8 +221,14 @@ public class LoadSortTest extends LinearOpMode {
             pivot.goToNectar();
             lastAction = "forced to nectar spacing by hand";
         }
+        if (y && !yPrev && pivot != null) {
+            lastAction = pivot.goToOpen()
+                    ? "OPEN - safe to pull a ball out"
+                    : "open position not configured";
+        }
         xPrev = x;
         bPrev = b;
+        yPrev = y;
     }
 
     private void handleRpmAdjust() {

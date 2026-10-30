@@ -68,6 +68,37 @@ against an unreliable zero.
 
 ## Confirmed on the robot 2026-10-30
 
+### Shooter pivot travel, measured with no sensor
+
+Measured with **Pivot Jog Test** against real balls. The `pivotHome` beam break
+has no power, so homing cannot run -- these are absolute servo positions, which
+is all a standard servo ever needed. **Lower is a wider gap.**
+
+| | position |
+|---|---|
+| widest (`MIN_SAFE_POSITION`) | 0.166 |
+| open, for ball extraction (`OPEN_POSITION`) | 0.2 |
+| nectar grip | 0.21 |
+| pollen grip | 0.539 |
+| tightest (`MAX_SAFE_POSITION`) | 0.679 |
+
+Everything that commands the pivot is now clipped to the band, which is what
+makes driving it into a hard stop impossible. It was clipped to the SDK range
+of 0.0-1.0 before, and the pivot got slammed into a stop twice on 2026-10-30.
+
+The 2026-10-01 bench values were pollen 0.48 and nectar 0.135. Both moved up by
+roughly a constant 0.06-0.08, which looks like a re-seated linkage or servo horn
+rather than anything changing about the balls.
+
+**Worth a look: nectar grip 0.21 sits only 0.044 from the widest position, while
+there is 0.14 of unused travel above the pollen grip.** So the pivot can barely
+open wider than its own nectar grip -- there is almost no extraction clearance
+for a stuck nectar ball, and no margin at all for an oversized one. Re-seating
+the linkage lower in its range would buy that margin back from travel that is
+currently doing nothing.
+
+---
+
 ### Ball type IS readable from indexer current
 
 Twenty labeled passes with **Indexer Load Test**, at 50 RPM, normalized to 12V:

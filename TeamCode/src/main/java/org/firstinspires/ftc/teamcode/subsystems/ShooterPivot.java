@@ -79,13 +79,15 @@ public class ShooterPivot {
     public static double NECTAR_OFFSET = 0.0;
 
     // ---- Safe travel band --------------------------------------------------
-    // TODO(on-robot): PLACEHOLDERS, deliberately the full legal range so that
-    // setting them changes nothing until they are measured. Find the real ends
-    // with Pivot Jog Test -- jog until the servo audibly strains, back off, and
-    // record. Everything that commands the pivot is clipped to this band, so
-    // correct numbers here make it impossible to drive into a hard stop.
-    public static double MIN_SAFE_POSITION = 0.0;
-    public static double MAX_SAFE_POSITION = 1.0;
+    // MEASURED ON THE ROBOT 2026-10-30 with Pivot Jog Test: jogged until the
+    // servo audibly strained at each end, then backed off. Everything that
+    // commands the pivot is clipped to this band, which is what makes it
+    // impossible to drive into a hard stop -- the failure that hunted this servo
+    // twice on 2026-10-30, when the clip was still the SDK range of 0.0-1.0.
+    //
+    // LOWER IS A WIDER GAP. Nectar is the bigger ball and sits at the low end.
+    public static double MIN_SAFE_POSITION = 0.166;   // widest
+    public static double MAX_SAFE_POSITION = 0.679;   // tightest
 
     // The wide-open position, for pulling a stuck ball out without anyone
     // forcing the servo by hand. MEASURED ON THE ROBOT 2026-10-30 with Pivot
@@ -94,10 +96,17 @@ public class ShooterPivot {
     public static double OPEN_POSITION = 0.2;
 
     // Used only if homing fails, so a failed home degrades to "the old numbers"
-    // instead of "the shooter does not work". Bench-measured as ABSOLUTE servo
-    // positions on 2026-10-01, before homing existed.
-    public static double FALLBACK_POLLEN_POSITION = 0.48;
-    public static double FALLBACK_NECTAR_POSITION = 0.135;
+    // instead of "the shooter does not work". Which is the normal case right now:
+    // the pivotHome beam break has no power, so homing cannot run at all and
+    // these are what goToPollen/goToNectar actually use.
+    //
+    // RE-MEASURED ON THE ROBOT 2026-10-30 with Pivot Jog Test, against real
+    // balls. The 2026-10-01 bench values were pollen 0.48 and nectar 0.135 --
+    // both moved up by roughly a constant 0.06-0.08, which is the signature of
+    // the linkage or servo horn having been re-seated rather than anything
+    // changing about the balls.
+    public static double FALLBACK_POLLEN_POSITION = 0.539;
+    public static double FALLBACK_NECTAR_POSITION = 0.21;
 
     private final Servo pivot;
     private final DigitalChannel beam;
