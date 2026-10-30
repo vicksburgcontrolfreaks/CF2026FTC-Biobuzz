@@ -78,6 +78,20 @@ public class ShooterPivot {
     public static double POLLEN_OFFSET = 0.0;
     public static double NECTAR_OFFSET = 0.0;
 
+    // ---- Safe travel band --------------------------------------------------
+    // TODO(on-robot): PLACEHOLDERS, deliberately the full legal range so that
+    // setting them changes nothing until they are measured. Find the real ends
+    // with Pivot Jog Test -- jog until the servo audibly strains, back off, and
+    // record. Everything that commands the pivot is clipped to this band, so
+    // correct numbers here make it impossible to drive into a hard stop.
+    public static double MIN_SAFE_POSITION = 0.0;
+    public static double MAX_SAFE_POSITION = 1.0;
+
+    // TODO(on-robot): the wide-open position, for pulling a stuck ball out.
+    // NaN until measured, and goToOpen() refuses to move while it is NaN rather
+    // than guessing and slamming the mechanism into something.
+    public static double OPEN_POSITION = Double.NaN;
+
     // Used only if homing fails, so a failed home degrades to "the old numbers"
     // instead of "the shooter does not work". Bench-measured as ABSOLUTE servo
     // positions on 2026-10-01, before homing existed.
@@ -245,7 +259,23 @@ public class ShooterPivot {
         setPosition(zeroPosition + offset);
     }
 
-    /** Raw absolute servo position, clipped to the legal 0-1 range. */
+    /**
+     * Moves the pivot wide open, so a stuck ball can be pulled out without
+     * anyone forcing the servo by hand. Back-driving a powered servo can slip
+     * its pot or bind the linkage, and then it hunts for a position it can no
+     * longer reach -- that happened on 2026-10-30.
+     *
+     * Returns false and does nothing if OPEN_POSITION has not been measured yet.
+     */
+    public boolean goToOpen() {
+        if (Double.isNaN(OPEN_POSITION)) {
+            return false;
+        }
+        setPosition(OPEN_POSITION);
+        return true;
+    }
+
+    /** Raw absolute servo position, clipped to the safe travel band. */
     public void setPosition(double position) {
         commandedPosition = clip(position);
         pivot.setPosition(commandedPosition);
@@ -256,8 +286,14 @@ public class ShooterPivot {
         sleep(dwellMs);
     }
 
+    /**
+     * Clips to the MECHANISM's travel, not the SDK's. 0.0 and 1.0 are merely
+     * what a servo will accept -- past the mechanism's real limits the servo is
+     * pressed against a hard stop, where it strains, heats and eventually
+     * cooks. Measure the band with Pivot Jog Test and put it above.
+     */
     private double clip(double position) {
-        return Range.clip(position, 0.0, 1.0);
+        return Range.clip(position, MIN_SAFE_POSITION, MAX_SAFE_POSITION);
     }
 
     private void sleep(long ms) {
