@@ -66,6 +66,40 @@ against an unreliable zero.
 
 ---
 
+## Confirmed on the robot 2026-10-30
+
+### Ball type IS readable from indexer current
+
+Twenty labeled passes with **Indexer Load Test**, at 50 RPM, normalized to 12V:
+
+| | n | min | mean | max |
+|---|---|---|---|---|
+| empty indexer (baseline peak) | 3 | 0.71 | **0.79** | 0.86 A |
+| pollen, rise above baseline | 10 | -0.24 | **-0.06** | 0.06 A |
+| nectar, rise above baseline | 10 | 1.38 | **2.09** | 2.63 A |
+
+**Gap between the groups: 1.32 A.** Wider than either group's own spread (0.30
+for pollen, 1.25 for nectar), which is the test that matters -- the separation
+is bigger than the noise it has to survive. Threshold set at the midpoint,
+**0.72 A above baseline**, so either misclassification needs a 0.66 A excursion.
+
+Lives in `subsystems/BallLoadClassifier.java`, with `LoadSortTest` driving the
+pivot from it. What invalidates the calibration is documented there: feed speed
+(these are 50 RPM numbers), how the pass starts, and mechanical changes.
+
+**Pollen is indistinguishable from an empty indexer** -- -0.06 A mean rise is
+zero within noise, because a pollen ball costs the indexer essentially nothing.
+Good for reliability, since the real question is only "is there extra load",
+but it means current sensing can never be a ball-PRESENCE sensor. The result
+enum is called `POLLEN_OR_EMPTY` so nobody forgets. With `sensor1-3` retired on
+2026-10-27 there is no ball-presence signal on the robot at all.
+
+Still to spot-check: the 12V normalization never had to work (all 20 samples
+came from a similar battery state), and warm-vs-cold mechanism and scuffed
+balls were not varied.
+
+---
+
 ## Confirmed on the robot 2026-10-29
 
 - Collector and indexer directions are both correct as set in `RobotHardware`
