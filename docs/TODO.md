@@ -7,6 +7,12 @@ would otherwise get lost in commit messages.
 
 ## Needs the robot
 
+> **The robot was taken apart and rebuilt as of 2026-10-31.** Work through
+> [reassembly-checklist.md](reassembly-checklist.md) rather than this list —
+> it covers the items below in dependency order, and it starts by re-measuring
+> the pivot band, which the whole repo's pivot safety depends on. Most measured
+> numbers in this file are now suspect.
+
 ### 1. Pull the robot config XML into the repo
 **Blocked on:** building the config once on the Driver Station.
 
