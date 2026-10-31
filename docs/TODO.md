@@ -69,6 +69,38 @@ measure the offsets and the path wakes up with no other changes. Worth
 revisiting only if the linkage starts slipping often enough that re-measuring
 by hand becomes the bottleneck.
 
+### 4. Compare the two load-recovery maneuvers
+**Why:** balls get lost in the dead space between the collector and the indexer,
+where no mechanism can reach them. `LoadRecovery` has two candidate rescues and
+only the robot can say which works. Run **Load Recovery Test**, put a ball in
+the dead spot by hand, and try both against the same ball.
+
+**Do the direction check first, with no ball in the robot.** Drop `SNAP_POWER`
+to ~0.3, press A, and confirm the robot lurches **forward**. Backward sends the
+ball toward the front of the robot and possibly out of it — set
+`LoadRecovery.SNAP_SIGN = -1.0` if so.
+
+That check is not paranoia: `RobotHardware.init()` sets all four drive
+directions **exactly inverted** from `pedroPathing/Constants.java`, and
+Constants only wins because `createFollower()` runs afterward. So raw-power
+drive depends on the follower existing. Worth deleting those lines as part of
+the two-robots cleanup below, which already flags them as dead.
+
+Then collect:
+- Which maneuver frees the ball, and after how many reps. Tune `SHAKE_REPS` /
+  `PULSE_REPS` to what actually worked
+- `Snap displacement` — near zero means the robot never accelerated (pinned,
+  or wheels slipping), which is a blocked robot and not a failed idea
+- `Net drift`, to tune `RETURN_MS`. It will not reach zero; the snap slips the
+  wheels. Small enough to ignore is the goal
+- Whether the collector pulse ever spits the ball out the FRONT. Shorten
+  `PULSE_REVERSE_MS` if so
+
+If **neither** works, that is a real result: it means the ball is wedged rather
+than resting, which no amount of chassis acceleration fixes. That points back at
+the mechanical problem in the collection path logged on 2026-10-29, and the fix
+would be the ramp or the linkage.
+
 ---
 
 ## Confirmed on the robot 2026-10-30
