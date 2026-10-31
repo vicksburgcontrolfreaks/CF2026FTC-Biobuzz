@@ -7,8 +7,15 @@ import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 
 /**
- * Bring-up op mode for the shooter pivot, and the quickest way to check the IR
- * beam break on its own.
+ * Bring-up op mode for the shooter pivot's OPTIONAL homing sensor, and the
+ * quickest way to check an IR beam break on its own.
+ *
+ * NOTHING ON THE ROBOT NEEDS THIS RIGHT NOW. There is no beam break fitted, and
+ * as of 2026-10-31 the pivot is not meant to have one: it runs off the absolute
+ * positions measured with **Pivot Jog Test**, which is the op mode you want for
+ * routine pivot calibration. Decision and data are in ShooterPivot's class
+ * comment. This op mode is kept for the day somebody fits a sensor -- and it
+ * will not even load without a "pivotHome" entry in the config.
  *
  * The config needs "pivotHome" (DigitalChannel). "shooterPivot" (Servo) is
  * OPTIONAL -- tryGet returns null instead of throwing, so this runs on a bench
@@ -37,6 +44,11 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *
  * 5. VERIFY (B and X). Those jump to the stored offsets. If a ball of each kind
  *    fits at its own button, the pivot is calibrated and done.
+ *
+ * Until step 4 is done, POLLEN_OFFSET and NECTAR_OFFSET are NaN and B/X keep
+ * using the measured absolute positions -- deliberately, so a freshly wired
+ * sensor cannot silently send both grips to the same gap. "Positions from" says
+ * which set is live.
  */
 @TeleOp(name = "Shooter Pivot Home Test", group = "Test")
 public class ShooterPivotHomeTest extends LinearOpMode {
@@ -135,8 +147,13 @@ public class ShooterPivotHomeTest extends LinearOpMode {
             telemetry.addData("Offset From Zero <-- WRITE THIS DOWN",
                     pivot.isHomed() ? pivot.getOffsetFromZero() : Double.NaN);
             telemetry.addLine();
-            telemetry.addData("Stored POLLEN_OFFSET", ShooterPivot.POLLEN_OFFSET);
-            telemetry.addData("Stored NECTAR_OFFSET", ShooterPivot.NECTAR_OFFSET);
+            telemetry.addData("Stored POLLEN_OFFSET", Double.isNaN(ShooterPivot.POLLEN_OFFSET)
+                    ? "not measured" : ShooterPivot.POLLEN_OFFSET);
+            telemetry.addData("Stored NECTAR_OFFSET", Double.isNaN(ShooterPivot.NECTAR_OFFSET)
+                    ? "not measured" : ShooterPivot.NECTAR_OFFSET);
+            telemetry.addData("Positions from", pivot.isUsingHomedOffsets()
+                    ? "homed zero + offsets"
+                    : "measured absolutes - B/X ignore the offsets above");
             telemetry.update();
         }
     }

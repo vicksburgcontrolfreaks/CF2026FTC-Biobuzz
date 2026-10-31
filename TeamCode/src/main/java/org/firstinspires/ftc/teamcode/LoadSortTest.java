@@ -23,12 +23,10 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *
  * WHAT IT NEEDS IN THE CONFIG
  *   "indexer"       DcMotorEx, required
- *   "shooterPivot"  Servo, OPTIONAL
- *   "pivotHome"     DigitalChannel, OPTIONAL
- * Without the pivot it still classifies and reports what it WOULD command,
- * which is how you check the logic before anything moves. Both pivot devices
- * have to be present for the pivot half to run, because ShooterPivot needs the
- * beam break to construct even when homing is never attempted.
+ *   "shooterPivot"  Servo, OPTIONAL -- all the pivot half needs
+ *   "pivotHome"     DigitalChannel, OPTIONAL and unused here; nothing homes
+ * Without the pivot servo it still classifies and reports what it WOULD
+ * command, which is how you check the logic before anything moves.
  *
  * CONTROLS (gamepad1)
  *   A (hold)      feed a ball. Classification happens when you RELEASE.
@@ -50,13 +48,13 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *    about 0.2 A, the calibration has drifted -- re-run Indexer Load Test
  *    rather than nudging the threshold on a hunch.
  *
- * 3. THE PIVOT IS USING FALLBACK POSITIONS. The beam break has no power, so
- *    homing cannot run, so goToPollen/goToNectar use the absolute positions
- *    measured against real balls on 2026-10-30: pollen 0.539, nectar 0.21,
- *    inside a safe band of 0.166 to 0.679. That is working as designed, and
- *    "Pivot homed" will read false. Once the beam break is fixed and the real
- *    offsets are measured, this op mode needs no changes -- ShooterPivot
- *    switches to the homed path by itself.
+ * 3. THE PIVOT IS USING MEASURED ABSOLUTE POSITIONS, and that is the design,
+ *    not a degraded mode. A servo's setPosition is absolute, so no homing is
+ *    needed: goToPollen/goToNectar go to the positions measured against real
+ *    balls on 2026-10-30 -- pollen 0.539, nectar 0.21, inside a safe band of
+ *    0.166 to 0.679. "Pivot positions from" says which numbers are in play.
+ *    Re-measure with Pivot Jog Test after any work on the pivot linkage; the
+ *    reasoning is in ShooterPivot's class comment.
  *
  * WHAT THIS CANNOT DO
  * POLLEN_OR_EMPTY means exactly that. A pollen ball and an empty indexer both
@@ -88,15 +86,14 @@ public class LoadSortTest extends LinearOpMode {
 
         BallLoadClassifier classifier = new BallLoadClassifier(indexer, battery);
 
-        // Optional pivot. ShooterPivot needs both the servo and the beam break
-        // to construct, so it is all-or-nothing.
+        // Optional pivot: the servo is all it takes. The pivotHome beam break is
+        // passed along if the config happens to have one, but ShooterPivot
+        // tolerates null and never homes here either way.
         Servo pivotServo = hardwareMap.tryGet(Servo.class, "shooterPivot");
         DigitalChannel pivotBeam = hardwareMap.tryGet(DigitalChannel.class, "pivotHome");
-        ShooterPivot pivot = null;
-        if (pivotServo != null && pivotBeam != null) {
-            pivotBeam.setMode(DigitalChannel.Mode.INPUT);
-            pivot = new ShooterPivot(pivotServo, pivotBeam);
-        }
+        ShooterPivot pivot = pivotServo != null
+                ? new ShooterPivot(pivotServo, pivotBeam)
+                : null;
 
         telemetry.addLine("LOAD SORT TEST");
         telemetry.addLine("Hold A to feed a ball. Verdict lands when you release.");
@@ -165,10 +162,12 @@ public class LoadSortTest extends LinearOpMode {
             telemetry.addLine();
             if (pivot != null) {
                 telemetry.addData("Pivot position", pivot.getCommandedPosition());
-                telemetry.addData("Pivot homed", pivot.isHomed());
-                if (!pivot.isHomed()) {
-                    telemetry.addLine("  using fallback positions - beam break unpowered");
-                }
+                telemetry.addData("Pivot positions from",
+                        pivot.isUsingHomedOffsets()
+                                ? "homed zero + offsets"
+                                : "measured absolutes (pollen "
+                                        + ShooterPivot.POLLEN_POSITION + ", nectar "
+                                        + ShooterPivot.NECTAR_POSITION + ")");
             } else {
                 telemetry.addLine("Pivot not fitted - nothing moved");
             }

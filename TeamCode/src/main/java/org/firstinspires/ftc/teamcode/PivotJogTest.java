@@ -195,10 +195,10 @@ public class PivotJogTest extends LinearOpMode {
                     telemetry.addLine(String.format("  OPEN_POSITION = %.3f;", openEnd));
                 }
                 if (!Double.isNaN(pollenAt)) {
-                    telemetry.addLine(String.format("  FALLBACK_POLLEN_POSITION = %.3f;", pollenAt));
+                    telemetry.addLine(String.format("  POLLEN_POSITION = %.3f;", pollenAt));
                 }
                 if (!Double.isNaN(nectarAt)) {
-                    telemetry.addLine(String.format("  FALLBACK_NECTAR_POSITION = %.3f;", nectarAt));
+                    telemetry.addLine(String.format("  NECTAR_POSITION = %.3f;", nectarAt));
                 }
             }
             telemetry.update();

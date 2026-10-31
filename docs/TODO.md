@@ -47,22 +47,27 @@ confirmation of auto-aim **does not carry over**.
 - While there, capture the two numbers never collected: `Frame age` in ms, and
   how far `Bearing raw` jitters. Those would let `DEADBAND_DEG` come down from 5.0
 
-### 3. Measure the pollen / nectar pivot offsets
-**Why:** `ShooterPivot.POLLEN_OFFSET` and `NECTAR_OFFSET` are both `0.0`
-placeholders. Homing works and then parks the pivot at a gap that is almost
-certainly useless.
+### ~~3. Measure the pollen / nectar pivot offsets~~ — DROPPED 2026-10-31
+The pivot does not need homing at all, so there are no offsets to measure. A
+servo's `setPosition` is absolute, so the positions measured on 2026-10-30 are
+already everything the pivot needs. Full reasoning is in `ShooterPivot`'s class
+comment; the short version is that the 2026-10-01 → 2026-10-30 shift was
+**+0.059 pollen but +0.075 nectar**, and a homing sensor finds one reference
+point, which can only correct a constant offset. Re-homing would have left
+~0.016 of error on one grip — a third of nectar's entire 0.044 of clearance.
 
-Run **Shooter Pivot Home Test** and follow the steps in its header:
-1. Block the beam with a finger, confirm `Beam Broken` reads `true`. Flip
-   `BEAM_BROKEN_STATE` if not
-2. Home a few times, confirm `Zero Drift` stays under 0.005. If not, raise
-   `FINE_DWELL_MS` — the servo is not finishing its steps before the beam is read
-3. Jog onto a real pollen ball until it just fits, read `Offset From Zero`,
-   write it into `POLLEN_OFFSET`. Repeat with nectar
-4. Verify with B and X
+**The replacement procedure, after any work on the pivot servo, horn or
+linkage:** run **Pivot Jog Test**, re-measure both grips against real balls,
+paste the numbers into `ShooterPivot.POLLEN_POSITION` / `NECTAR_POSITION`. The
+op mode prints them in copy-paste form. That is this mechanism's calibration.
 
-Until step 2 passes, do not bother with step 3 — the offsets would be measured
-against an unreliable zero.
+Homing was kept, not deleted: the sensor is now optional (`new
+ShooterPivot(servo)`), `POLLEN_OFFSET`/`NECTAR_OFFSET` are `NaN` so a future
+powered sensor cannot silently send both grips to the same gap, and
+`isUsingHomedOffsets()` reports which numbers are live. Fit a beam break and
+measure the offsets and the path wakes up with no other changes. Worth
+revisiting only if the linkage starts slipping often enough that re-measuring
+by hand becomes the bottleneck.
 
 ---
 

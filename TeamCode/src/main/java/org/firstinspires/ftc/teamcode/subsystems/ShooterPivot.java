@@ -11,23 +11,56 @@ import com.qualcomm.robotcore.util.Range;
  * shooter can hold a pollen ball or a (larger) nectar ball.
  *
  * Driver Station config names this expects:
- *   "shooterPivot" - Servo, on a servo port
- *   "pivotHome"    - the IR beam break, on a digital port
+ *   "shooterPivot" - Servo, on a servo port. REQUIRED.
+ *   "pivotHome"    - the IR beam break, on a digital port. OPTIONAL -- see
+ *                    below. There is no such sensor on the robot right now.
  *
- * WHY A SERVO NEEDS "HOMING" AT ALL
- * Normally it does not. setPosition(0.48) is absolute -- the servo goes to the
- * same place every time, so there is nothing to recover. What is NOT stable is
- * the MAPPING from servo position to physical flywheel gap. Re-mount the servo,
- * pop the linkage off, let a horn slip one spline, and 0.48 is no longer the
- * pollen gap -- but the code still says 0.48 and the shots just quietly go bad.
+ * HOW IT KNOWS WHERE IT IS: IT JUST DOES
+ * setPosition(0.539) is absolute. A servo has a potentiometer on its output
+ * shaft and its own control loop, so that command means one shaft angle and it
+ * means the same angle every power cycle, forever. Unlike a motor -- which
+ * counts encoder ticks from wherever it happened to be sitting at INIT -- there
+ * is nothing to recover at startup. The measured positions below are all this
+ * class needs to work, and the normal path through it never homes.
  *
- * So this class does not measure where the servo is. It measures where the
- * MECHANISM is, by sweeping the servo until the IR beam trips and recording the
- * servo position that did it. That position becomes zero, and pollen/nectar are
- * stored as offsets FROM zero instead of as absolute positions. Re-home after a
- * repair and the offsets still land in the right physical place.
+ * WHY THERE IS HOMING CODE HERE ANYWAY
+ * Not to find the servo. To find the MECHANISM. What is not stable is the
+ * MAPPING from servo position to physical flywheel gap: re-mount the servo, pop
+ * the linkage off, let a horn slip one spline, and 0.539 is no longer the pollen
+ * gap -- but the code still says 0.539 and the shots just quietly go bad.
  *
- * TWO THINGS THAT WILL BITE YOU, and what this class does about them:
+ * home() sweeps the servo until an IR beam trips, and calls the position that
+ * did it zero. Pollen and nectar then live as offsets FROM zero rather than as
+ * absolute positions, so re-homing after a repair lands them in the right
+ * physical place with nobody re-measuring anything.
+ *
+ * WHY IT IS DORMANT, AND THE DATA THAT SAYS LEAVE IT THAT WAY  (2026-10-31)
+ * The mechanism really did move between 2026-10-01 and 2026-10-30, which is
+ * exactly the case homing exists for. But look at how much it moved:
+ *
+ *     pollen  0.539 - 0.48  = +0.059
+ *     nectar  0.21  - 0.135 = +0.075
+ *
+ * Those differ by 0.016, so the shift was NOT a constant offset. A single
+ * reference point -- which is all a homing sensor ever finds -- can only
+ * correct a constant offset, so re-homing would have left about 0.016 of error
+ * on one of the two grips. Nectar sits 0.044 from the widest the mechanism
+ * goes, so 0.016 is a third of its entire clearance. Not nothing.
+ *
+ * Measuring each grip against its real ball with Pivot Jog Test tests the thing
+ * that actually matters -- does the ball fit -- instead of testing a proxy and
+ * then trusting an assumption the data does not support. That is a few minutes
+ * of work after a repair, and it is the recommended procedure.
+ *
+ * So: no beam break is fitted, none is needed, and this code is kept rather
+ * than deleted because it costs nothing to keep and the decision may change
+ * (a mechanism that slips OFTEN would tip the other way, since auto-correcting
+ * at every INIT beats remembering to re-measure). If you do fit one, wire it,
+ * run ShooterPivotHomeTest, measure POLLEN_OFFSET and NECTAR_OFFSET, and this
+ * path comes alive with no other changes.
+ *
+ * TWO THINGS THAT WILL BITE YOU IF YOU EVER DO HOME, and what this class
+ * already does about them:
  *
  *   1. SERVO LAG. A servo does not teleport. Command 0.30, read the beam a
  *      millisecond later, and you are reading the beam at 0.28 because the servo
@@ -41,8 +74,10 @@ import com.qualcomm.robotcore.util.Range;
  *      always making the final approach in the same direction: creep up on the
  *      beam, back off, then creep up on it again the same way.
  *
- * Call home() once before the pivot is used. Until then this class falls back to
- * the bench-measured absolute positions so the robot still shoots.
+ * Homing is optional in both senses: construct without a beam break and home()
+ * simply reports why it cannot run, and even with one fitted the pivot works
+ * off the measured absolute positions until home() succeeds AND the offsets
+ * have been measured.
  */
 @Configurable
 public class ShooterPivot {
@@ -70,13 +105,22 @@ public class ShooterPivot {
     public static double HOME_TIMEOUT_SEC = 6.0;
 
     // ---- Where the gaps are, relative to the homed zero ---------------------
-    // TODO(on-robot): BOTH OF THESE ARE PLACEHOLDERS. Run ShooterPivotHomeTest,
-    // home the pivot, then jog the servo until a pollen ball just fits and read
-    // the "Offset From Zero" number off the telemetry. Repeat for nectar. Put
-    // those two numbers here. Until then the pivot homes fine and then sits at
-    // zero, which is almost certainly not a useful flywheel gap.
-    public static double POLLEN_OFFSET = 0.0;
-    public static double NECTAR_OFFSET = 0.0;
+    // UNMEASURED, and only used if a beam break is ever fitted and home()
+    // succeeds. To measure them: wire the sensor, run ShooterPivotHomeTest, home
+    // the pivot, jog until a pollen ball just fits, and read "Offset From Zero"
+    // off the telemetry. Repeat for nectar.
+    //
+    // NaN, NOT 0.0, and that is deliberate. 0.0 is a perfectly legal offset, so
+    // a 0.0 here is indistinguishable from "nobody has measured this yet" -- and
+    // the failure it caused would be silent: the day somebody powers the sensor,
+    // homing starts succeeding, both grips go to zero + 0.0, pollen and nectar
+    // end up at the SAME gap, and the measured numbers below are still sitting
+    // right there in the file but no longer reachable. Nobody touched the pivot
+    // code, so nobody suspects it. NaN cannot be mistaken for a measurement, so
+    // goToPollen/goToNectar keep using the measured positions until these are
+    // filled in. Same trick as OPEN_POSITION below.
+    public static double POLLEN_OFFSET = Double.NaN;
+    public static double NECTAR_OFFSET = Double.NaN;
 
     // ---- Safe travel band --------------------------------------------------
     // MEASURED ON THE ROBOT 2026-10-30 with Pivot Jog Test: jogged until the
@@ -84,6 +128,14 @@ public class ShooterPivot {
     // commands the pivot is clipped to this band, which is what makes it
     // impossible to drive into a hard stop -- the failure that hunted this servo
     // twice on 2026-10-30, when the clip was still the SDK range of 0.0-1.0.
+    //
+    // CONFIRMED 2026-10-31: both ends are the MECHANISM's hard stops, not the
+    // servo's own travel limits -- which is also why they sit well inside the
+    // SDK's 0.0-1.0. That matters for two reasons. The mechanism has physical
+    // references at both ends, so Pivot Jog Test can always find them again,
+    // which is what makes re-measuring a reliable substitute for a homing
+    // sensor. And these two numbers move WITH the linkage: re-seat it and the
+    // band shifts along with the grips, so re-measure all four together.
     //
     // LOWER IS A WIDER GAP. Nectar is the bigger ball and sits at the low end.
     public static double MIN_SAFE_POSITION = 0.166;   // widest
@@ -95,18 +147,23 @@ public class ShooterPivot {
     // set back to NaN.
     public static double OPEN_POSITION = 0.2;
 
-    // Used only if homing fails, so a failed home degrades to "the old numbers"
-    // instead of "the shooter does not work". Which is the normal case right now:
-    // the pivotHome beam break has no power, so homing cannot run at all and
-    // these are what goToPollen/goToNectar actually use.
+    // THE TWO NUMBERS THAT RUN THE SHOOTER. goToPollen()/goToNectar() use these
+    // unless a beam break is fitted, home() succeeded, and the offsets above
+    // have been measured -- none of which is true today, and none of which has
+    // to become true. These were called FALLBACK_* until 2026-10-31, which made
+    // the primary path sound like a backup plan.
     //
-    // RE-MEASURED ON THE ROBOT 2026-10-30 with Pivot Jog Test, against real
-    // balls. The 2026-10-01 bench values were pollen 0.48 and nectar 0.135 --
-    // both moved up by roughly a constant 0.06-0.08, which is the signature of
-    // the linkage or servo horn having been re-seated rather than anything
-    // changing about the balls.
-    public static double FALLBACK_POLLEN_POSITION = 0.539;
-    public static double FALLBACK_NECTAR_POSITION = 0.21;
+    // MEASURED ON THE ROBOT 2026-10-30 with Pivot Jog Test, against real balls.
+    // RE-MEASURE THEM THE SAME WAY after any work on the servo, the horn or the
+    // linkage -- that is this mechanism's calibration procedure, and it replaces
+    // what a homing sensor would have done automatically.
+    //
+    // The 2026-10-01 bench values were pollen 0.48 and nectar 0.135. Both moved
+    // up -- by +0.059 and +0.075, which is a re-seated linkage or horn rather
+    // than anything changing about the balls. That the two shifts DIFFER is the
+    // whole argument for re-measuring instead of homing; see the class comment.
+    public static double POLLEN_POSITION = 0.539;
+    public static double NECTAR_POSITION = 0.21;
 
     private final Servo pivot;
     private final DigitalChannel beam;
@@ -116,15 +173,39 @@ public class ShooterPivot {
     private double commandedPosition = 0.0;
     private String homeFailure = null;
 
+    /**
+     * The normal way to build one: just the servo, no homing sensor. This is
+     * the whole robot as it stands -- the pivot runs off POLLEN_POSITION and
+     * NECTAR_POSITION and never needs a digital port.
+     */
+    public ShooterPivot(Servo pivot) {
+        this(pivot, null);
+    }
+
+    /**
+     * With a homing sensor. beam may be null, which is the same as using the
+     * one-argument constructor -- so an op mode can pass whatever
+     * hardwareMap.tryGet() handed back without checking it first.
+     */
     public ShooterPivot(Servo pivot, DigitalChannel beam) {
         this.pivot = pivot;
         this.beam = beam;
-        this.beam.setMode(DigitalChannel.Mode.INPUT);
+        if (beam != null) {
+            beam.setMode(DigitalChannel.Mode.INPUT);
+        }
     }
 
-    /** True when something is blocking the IR beam. */
+    /** True if a pivotHome beam break was passed in, so home() can run. */
+    public boolean hasBeamBreak() {
+        return beam != null;
+    }
+
+    /**
+     * True when something is blocking the IR beam. Always false when no beam
+     * break is fitted, so gate on hasBeamBreak() before believing it.
+     */
     public boolean isBeamBroken() {
-        return isBeamBroken(beam);
+        return beam != null && isBeamBroken(beam);
     }
 
     /**
@@ -166,6 +247,14 @@ public class ShooterPivot {
     public boolean home() {
         homed = false;
         homeFailure = null;
+
+        if (beam == null) {
+            homeFailure = "no pivotHome beam break fitted - the pivot is running "
+                    + "on the positions measured with Pivot Jog Test, which is "
+                    + "the normal case and not a problem";
+            return false;
+        }
+
         ElapsedTime timer = new ElapsedTime();
 
         double direction = Math.signum(SWEEP_TO - SWEEP_FROM);
@@ -246,22 +335,40 @@ public class ShooterPivot {
         return null;
     }
 
-    /** Sets pollen spacing, measured out from the homed zero. */
+    /**
+     * Sets pollen spacing. Uses the measured absolute position unless homing
+     * has actually happened AND POLLEN_OFFSET has actually been measured.
+     */
     public void goToPollen() {
-        if (homed) {
+        if (isUsingHomedOffsets()) {
             setOffsetFromZero(POLLEN_OFFSET);
         } else {
-            setPosition(FALLBACK_POLLEN_POSITION);
+            setPosition(POLLEN_POSITION);
         }
     }
 
-    /** Sets nectar spacing, measured out from the homed zero. */
+    /**
+     * Sets nectar spacing. Uses the measured absolute position unless homing
+     * has actually happened AND NECTAR_OFFSET has actually been measured.
+     */
     public void goToNectar() {
-        if (homed) {
+        if (isUsingHomedOffsets()) {
             setOffsetFromZero(NECTAR_OFFSET);
         } else {
-            setPosition(FALLBACK_NECTAR_POSITION);
+            setPosition(NECTAR_POSITION);
         }
+    }
+
+    /**
+     * True when the pivot is driving off a homed zero plus offsets rather than
+     * off the measured absolute positions. Needs BOTH halves: a successful home
+     * is useless without measured offsets, and measured offsets are meaningless
+     * without a zero to measure them from. Telemetry should show this rather
+     * than isHomed(), because isHomed() alone does not say which numbers are in
+     * use.
+     */
+    public boolean isUsingHomedOffsets() {
+        return homed && !Double.isNaN(POLLEN_OFFSET) && !Double.isNaN(NECTAR_OFFSET);
     }
 
     /** Moves to zero + offset. Only meaningful once homed. */
