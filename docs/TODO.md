@@ -82,10 +82,15 @@ is all a standard servo ever needed. **Lower is a wider gap.**
 | | position |
 |---|---|
 | widest (`MIN_SAFE_POSITION`) | 0.166 |
-| open, for ball extraction (`OPEN_POSITION`) | 0.2 |
+| open, as jogged | 0.2 |
 | nectar grip | 0.21 |
 | pollen grip | 0.539 |
 | tightest (`MAX_SAFE_POSITION`) | 0.679 |
+
+`OPEN_POSITION` was lowered from the jogged 0.2 to **0.17** on 2026-10-31, when
+open started being used for ball ENTRY and not just extraction — 0.2 left only
+0.01 of clearance over the nectar grip. It is the one chosen rather than
+measured number in `ShooterPivot`.
 
 Everything that commands the pivot is now clipped to the band, which is what
 makes driving it into a hard stop impossible. It was clipped to the SDK range

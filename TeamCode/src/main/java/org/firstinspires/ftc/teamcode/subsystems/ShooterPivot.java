@@ -141,11 +141,24 @@ public class ShooterPivot {
     public static double MIN_SAFE_POSITION = 0.166;   // widest
     public static double MAX_SAFE_POSITION = 0.679;   // tightest
 
-    // The wide-open position, for pulling a stuck ball out without anyone
-    // forcing the servo by hand. MEASURED ON THE ROBOT 2026-10-30 with Pivot
-    // Jog Test. goToOpen() returns false instead of guessing if this is ever
-    // set back to NaN.
-    public static double OPEN_POSITION = 0.2;
+    // The wide-open position. Two jobs: pulling a stuck ball out without anyone
+    // forcing the servo by hand, and standing open while an unclassified ball is
+    // on its way in, so a nectar can never meet a pollen-width gap.
+    //
+    // CHOSEN, NOT MEASURED -- unlike every other number in this file. Pivot Jog
+    // Test measured 0.2 on 2026-10-30, which turned out to sit only 0.01 wider
+    // than the nectar grip at 0.21: almost no clearance for getting a nectar
+    // ball IN. Lowered to 0.17 on 2026-10-31 to buy that back, which is 0.04 of
+    // clearance instead of 0.01.
+    //
+    // It is 0.004 off MIN_SAFE_POSITION, which sounds alarming and is not: 0.166
+    // is itself a backed-off number, recorded after the servo strained and then
+    // being eased away from the stop. So 0.17 is inside an already-safe limit,
+    // not against the stop. Do not raise MIN_SAFE_POSITION without revisiting
+    // this one.
+    //
+    // goToOpen() returns false instead of guessing if this is ever set to NaN.
+    public static double OPEN_POSITION = 0.17;
 
     // THE TWO NUMBERS THAT RUN THE SHOOTER. goToPollen()/goToNectar() use these
     // unless a beam break is fitted, home() succeeded, and the offsets above
