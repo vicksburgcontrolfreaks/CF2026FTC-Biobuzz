@@ -37,13 +37,18 @@ import com.qualcomm.robotcore.util.Range;
  * Nothing in software can prevent that -- it cannot know where the pivot is, so
  * it cannot creep there from the current position.
  *
- * What it CAN do is land where the pivot already is. START_POSITION defaults to
- * 0.2, the open end measured on the robot 2026-10-30. Park the pivot fully open
- * before starting and pressing Y commands the position it is already in, so
- * nothing moves at all and the jump problem disappears.
+ * What it CAN do is aim for the position most likely to still be legal.
+ * START_POSITION defaults to 0.42, the MIDDLE of the 0.166-0.679 band measured
+ * 2026-10-30. It used to default to 0.2, the old open end -- which was fine
+ * until the robot was rebuilt. An end of travel is the first number a
+ * reassembly invalidates: re-seat the linkage slightly differently and 0.2 can
+ * land past a hard stop, and Y presses the servo into it. On the rebuilt robot
+ * 2026-11-02, Y at 0.2 set the pivot moving and it did not settle. Mid-band has
+ * about 0.25 of margin either way, more
+ * than any re-seating is likely to shift it.
  *
- * Parked somewhere else, Y still sends it to 0.2, which is known to be a legal
- * position. Change it in Panels if you want a different spot.
+ * Park the pivot near the middle of its travel before starting and the jump is
+ * small. Change START_POSITION in Panels if you want a different spot.
  *
  * Be ready on the stop button the first time, and listen. A servo pressed
  * against a stop buzzes.
@@ -86,10 +91,10 @@ import com.qualcomm.robotcore.util.Range;
 public class PivotJogTest extends LinearOpMode {
 
     /**
-     * Where the pivot is commanded when you press Y. Defaults to the open end
-     * measured 2026-10-30, so parking the pivot fully open makes Y a no-op.
+     * Where the pivot is commanded when you press Y. Mid-band, not an end, so it
+     * survives a rebuild -- see "THE ONE MOVE THAT CANNOT BE MADE SAFE" above.
      */
-    public static double START_POSITION = 0.2;
+    public static double START_POSITION = 0.42;
 
     /** One bumper press. */
     public static double FINE_STEP = 0.002;
@@ -145,7 +150,7 @@ public class PivotJogTest extends LinearOpMode {
         telemetry.addData("Y will command", START_POSITION);
         telemetry.addLine();
         telemetry.addLine("The servo cannot be read, so that first move cannot be");
-        telemetry.addLine("smoothed - it jumps. Park the pivot OPEN and it will not move.");
+        telemetry.addLine("smoothed - it jumps. Park the pivot mid-travel to keep it small.");
         telemetry.addLine("If it BUZZES, stop at once and change START_POSITION.");
         telemetry.addLine();
         telemetry.addLine("After that every move is rate limited and slow.");
