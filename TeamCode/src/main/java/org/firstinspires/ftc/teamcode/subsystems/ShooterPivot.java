@@ -137,9 +137,13 @@ public class ShooterPivot {
     // sensor. And these two numbers move WITH the linkage: re-seat it and the
     // band shifts along with the grips, so re-measure all four together.
     //
+    // RE-MEASURED 2026-11-02 after the robot was rebuilt. The 2026-10-30 band was
+    // 0.166-0.679; it moved up by +0.104 at the wide end and +0.065 at the tight
+    // end, so the linkage geometry changed, not just its offset.
+    //
     // LOWER IS A WIDER GAP. Nectar is the bigger ball and sits at the low end.
-    public static double MIN_SAFE_POSITION = 0.166;   // widest
-    public static double MAX_SAFE_POSITION = 0.679;   // tightest
+    public static double MIN_SAFE_POSITION = 0.27;    // widest
+    public static double MAX_SAFE_POSITION = 0.744;   // tightest
 
     // The wide-open position. Two jobs: pulling a stuck ball out without anyone
     // forcing the servo by hand, and standing open while an unclassified ball is
@@ -151,14 +155,21 @@ public class ShooterPivot {
     // ball IN. Lowered to 0.17 on 2026-10-31 to buy that back, which is 0.04 of
     // clearance instead of 0.01.
     //
-    // It is 0.004 off MIN_SAFE_POSITION, which sounds alarming and is not: 0.166
-    // is itself a backed-off number, recorded after the servo strained and then
-    // being eased away from the stop. So 0.17 is inside an already-safe limit,
-    // not against the stop. Do not raise MIN_SAFE_POSITION without revisiting
-    // this one.
+    // AFTER THE 2026-11-02 REBUILD IT IS 0.272, and the clearance is worse: the
+    // jogged open was 0.285, 0.002 from the nectar grip at 0.287, and even the
+    // widest legal position (0.27) is only 0.017 from it. 0.272 takes 0.015 of
+    // that -- the most software can get. The real fix is mechanical: re-seat the
+    // linkage so the band shifts toward wider. There is 0.074 of unused travel
+    // above the pollen grip to trade for it.
+    //
+    // It is 0.002 off MIN_SAFE_POSITION, which sounds alarming and is not:
+    // MIN_SAFE_POSITION is itself a backed-off number, recorded after the servo
+    // strained and then being eased away from the stop. So this is inside an
+    // already-safe limit, not against the stop. Do not raise MIN_SAFE_POSITION
+    // without revisiting this one.
     //
     // goToOpen() returns false instead of guessing if this is ever set to NaN.
-    public static double OPEN_POSITION = 0.17;
+    public static double OPEN_POSITION = 0.272;
 
     // THE TWO NUMBERS THAT RUN THE SHOOTER. goToPollen()/goToNectar() use these
     // unless a beam break is fitted, home() succeeded, and the offsets above
@@ -175,8 +186,11 @@ public class ShooterPivot {
     // up -- by +0.059 and +0.075, which is a re-seated linkage or horn rather
     // than anything changing about the balls. That the two shifts DIFFER is the
     // whole argument for re-measuring instead of homing; see the class comment.
-    public static double POLLEN_POSITION = 0.539;
-    public static double NECTAR_POSITION = 0.21;
+    //
+    // RE-MEASURED 2026-11-02 after the rebuild: pollen 0.539 -> 0.67 (+0.131),
+    // nectar 0.21 -> 0.287 (+0.077). Different shifts again.
+    public static double POLLEN_POSITION = 0.67;
+    public static double NECTAR_POSITION = 0.287;
 
     private final Servo pivot;
     private final DigitalChannel beam;

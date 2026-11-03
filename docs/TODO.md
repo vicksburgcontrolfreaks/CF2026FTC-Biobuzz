@@ -109,9 +109,42 @@ would be the ramp or the linkage.
 
 ---
 
-## Confirmed on the robot 2026-10-30
+## Confirmed on the robot 2026-11-02 (after the rebuild)
+
+### Shooter pivot travel, re-measured
+
+Reassembly checklist step 12, with **Pivot Jog Test**, against real balls.
+These are the numbers in `ShooterPivot` now. **Lower is a wider gap.**
+
+| | position | was (2026-10-30) | shift |
+|---|---|---|---|
+| widest (`MIN_SAFE_POSITION`) | 0.27 | 0.166 | +0.104 |
+| open, as jogged | 0.285 | 0.2 | +0.085 |
+| `OPEN_POSITION` (chosen) | **0.272** | 0.17 | +0.102 |
+| nectar grip | 0.287 | 0.21 | +0.077 |
+| pollen grip | 0.67 | 0.539 | +0.131 |
+| tightest (`MAX_SAFE_POSITION`) | 0.744 | 0.679 | +0.065 |
+
+The shifts are **not** constant (+0.065 to +0.131), so the linkage geometry
+changed, not just its seating. Re-measuring rather than homing was the right
+call again.
+
+**Open problem: nectar entry clearance.** The jogged open (0.285) was only 0.002
+wider than the nectar grip, so `OPEN_POSITION` was set to 0.272, just inside the
+widest end. That buys 0.015 of clearance, the most the band allows. The old
+linkage had 0.04. If nectar balls catch on the way in during Load Sort Test,
+the fix is mechanical: re-seat the linkage so the band shifts toward wider.
+There is 0.074 of unused travel above the pollen grip to trade for it.
+
+Pivot Jog Test's `START_POSITION` (what Y commands) was also moved from 0.2 to
+0.42, mid-band. At 0.2 on the rebuilt robot, Y set the pivot moving and it did
+not settle.
+
+## Confirmed on the robot 2026-10-30 (old linkage, superseded)
 
 ### Shooter pivot travel, measured with no sensor
+
+> **Superseded by the 2026-11-02 numbers above.** Kept for comparison only.
 
 Measured with **Pivot Jog Test** against real balls. The `pivotHome` beam break
 has no power, so homing cannot run -- these are absolute servo positions, which

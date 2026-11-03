@@ -62,8 +62,9 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  * 3. THE PIVOT IS USING MEASURED ABSOLUTE POSITIONS, and that is the design,
  *    not a degraded mode. A servo's setPosition is absolute, so no homing is
  *    needed: goToPollen/goToNectar go to the positions measured against real
- *    balls on 2026-10-30 -- pollen 0.539, nectar 0.21, inside a safe band of
- *    0.166 to 0.679. "Pivot positions from" says which numbers are in play.
+ *    balls after the 2026-11-02 rebuild -- pollen 0.67, nectar 0.287, inside a
+ *    safe band of 0.27 to 0.744. "Pivot positions from" says which numbers are
+ *    in play.
  *    Re-measure with Pivot Jog Test after any work on the pivot linkage; the
  *    reasoning is in ShooterPivot's class comment.
  *
@@ -207,15 +208,19 @@ public class LoadSortTest extends LinearOpMode {
      *
      * A nectar ball cannot fit a gap set for pollen. Waiting for the verdict to
      * set the gap means a nectar arriving while the pivot still sits at the last
-     * ball's pollen spacing (0.539) finds it 0.329 of travel too tight, and
+     * ball's pollen spacing (0.67) finds it 0.383 of travel too tight, and
      * jams. Opening first makes the gap wrong in the SAFE direction -- too wide
      * never jams, it just does not grip, and the verdict closes it in time.
      *
-     * It also puts the timing margin where it is needed. OPEN_POSITION (0.17) is
-     * only 0.04 from the nectar grip (0.21), so nectar needs almost no servo
+     * It also puts the timing margin where it is needed. OPEN_POSITION (0.272)
+     * is only 0.015 from the nectar grip (0.287), so nectar needs almost no servo
      * travel after it is recognized, and the whole ~0.6-1.2s of ramp travel is
-     * available for the longer pollen move (0.17 -> 0.539) -- the case that can
+     * available for the longer pollen move (0.272 -> 0.67) -- the case that can
      * afford to be late, since a pollen ball fits any gap.
+     *
+     * That 0.015 is also the weak spot: it is all the entry clearance a nectar
+     * ball gets on the rebuilt linkage (it was 0.04 before). If nectar balls
+     * catch on the way in, the fix is re-seating the linkage, not this code.
      */
     private void openForUnknownBall(ShooterPivot pivot) {
         nectarLatched = false;

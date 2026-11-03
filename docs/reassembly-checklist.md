@@ -24,6 +24,10 @@ Related:
 
 ## READ FIRST: do not command the pivot yet
 
+> **Resolved 2026-11-02.** Step 12 is done and the new band (0.27-0.744) is in
+> `ShooterPivot`. Pivot op modes are safe to run again. What follows is kept
+> for the next rebuild.
+
 `ShooterPivot.MIN_SAFE_POSITION` (0.166) and `MAX_SAFE_POSITION` (0.679) were
 measured against the **old** linkage seating. Every pivot command is clipped to
 that band, and that clip is the only thing standing between the servo and a hard
@@ -125,6 +129,15 @@ other.
 ## Phase 3 — re-establish limits
 
 **12. `Pivot Jog Test`** ← the gate for everything pivot-related.
+
+> **DONE 2026-11-02.** Band 0.27-0.744, open 0.272 (chosen), nectar 0.287,
+> pollen 0.67. The shifts were not constant, so the geometry changed. Nectar
+> entry clearance dropped from 0.04 to 0.015; watch for it in step 17. Full
+> table in [TODO.md](TODO.md).
+>
+> Pivot Jog Test now starts at 0.42 (mid-band) when you press Y. The old 0.2
+> start was an end of travel, and on the rebuilt robot the pivot did not settle
+> there.
 
 Re-measure and write in all five constants. The op mode prints them in
 copy-paste form:
