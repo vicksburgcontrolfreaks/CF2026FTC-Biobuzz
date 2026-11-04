@@ -1,7 +1,7 @@
 # Flywheel RPM gap: right reads about half of left
 
-**Status:** open. **Right wheel is fine; its reading is low. Cable and port ruled out —**
-**the right motor's encoder is the prime suspect.** Replace the motor (2026-11-04).
+**Status:** diagnosed. **The right shooter motor's encoder is bad (cross-swap confirmed).**
+Replace the motor, then retest (2026-11-04).
 
 The **low** side is **`shooterRight`, Control Hub motor port 2.** The first write-up
 had the sides backwards.
@@ -74,6 +74,14 @@ changed the ratio.
 the right motor's encoder into EH port 2 (the low reading should follow it). Then
 replace the right shooter motor (same HD Hex + 3:1). Retest: both ~1300 at full
 trigger in POWER mode.
+
+**Cross-swap (2026-11-04): CONFIRMED.** With the encoder cables swapped between
+sides, the low reading moved to the other label: it follows the right motor.
+**The right shooter motor's built-in encoder is bad.** Cable, port, and code are
+all fine. Cables were to be returned to normal (L → EH2, R → CH2).
+
+**Fix:** replace the right shooter motor (HD Hex, same 3:1 cartridge). Retest:
+both ~1300 at full trigger, within ~5%. Then do reassembly-checklist step 15.
 
 **Until then: no VELOCITY mode or RPM targets on the shooter.** The right PIDF
 sees a false low reading and drives that wheel to full power, so the wheels
