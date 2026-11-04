@@ -1,64 +1,59 @@
-# Flywheel RPM gap: left reads ~400, right ~1200
+# Flywheel RPM gap: right reads about half of left
 
-**Status:** open. Cause narrowed to the left encoder signal (2026-11-04); cable checks next.
+**Status:** open. We still don't know if the right wheel is really slower or only
+*reads* slower. The slow-motion video test (below) decides it.
 
-## What we saw (2026-11-02, after the rebuild)
+The **low** side is **`shooterRight`, Control Hub motor port 2.** The first write-up
+had the sides backwards.
 
-In `Shooter Flywheel Test`, `Actual R RPM` was about **1200** and `Actual L RPM`
-about **400**. That's 3x apart. We didn't write down whether it was in POWER or
-VELOCITY mode. Note that next time.
+## What we saw
 
-## Test results (2026-11-04, POWER mode, full trigger)
+**2026-11-02 (after the rebuild):** about 1200 vs 400 (low side about 1/3 of
+high). Mode unknown, possibly VELOCITY, which would change the gap. Always note
+the mode.
 
-- Hand-spin: both feel about the same. Hand-spun RPM was too low and short to read.
-- Both wheels **look the same speed**.
-- Right ~1300 RPM, left ~600-650. The ratio is now about **1/2**, not the 1/3 from 11/02.
-- Amps L ~2.6, R ~2.2. Close.
+**2026-11-04 (POWER mode):**
+- Left ~1300 RPM, right ~600-650 at full trigger. Low side about **1/2** of high.
+- The **percentage gap stays the same at every trigger position.**
+- Amps L ~2.6, R ~2.2 at full.
+- Both wheels feel the same spun by hand. Hand-spun RPM was too short to read.
+- Both wheels "look the same speed," but 10 vs 22 rev/s are both a blur, so
+  this doesn't prove anything.
 
-**Verdict: B, the left reading is wrong.** Equal speed and equal amps rule out
-drag. A ratio that changes from day to day rules out any fixed setting (gear
-ratio, ticks/rev). The encoder is dropping a varying number of counts, which
-points to a marginal connection or a bad encoder.
+## What that rules out
 
-Next: (1) 25% trigger. Do L/R match at low speed and split at high? Is left
-jumpy? (2) Power off, reseat the left encoder cable at both ends (motor, EH
-port 2), and inspect it for pinches near the pivot. (3) Swap in a spare cable.
-Still bad → the encoder or EH port 2 is the problem; involve a mentor.
+- **Intermittent dropped counts (a loose cable)** usually gets worse with speed.
+  A gap that's a constant percentage acts like a fixed **multiplier**, so this is less likely.
+- **Hub-to-hub PIDF differences:** POWER mode is open loop, and a ~2x gap is far
+  too big anyway.
+- **The `SHOOTER_GEAR_RATIO` setting:** both sides use the same 3.0, and the
+  encoder sits on the motor, before the gearbox, so this setting can't skew one side.
 
-## Why it isn't the hubs, or a gear ratio
+## Still possible
 
-- Each hub (EH2 left, CH2 right) runs its own velocity PIDF, which can leave a
-  *small* gap. A 3x gap is too big to come from that.
-- Both sides use the same `RobotHardware.SHOOTER_GEAR_RATIO` (3.0). The encoder
-  is on the **motor**, before the gearbox. So a mismatched cartridge would make
-  the left *wheel* slow while both *readings* matched. It can't make the left
-  reading 3x low. (Check the cartridges anyway; it takes ten seconds.)
+- **Real:** the right motor really spins about half as fast (weak or damaged
+  motor, binding in the right gearbox cartridge, or a different motor type or
+  cartridge put in during the rebuild).
+- **Reading:** the right wheel spins at full speed, but its encoder (or CH port 2)
+  reports a consistently scaled-down count.
 
-So it's one of these two:
+## Next test: slow-motion video (decides real vs. reading)
 
-- **A. The left motor really is slower.** Something is rubbing or jammed.
-  The pivot was just rebuilt, and it sets the gap between the flywheels, so
-  look there first.
-- **B. The left reading is wrong.** The left encoder cable (EH motor port 2)
-  is loose, damaged, or in the wrong port, or the encoder itself is bad.
+1. Robot off. Put bright tape on the edge of each flywheel.
+2. Film each wheel in slow motion (240 fps if possible) at full trigger, POWER mode.
+   Keep hands and the phone clear.
+3. Count frames for one full turn. At 240 fps: 1300 RPM is about **11 frames/turn**,
+   600 RPM about **24**.
 
-## Test plan (Shooter Flywheel Test, POWER mode, no code changes)
-
-1. **Motors off (don't press A): spin each wheel by hand**, about the same speed.
-   - Left feels stiffer or stops sooner → **A**.
-   - Left RPM reads 0, jumps around, or reads much lower than right → **B**.
-2. **Motors on: press A, hold the trigger about halfway.** Do both wheels look and
-   sound the same speed? Left visibly slower → **A**.
-3. **Compare `Amps L` and `Amps R`** at that same trigger position.
-   - Left amps much higher → **A**: the motor is fighting something.
-   - Amps about equal → **B**: the motor is fine and the reading is wrong.
-
-Record: mode, trigger position, L/R RPM, L/R amps, and how the hand-spin felt.
-
-Keep fingers clear whenever the shooter is ON. Do the hand-spin only with it off.
+- **Frames about equal** → reading problem. Check or swap the right encoder cable.
+  Then swap encoder ports between sides to see if the low reading follows the
+  motor (the encoder is bad) or stays with the port (CH port 2 is bad).
+- **Right takes about 2x the frames** → the right wheel really is slow. Check the
+  right cartridge ratio and motor type against the left, and look for gearbox
+  binding. A motor swap may be needed (involve a mentor).
 
 ## Related
 
-- `docs/reassembly-checklist.md` step 11 (wheels spin inward) and step 15
-  (top speed has never been measured; VELOCITY mode can saturate and *look*
-  broken). Step 15 can't explain a left/right gap, but do it once this is fixed.
+- `docs/reassembly-checklist.md` step 11 (wheels spin inward) and step 15 (top
+  speed never measured; VELOCITY mode can saturate and look broken). Do step 15
+  after this is fixed.
