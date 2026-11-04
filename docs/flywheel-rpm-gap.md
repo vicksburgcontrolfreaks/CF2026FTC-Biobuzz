@@ -60,6 +60,11 @@ not a slow wheel.** The constant-percentage scale-down happens between the right
 motor's encoder and CH port 2. The code treats both sides the same and the left
 reads correctly, so it's hardware.
 
+**Reseat result (2026-11-04):** after reseating the right encoder cable, right
+dropped back to about 1/3 of left (left still ~1300). So the scale factor changes
+with how the cable sits. That points to the cable or a connector, not a fixed
+fault in the encoder. Trying a new cable next.
+
 ## Isolating the bad part (robot OFF before touching cables)
 
 1. Reseat and inspect the right encoder cable at both ends. Retest.
