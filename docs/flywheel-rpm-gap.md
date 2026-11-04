@@ -1,7 +1,8 @@
 # Flywheel RPM gap: right reads about half of left
 
-**Status:** open. We still don't know if the right wheel is really slower or only
-*reads* slower. The slow-motion video test (below) decides it.
+**Status:** open. **The right wheel spins at full speed. Only its reading is low**
+(slow-motion video, 2026-11-04). Next: find whether the cable, the right motor's
+encoder, or CH port 2 is at fault (see "Isolating the bad part").
 
 The **low** side is **`shooterRight`, Control Hub motor port 2.** The first write-up
 had the sides backwards.
@@ -51,6 +52,25 @@ the mode.
 - **Right takes about 2x the frames** → the right wheel really is slow. Check the
   right cartridge ratio and motor type against the left, and look for gearbox
   binding. A motor swap may be needed (involve a mentor).
+
+## Slow-motion result (2026-11-04)
+
+Both wheels took about the same number of frames per turn. **Reading problem,
+not a slow wheel.** The constant-percentage scale-down happens between the right
+motor's encoder and CH port 2. The code treats both sides the same and the left
+reads correctly, so it's hardware.
+
+## Isolating the bad part (robot OFF before touching cables)
+
+1. Reseat and inspect the right encoder cable at both ends. Retest.
+2. Swap in a spare encoder cable. Fixed → the cable was bad.
+3. Cross-swap encoder cables only: right motor's encoder → EH port 2, left's →
+   CH port 2.
+   - Low reading moves to "Actual L RPM" → the right motor's encoder is bad
+     (replace the motor; involve a mentor).
+   - Low reading stays on "Actual R RPM" → CH port 2 is bad. Move shooterRight
+     to another CH port and update the config + `RobotHardware` comment.
+   - **Put the cables back afterwards.**
 
 ## Related
 
