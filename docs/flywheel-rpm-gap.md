@@ -1,8 +1,7 @@
 # Flywheel RPM gap: right reads about half of left
 
-**Status:** open. **The right wheel spins at full speed. Only its reading is low**
-(slow-motion video, 2026-11-04). Next: find whether the cable, the right motor's
-encoder, or CH port 2 is at fault (see "Isolating the bad part").
+**Status:** open. **Right wheel is fine; its reading is low. Cable and port ruled out —**
+**the right motor's encoder is the prime suspect.** Replace the motor (2026-11-04).
 
 The **low** side is **`shooterRight`, Control Hub motor port 2.** The first write-up
 had the sides backwards.
@@ -64,6 +63,21 @@ reads correctly, so it's hardware.
 dropped back to about 1/3 of left (left still ~1300). So the scale factor changes
 with how the cable sits. That points to the cable or a connector, not a fixed
 fault in the encoder. Trying a new cable next.
+
+**New cable (2026-11-04):** same low reading. **Different port:** same low
+reading. (TODO: confirm that power + encoder both moved and the config was updated.)
+Cable and CH port 2 are ruled out. **Prime suspect: the right motor's built-in
+encoder** (its jack or board). That also explains why reseating at the motor end
+changed the ratio.
+
+**Next:** inspect the right motor's encoder jack. Optionally prove it by putting
+the right motor's encoder into EH port 2 (the low reading should follow it). Then
+replace the right shooter motor (same HD Hex + 3:1). Retest: both ~1300 at full
+trigger in POWER mode.
+
+**Until then: no VELOCITY mode or RPM targets on the shooter.** The right PIDF
+sees a false low reading and drives that wheel to full power, so the wheels
+mismatch.
 
 ## Isolating the bad part (robot OFF before touching cables)
 
