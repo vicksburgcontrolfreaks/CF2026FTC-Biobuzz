@@ -1,12 +1,29 @@
 # Flywheel RPM gap: left reads ~400, right ~1200
 
-**Status:** open. Diagnosis planned, not yet run (robot unavailable 2026-11-03).
+**Status:** open. Cause narrowed to the left encoder signal (2026-11-04); cable checks next.
 
 ## What we saw (2026-11-02, after the rebuild)
 
 In `Shooter Flywheel Test`, `Actual R RPM` was about **1200** and `Actual L RPM`
 about **400**. That's 3x apart. We didn't write down whether it was in POWER or
 VELOCITY mode. Note that next time.
+
+## Test results (2026-11-04, POWER mode, full trigger)
+
+- Hand-spin: both feel about the same. Hand-spun RPM was too low and short to read.
+- Both wheels **look the same speed**.
+- Right ~1300 RPM, left ~600-650. The ratio is now about **1/2**, not the 1/3 from 11/02.
+- Amps L ~2.6, R ~2.2. Close.
+
+**Verdict: B, the left reading is wrong.** Equal speed and equal amps rule out
+drag. A ratio that changes from day to day rules out any fixed setting (gear
+ratio, ticks/rev). The encoder is dropping a varying number of counts, which
+points to a marginal connection or a bad encoder.
+
+Next: (1) 25% trigger. Do L/R match at low speed and split at high? Is left
+jumpy? (2) Power off, reseat the left encoder cable at both ends (motor, EH
+port 2), and inspect it for pinches near the pivot. (3) Swap in a spare cable.
+Still bad → the encoder or EH port 2 is the problem; involve a mentor.
 
 ## Why it isn't the hubs, or a gear ratio
 
