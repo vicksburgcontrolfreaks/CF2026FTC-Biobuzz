@@ -100,8 +100,14 @@ public class RobotHardware {
 
         shooterPivot = hardwareMap.get(Servo.class, "shooterPivot"); // EH servo 0
 
-        pivotHome = hardwareMap.get(DigitalChannel.class, "pivotHome"); // EH digital 0
-        pivotHome.setMode(DigitalChannel.Mode.INPUT);
+        // OPTIONAL: ShooterPivot already runs without its beam break (2026-10-31),
+        // and as of 2026-11-05 robot 5618's config has no "pivotHome" at all. It
+        // has analog "pivotPos" (EH analog 3) and "deflectorPos" (EH analog 1)
+        // instead, which nothing in code reads yet. null when it's not configured.
+        pivotHome = hardwareMap.tryGet(DigitalChannel.class, "pivotHome"); // EH digital 0
+        if (pivotHome != null) {
+            pivotHome.setMode(DigitalChannel.Mode.INPUT);
+        }
 
         // Turret. Handed the lf object we already have, so there is one lf in the
         // whole robot rather than two handles fighting over it.
