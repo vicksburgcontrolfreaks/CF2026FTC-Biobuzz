@@ -21,6 +21,7 @@ public class DriveTeleOp extends OpMode {
         try {
             follower = Constants.createFollower(hardwareMap);
             telemetry.addData("Status", "Follower initialized");
+            telemetry.addData("Robot", WhichRobot.number());
         } catch (Exception e) {
             telemetry.addData("Error", "Follower failed: " + e.getMessage());
         }

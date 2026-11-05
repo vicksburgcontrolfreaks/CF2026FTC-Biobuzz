@@ -14,11 +14,15 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  * robot drives.
  *
  * WHY IT READS Constants.java
- * Pedro Pathing sets the drive motor directions from Constants.driveConstants,
+ * Pedro Pathing sets the drive motor directions from Constants.driveConstants(),
  * and it OVERWRITES whatever RobotHardware set, in DriveTeleOp too. So
  * Constants.java is the only place drive direction really lives, and this test
  * uses exactly those values. If a wheel is wrong here, fix it in Constants.java
  * and nowhere else.
+ *
+ * The two robots (5618, 6494) have DIFFERENT drive directions. Constants picks
+ * the right set from the config name (see WhichRobot). Check the "Robot" line
+ * on the screen, and fix only that robot's block in Constants.java.
  *
  * Config needs only the 4 drive motors: "lf", "lr", "rf", "rr".
  *
@@ -47,13 +51,15 @@ public class DriveMotorDirectionTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        MecanumConstants drive = Constants.driveConstants;
+        MecanumConstants drive = Constants.driveConstants();
+        String robot = WhichRobot.number();
 
         DcMotorEx lf = setUp(drive.leftFrontMotorName, drive.leftFrontMotorDirection);
         DcMotorEx lr = setUp(drive.leftRearMotorName, drive.leftRearMotorDirection);
         DcMotorEx rf = setUp(drive.rightFrontMotorName, drive.rightFrontMotorDirection);
         DcMotorEx rr = setUp(drive.rightRearMotorName, drive.rightRearMotorDirection);
 
+        telemetry.addData("Robot", robot + "  (config \"" + WhichRobot.configName() + "\")");
         telemetry.addLine("ROBOT ON BLOCKS. Directions from Constants.java:");
         showDirections(drive);
         telemetry.update();
@@ -73,6 +79,7 @@ public class DriveMotorDirectionTest extends LinearOpMode {
             rf.setPower(runRf ? TEST_POWER : 0);
             rr.setPower(runRr ? TEST_POWER : 0);
 
+            telemetry.addData("Robot", robot);
             telemetry.addLine("Every wheel should spin FORWARD (top rolls toward the front).");
             telemetry.addLine();
             telemetry.addData("Running", running(runLf, runLr, runRf, runRr, all));
