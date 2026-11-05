@@ -35,10 +35,10 @@ public class Constants {
             .rightRearMotorName("rr") //EH0
             .leftRearMotorName("lr") //CH0
             .leftFrontMotorName("lf") //CH1 - also carries the turret encoder
-            .leftFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
-            .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
-            .rightFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
-            .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD);
+            .leftFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
+            .leftRearMotorDirection(DcMotorSimple.Direction.FORWARD)
+            .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
+            .rightRearMotorDirection(DcMotorSimple.Direction.REVERSE); // all four flipped 2026-11-05: per-wheel test on 5618 showed every wheel backwards
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
             .forwardPodY(6.89) //175mm 6.89in
