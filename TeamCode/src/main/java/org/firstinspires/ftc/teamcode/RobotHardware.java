@@ -84,7 +84,10 @@ public class RobotHardware {
         // Confirmed on the robot 2026-10-29: FORWARD feeds up toward the shooter.
         indexer.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        colorSensor = hardwareMap.get(NormalizedColorSensor.class, "colorSensor"); // EH I2C1
+        // OPTIONAL: not fitted to the robots yet (2026-11-05), and nothing that uses
+        // RobotHardware reads it. tryGet returns null instead of crashing INIT, so
+        // anything that does start using it must check for null first.
+        colorSensor = hardwareMap.tryGet(NormalizedColorSensor.class, "colorSensor"); // EH I2C1
 
         // Shooter: wheels face each other, so one side is physically reversed and
         // both take the same commanded velocity. Note the two motors are on
