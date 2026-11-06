@@ -35,7 +35,7 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *                 there. On 5618 they'd hit a hard stop, so they're blocked
  *                 until 5618's band is measured with Pivot Jog Test.
  *                 The pivot does NOT move until you press one.
- *   Y (hold)    - collector in, to load pieces. Works while firing too: hold Y
+ *   Y (hold)    - collector in at COLLECT_RPM (200), to load pieces. Works while firing too: hold Y
  *                 during a shot if the collector has to push a ball into the indexer.
  *   RT (hold)   - indexer FEED toward the shooter, 50 RPM (manual; checks direction)
  *   X (hold)    - indexer UNJAM: runs BACKWARD, away from the shooter, 50 RPM
@@ -148,6 +148,7 @@ public class ShooterTest extends LinearOpMode {
             telemetryM.addLine("");
             telemetryM.addData("Queued / fired", shooter.getShotsQueued() + " / " + shooter.getShotsFired());
             telemetryM.addData("Last dip (RPM)", shooter.getLastDipRpm());
+            telemetryM.addData("Collector RPM", collection.getCollectorRPM());
             telemetryM.addData("Indexer RPM", collection.getIndexerRPM());
             telemetryM.addData("Indexer amps", collection.getIndexerCurrentAmps());
             telemetryM.update(telemetry);

@@ -39,9 +39,11 @@ import org.firstinspires.ftc.teamcode.RobotHardware;
 @Configurable
 public class CollectionSystem {
 
-    // Default powers. Tunable live so they can be dialed in without a redeploy.
-    public static double COLLECT_POWER = 0.5;
-    public static double EJECT_POWER = -0.5;
+    // Collector speeds, closed loop, in collector RPM (after the 20:1; ~300 max).
+    // Tunable live in Panels. 200 is Collection System Test's starting speed; the
+    // old 0.5 power (~150 RPM unloaded, less under load) felt slow on 6494, 2026-11-05.
+    public static double COLLECT_RPM = 200.0;
+    public static double EJECT_RPM = 200.0;   // run in reverse by eject()
 
     // Indexer speeds, closed loop, in indexer RPM (after the 20:1). 50 RPM is
     // what Collection System Test, Load Recovery and the ball classifier use;
@@ -66,14 +68,14 @@ public class CollectionSystem {
 
     // ---- Collector ----------------------------------------------------------
 
-    /** Pulls pieces in at COLLECT_POWER. */
+    /** Pulls pieces in at COLLECT_RPM. */
     public void collect() {
-        collector.setPower(COLLECT_POWER);
+        setCollectorRPM(COLLECT_RPM);
     }
 
     /** Spits a piece back out -- the wrong-alliance nectar escape hatch. */
     public void eject() {
-        collector.setPower(EJECT_POWER);
+        setCollectorRPM(-EJECT_RPM);
     }
 
     public void stopCollector() {
