@@ -102,9 +102,11 @@ public class Constants {
     public static PinpointConstants localizerConstants() {
         switch (WhichRobot.get()) {
             case R5618:
-                // NOT YET CHECKED on the 2026 robot -- still the 2025 port values.
+                // Localization Test on 5618, 2026-11-05: forward push read y down 24,
+                // same as 6494, so the forward pod is REVERSED. Strafe direction and
+                // the heading (+6.6 per turn?) still being confirmed.
                 return sharedLocalizer()
-                        .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
+                        .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
                         .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
             case R6494:
             default:
