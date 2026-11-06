@@ -10,6 +10,7 @@ import org.firstinspires.ftc.teamcode.Auton.AutoMenu;
 import org.firstinspires.ftc.teamcode.field.Alliance;
 import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
 import org.firstinspires.ftc.teamcode.field.FieldConstants;
+import org.firstinspires.ftc.teamcode.field.HiveGeometry;
 import org.firstinspires.ftc.teamcode.field.PoseHandoff;
 import org.firstinspires.ftc.teamcode.geometry.FieldCentric;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -42,9 +43,14 @@ import java.util.List;
  *   Right stick X  turret by hand -- overrides aiming while held
  *   D-pad Up     park the turret forward / resume aiming
  *   D-pad Down   "a NECTAR is next": nectar gap until the next shot
- *   D-pad L / R  aim at our AUDIENCE / SCORING cell
+ *   D-pad L / R  aim at our AUDIENCE / SCORING cell (with "Our side": until the
+ *                robot next crosses the middle of the field)
  *   Rumble       short = ready (at speed + on target); 3 blips = nectar detected;
  *                long = JAM fault, everything stopped
+ *
+ * WHICH CELL: "Our side of the field" (default when the pose came from auto) =
+ * the cell on the robot's half (Pedro y vs 72), up OR down -- if it tips we're
+ * already aimed. Otherwise the cell picked in the menu.
  *
  * TURRET: aims at our cell by camera whenever it's in view (TurretAim). Not
  * homed at Start (no auto since power-up)? It homes itself -- so the turret must
@@ -76,7 +82,7 @@ public class DriveTeleOp extends OpMode {
     }
 
     private enum AimCell {
-        SCORING("Scoring cell"), AUDIENCE("Audience cell");
+        BY_SIDE("Our side of the field"), SCORING("Scoring cell"), AUDIENCE("Audience cell");
         private final String label;
         AimCell(String label) { this.label = label; }
         @Override public String toString() { return label; }
@@ -88,8 +94,10 @@ public class DriveTeleOp extends OpMode {
     private final AutoMenu.Choice<StartPose> startPose =
             menu.add("Start pose", StartPose.FACING_AWAY, StartPose.FROM_AUTO)
                     .allowWhen(p -> p != StartPose.FROM_AUTO || PoseHandoff.has());
+    // BY_SIDE needs a real position, which only the auto handoff gives us.
     private final AutoMenu.Choice<AimCell> aimCell =
-            menu.add("Aim at", AimCell.SCORING, AimCell.AUDIENCE);
+            menu.add("Aim at", AimCell.SCORING, AimCell.AUDIENCE, AimCell.BY_SIDE)
+                    .allowWhen(c -> c != AimCell.BY_SIDE || startPose.get() == StartPose.FROM_AUTO);
 
     private RobotHardware hardware;
     private Follower follower;
@@ -100,6 +108,9 @@ public class DriveTeleOp extends OpMode {
 
     private final Launcher.Controls controls = new Launcher.Controls();
     private final ElapsedTime loopTimer = new ElapsedTime();
+    private FieldAprilTags.Cell targetCell;
+    private boolean bySide = false;
+    private FieldAprilTags.Cell lastSideCell = null;   // what "our side" said last loop
     private boolean turretParked = false;
     private boolean turretManual = false;
     private boolean wasReady = false;
@@ -118,6 +129,7 @@ public class DriveTeleOp extends OpMode {
         if (PoseHandoff.has() && PoseHandoff.ageSeconds() < AUTO_POSE_FRESH_SEC) {
             if (PoseHandoff.alliance() != null) alliance.set(PoseHandoff.alliance());
             startPose.set(StartPose.FROM_AUTO);
+            aimCell.set(AimCell.BY_SIDE);
         }
     }
 
@@ -161,7 +173,8 @@ public class DriveTeleOp extends OpMode {
     @Override
     public void start() {
         Pose start;
-        if (startPose.get() == StartPose.FROM_AUTO && PoseHandoff.has()) {
+        boolean poseFromAuto = startPose.get() == StartPose.FROM_AUTO && PoseHandoff.has();
+        if (poseFromAuto) {
             start = PoseHandoff.pose();
         } else {
             start = new Pose(FieldConstants.CENTER, FieldConstants.CENTER,
@@ -170,7 +183,14 @@ public class DriveTeleOp extends OpMode {
         follower.setStartingPose(start);
         PoseHandoff.clear();   // taken; a second TeleOp run must not reuse it
 
-        aim = new TurretAim(cellFor(aimCell.get()).tagIds);   // default: search for OUR cell only
+        bySide = poseFromAuto && aimCell.get() == AimCell.BY_SIDE;
+        if (bySide) {
+            lastSideCell = HiveGeometry.sideCell(alliance.get(), start.getY(), null);
+            targetCell = lastSideCell;
+        } else {
+            targetCell = cellFor(aimCell.get() == AimCell.AUDIENCE ? AimCell.AUDIENCE : AimCell.SCORING);
+        }
+        aim = new TurretAim(targetCell.tagIds);   // default: search for THAT cell only
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
         launcher.start();
         loopTimer.reset();
@@ -231,8 +251,17 @@ public class DriveTeleOp extends OpMode {
     // ---- Gamepad 2: turret ----------------------------------------------------
 
     private void operateTurret(double dt) {
-        if (gamepad2.dpadLeftWasPressed()) setCell(AimCell.AUDIENCE);
-        if (gamepad2.dpadRightWasPressed()) setCell(AimCell.SCORING);
+        // "Our side": switch cells when the robot crosses the midline. A D-pad
+        // pick sticks until the NEXT crossing (it doesn't touch lastSideCell).
+        if (bySide) {
+            FieldAprilTags.Cell side = HiveGeometry.sideCell(alliance.get(), follower.getPose().getY(), lastSideCell);
+            if (side != lastSideCell) {
+                lastSideCell = side;
+                setTarget(side);
+            }
+        }
+        if (gamepad2.dpadLeftWasPressed()) setTarget(cellFor(AimCell.AUDIENCE));
+        if (gamepad2.dpadRightWasPressed()) setTarget(cellFor(AimCell.SCORING));
 
         if (gamepad2.dpadUpWasPressed()) {
             turretParked = !turretParked;
@@ -261,9 +290,10 @@ public class DriveTeleOp extends OpMode {
         turret.update();
     }
 
-    private void setCell(AimCell cell) {
-        aimCell.set(cell);
-        aim.setTargetTagIds(cellFor(cell).tagIds);
+    private void setTarget(FieldAprilTags.Cell cell) {
+        if (cell == targetCell) return;
+        targetCell = cell;
+        aim.setTargetTagIds(cell.tagIds);
         aim.resetPhase();
     }
 
@@ -303,7 +333,8 @@ public class DriveTeleOp extends OpMode {
                 guard.getState(), guard.getNote());
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
-        telemetry.addData("Aim at", cellFor(aimCell.get()).displayName);
+        telemetry.addData("Aim at", "%s%s", targetCell.displayName,
+                !bySide ? "" : targetCell == lastSideCell ? "  (our side)" : "  (picked - until we cross the middle)");
         telemetry.addLine("");
         Pose p = follower.getPose();
         telemetry.addData("Pose", "(%.1f, %.1f) %.1f deg  [%s]", p.getX(), p.getY(),

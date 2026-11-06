@@ -42,4 +42,28 @@ public class HiveGeometryTest {
         assertTrue("The audience cell should be on the audience half (y < 72)", p[1] < 72);
         assertTrue("The opening should be inside the hive's footprint", FieldConstants.HIVE.contains(p[0], p[1]));
     }
+
+    // ---- sideCell: target the cell on our side of the field (default SIDE_DEADBAND 6) ----
+
+    @Test public void sideCell_audienceHalfPicksAudienceCell() {
+        assertEquals(Cell.RED_AUDIENCE, HiveGeometry.sideCell(Alliance.RED, 30, null));
+        assertEquals(Cell.BLUE_AUDIENCE, HiveGeometry.sideCell(Alliance.BLUE, 30, null));
+    }
+
+    @Test public void sideCell_farHalfPicksScoringCell() {
+        assertEquals(Cell.RED_SCORING, HiveGeometry.sideCell(Alliance.RED, 110, null));
+        assertEquals(Cell.BLUE_SCORING, HiveGeometry.sideCell(Alliance.BLUE, 110, null));
+    }
+
+    @Test public void sideCell_keepsCurrentInsideTheDeadband() {
+        assertEquals(Cell.RED_AUDIENCE, HiveGeometry.sideCell(Alliance.RED, 76, Cell.RED_AUDIENCE));
+        assertEquals(Cell.RED_SCORING, HiveGeometry.sideCell(Alliance.RED, 68, Cell.RED_SCORING));
+        // Past the band, it switches.
+        assertEquals(Cell.RED_SCORING, HiveGeometry.sideCell(Alliance.RED, 79, Cell.RED_AUDIENCE));
+    }
+
+    @Test public void sideCell_ignoresTheOtherAlliancesCell() {
+        // Currently "targeting" a blue cell as red makes no sense: decide fresh.
+        assertEquals(Cell.RED_AUDIENCE, HiveGeometry.sideCell(Alliance.RED, 70, Cell.BLUE_SCORING));
+    }
 }

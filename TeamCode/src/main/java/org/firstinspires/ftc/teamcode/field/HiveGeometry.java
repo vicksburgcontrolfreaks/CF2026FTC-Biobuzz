@@ -61,6 +61,30 @@ public final class HiveGeometry {
         return tilt == Tilt.FAR_UP ? Cell.BLUE_SCORING : Cell.BLUE_AUDIENCE;
     }
 
+    /**
+     * Half-width (in.) of the band around the midline where sideCell() keeps its
+     * current answer, so driving along y = 72 doesn't flip the target back and forth.
+     */
+    public static double SIDE_DEADBAND = 6.0;
+
+    /**
+     * Which of OUR two cells is on the robot's side of the field -- the one to
+     * target even while it faces DOWN, because when the hive tips it'll be the
+     * up cell and we're already aimed (Shane, 2026-11-06). The cells mirror
+     * across y = 72 for both alliances: audience cell below, scoring cell above.
+     *
+     * @param current the cell targeted now (kept inside the dead band); null = none yet
+     */
+    public static Cell sideCell(Alliance alliance, double robotY, Cell current) {
+        double mid = FieldConstants.CENTER;
+        Cell audience = alliance == Alliance.RED ? Cell.RED_AUDIENCE : Cell.BLUE_AUDIENCE;
+        Cell scoring = alliance == Alliance.RED ? Cell.RED_SCORING : Cell.BLUE_SCORING;
+        if (robotY > mid + SIDE_DEADBAND) return scoring;
+        if (robotY < mid - SIDE_DEADBAND) return audience;
+        if (current == audience || current == scoring) return current;
+        return robotY >= mid ? scoring : audience;
+    }
+
     /** {x, y, z}: where to aim for this alliance's up cell. Feed x, y to TurretGeometry.aimAngle(). */
     public static double[] aimPoint(Alliance alliance, Tilt tilt) {
         return openingOf(upCell(alliance, tilt),
