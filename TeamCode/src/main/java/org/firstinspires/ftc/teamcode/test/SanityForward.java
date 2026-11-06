@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.test;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -20,6 +21,9 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  * Motor names and directions are copied from pedroPathing/Constants.java.
  * If you change them there, change them here too.
  */
+// Hidden from the Driver Station 2026-11-05 (op mode cleanup): same as holding A in Drive Motor Direction Test.
+// The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @Autonomous(name = "Sanity: Drive Forward", group = "Test")
 public class SanityForward extends OpMode {
 

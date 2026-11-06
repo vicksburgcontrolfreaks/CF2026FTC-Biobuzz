@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -81,6 +82,9 @@ import java.util.List;
  * The RPM math is done locally rather than through CollectionSystem, because
  * that class requires a color sensor this robot does not have fitted yet.
  */
+// Hidden from the Driver Station 2026-11-05 (op mode cleanup): measurement finished (classifier calibrated 10/30); Load Sort Test covers the whole chain.
+// The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Indexer Load Test", group = "Test")
 public class IndexerLoadTest extends LinearOpMode {
 

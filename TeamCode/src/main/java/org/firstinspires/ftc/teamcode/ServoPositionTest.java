@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Servo;
@@ -20,6 +21,9 @@ import com.qualcomm.robotcore.util.Range;
  *
  * Servo positions go from 0.0 to 1.0 — that's the servo's whole range of travel.
  */
+// Hidden from the Driver Station 2026-11-05 (op mode cleanup): generic testServo tool; Pivot Jog Test replaced it for the pivot.
+// The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Servo Position Test", group = "Test")
 public class ServoPositionTest extends LinearOpMode {
 

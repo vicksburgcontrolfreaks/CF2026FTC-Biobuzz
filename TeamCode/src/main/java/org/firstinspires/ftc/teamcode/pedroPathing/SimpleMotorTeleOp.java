@@ -1,11 +1,15 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
+// Hidden from the Driver Station 2026-11-05 (op mode cleanup): early prototype, replaced by the subsystem test op modes.
+// The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Simple Motor TeleOp", group = "Prototypes")
 public class SimpleMotorTeleOp extends OpMode {
 

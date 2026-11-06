@@ -9,8 +9,8 @@ still on GitHub exactly as its owner left it._
   (5618 and 6494) on 2026-11-05.
 - **Start new work from `main`:** `git checkout main`, `git pull`,
   `git checkout -b yourname/feature`.
-- **Check the Build line at INIT.** DriveTeleOp, TestTeleOp, Select Auto, Drive
-  Motor Direction Test, Pivot Jog Test and Sanity: Drive Forward all show:
+- **Check the Build line at INIT.** DriveTeleOp, Select Auto, Drive
+  Motor Direction Test and Pivot Jog Test all show:
 
       Build   main @ c904ce9  (built 11/05 19:42)
       Robot   6494
