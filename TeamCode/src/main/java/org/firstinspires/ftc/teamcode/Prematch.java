@@ -7,7 +7,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 /**
- * Servo Feedback Test — Axon MAX MK2 in CONTINUOUS ROTATION mode, with its
+ * Prematch — the deflector servo (Axon MAX MK2, CONTINUOUS ROTATION) and its
  * feedback wire on an analog port.
  *
  * In continuous mode we don't tell the servo WHERE to go, we tell it how fast
@@ -29,8 +29,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *   X                   = clear the min/max voltage capture
  *   D-pad up            = drive to TARGET_DEGREES and stop (B cancels)
  */
-@TeleOp(name = "Servo Feedback Test", group = "Utility")
-public class ServoFeedbackTest extends LinearOpMode {
+@TeleOp(name = "Prematch", group = "Utility")
+public class Prematch extends LinearOpMode {
 
     private static final String SERVO_NAME = "deflector";
     private static final String FEEDBACK_NAME = "deflectorPos";
