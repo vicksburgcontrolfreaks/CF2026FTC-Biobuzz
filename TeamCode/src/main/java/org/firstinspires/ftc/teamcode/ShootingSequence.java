@@ -64,16 +64,21 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  * CONTROLS -- gamepad1, the shot shape
  *   Y                    ARM. Nothing moves before this. Commands the position
  *                        set during INIT; expect one jump.
- *   triggers             jog the pivot. RT tightens, LT widens. Rate limited.
+ *   bumpers              pivot one fine step  (PIVOT_FINE_STEP)
+ *   dpad left / right    pivot one big step   (PIVOT_BIG_STEP)
  *   B                    go wide open. The escape hatch if ARM landed on the
  *                        closed stop -- rate limited, so a traverse not a slam.
- *   bumpers              pivot fine step, one press at a time
- *   dpad left / right    pivot to the POLLEN / NECTAR position
  *   X                    capture the pivot reference here (do this at a stop)
  *   left stick click     capture this as the POLLEN position
  *   right stick click    capture this as the NECTAR position
  *   A                    flywheels on / off
  *   dpad up / down       flywheel target RPM +/- RPM_STEP
+ *
+ * The pivot steps, it does not jog. One press is one known change with no loop
+ * time in the arithmetic. The triggers used to jog it and were reported
+ * intermittent; most of that was the servo being programmed for continuous
+ * rotation internally while the config said positional, so setPosition() was
+ * setting SPEED and 0.5 meant stop. Stepping is also just easier to tune in.
  *
  * CONTROLS -- gamepad2, the shot itself
  *   triggers             jog the deflector. Needs no arming; it has no presets
@@ -99,12 +104,18 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 public class ShootingSequence extends LinearOpMode {
 
     // ---- Pivot -------------------------------------------------------------
-    // Starting point for the ARM command, per robot. Both are GUESSES carried
-    // over from Pivot Jog Test, which says so itself about 5618. They are only
-    // the DEFAULT now -- dpad up/down during INIT moves it before anything is
-    // written to the servo, which is the fix for a guess that lands past a stop.
-    public static double PIVOT_START_6494 = 0.42;
-    public static double PIVOT_START_5618 = 0.6;
+    /**
+     * What ARM commands, for both robots. 0.544 is the pollen position found by
+     * stepping up from the closed hard stop in Pivot Finder, 2026-11-06 --
+     * PROVISIONAL, found by eye and not yet confirmed by actually shooting,
+     * which is what this op mode is for.
+     *
+     * Replaced the old per-robot 0.42/0.6 guesses inherited from Pivot Jog Test.
+     * Those were only ever guesses at a safe place to start, and a measured
+     * position beats a guess on either robot. Still adjustable with dpad up/down
+     * during INIT, before anything is written to the servo.
+     */
+    public static double PIVOT_ARM_POSITION = 0.544;
 
     /**
      * Travel limit for jogging. Deliberately NOT ShooterPivot's band, because the
@@ -125,17 +136,12 @@ public class ShootingSequence extends LinearOpMode {
     /** One bumper press, in servo position units. */
     public static double PIVOT_FINE_STEP = 0.002;
 
-    /**
-     * Full trigger, position units per second. Was 0.06, which is what Pivot Jog
-     * Test uses for a deliberate hunt. Too slow here: if ARM lands past a hard
-     * stop, the commanded number has to walk back across the dead zone before
-     * the pivot moves at all, and 0.06/s makes that look like dead triggers.
-     */
-    public static double PIVOT_COARSE_RATE = 0.12;
+    /** One dpad left/right press. */
+    public static double PIVOT_BIG_STEP = 0.01;
 
     /**
      * Ceiling on how fast the commanded position may change, per second. Must
-     * stay above PIVOT_COARSE_RATE or it silently throttles the triggers.
+     * stay above the step sizes so a press is not throttled.
      */
     public static double PIVOT_MAX_RATE = 0.20;
 
@@ -237,7 +243,7 @@ public class ShootingSequence extends LinearOpMode {
             telemetry.addLine("NOT ARMED -- the pivot is not being written to at all.");
             telemetry.addLine();
             telemetry.addData("ARM will command", "%.3f   <-- dpad up/down to change", armPosition);
-            telemetry.addData("Robot", "%s   (default %.3f)", robotName(), startPosition());
+            telemetry.addData("Robot", "%s   (PIVOT_ARM_POSITION %.3f)", robotName(), PIVOT_ARM_POSITION);
             telemetry.addLine();
             telemetry.addLine("Set this NEAR WHERE THE PIVOT IS NOW, not at an end of travel.");
             telemetry.addLine("If a previous run slammed and buzzed, the stop is on that side:");
@@ -318,20 +324,20 @@ public class ShootingSequence extends LinearOpMode {
         }
 
         if (armed) {
+            // DISCRETE STEPS, NOT ANALOG JOG. One press, one known change, no
+            // loop time in the arithmetic. The analog version here was reported
+            // as intermittent -- most of that turned out to be the servo being
+            // programmed CR (0.5 = neutral), but stepping is what was verified
+            // working afterwards in Pivot Finder, so this matches it.
             if (rb && !lastRb1) pivotTarget += PIVOT_FINE_STEP;
             if (lb && !lastLb1) pivotTarget -= PIVOT_FINE_STEP;
-            if (dl && !lastDl1) pivotTarget = ShooterPivot.POLLEN_POSITION;
-            if (dr && !lastDr1) pivotTarget = ShooterPivot.NECTAR_POSITION;
-
-            double jog = gamepad1.right_trigger - gamepad1.left_trigger;
-            if (Math.abs(jog) > 0.05) {
-                pivotTarget += jog * PIVOT_COARSE_RATE * dt;
-            }
+            if (dl && !lastDl1) pivotTarget += PIVOT_BIG_STEP;
+            if (dr && !lastDr1) pivotTarget -= PIVOT_BIG_STEP;
 
             pivotTarget = Range.clip(pivotTarget, PIVOT_MIN_POSITION, PIVOT_MAX_POSITION);
 
-            // Creep toward the target. A wrong preset becomes a slow traverse you
-            // can hear coming, not a slam.
+            // Still creeps toward the target, which only matters now for the B
+            // escape hatch: that is the one command that can be a long traverse.
             double step = PIVOT_MAX_RATE * dt;
             pivotCommanded += Range.clip(pivotTarget - pivotCommanded, -step, step);
             pivot.setPosition(pivotCommanded);
@@ -412,11 +418,16 @@ public class ShootingSequence extends LinearOpMode {
         telemetry.addLine();
 
         telemetry.addLine("--- PIVOT ---");
-        telemetry.addData("Commanded", "%.3f   (target %.3f)", pivotCommanded, pivotTarget);
-        telemetry.addData("Presets", "pollen %.3f   nectar %.3f   open %.3f",
-                ShooterPivot.POLLEN_POSITION, ShooterPivot.NECTAR_POSITION,
-                ShooterPivot.OPEN_POSITION);
-        telemetry.addData("Jog limited to", "%.3f .. %.3f%s",
+        telemetry.addData("Asked servo for", "%.3f   (heading for %.3f)",
+                pivotCommanded, pivotTarget);
+        // ShooterPivot's POLLEN_POSITION is still the old 0.67 and has not been
+        // updated to the measured 0.544, because that is what this op mode is
+        // meant to confirm. Shown side by side so the difference is obvious.
+        telemetry.addData("Armed at", "%.3f   (ShooterPivot still says pollen %.3f)",
+                PIVOT_ARM_POSITION, ShooterPivot.POLLEN_POSITION);
+        telemetry.addData("Steps", "bumpers %.3f   dpad L/R %.3f",
+                PIVOT_FINE_STEP, PIVOT_BIG_STEP);
+        telemetry.addData("Limited to", "%.3f .. %.3f%s",
                 PIVOT_MIN_POSITION, PIVOT_MAX_POSITION,
                 (pivotTarget <= PIVOT_MIN_POSITION + 1e-6 ? "   AT OPEN LIMIT"
                         : pivotTarget >= PIVOT_MAX_POSITION - 1e-6 ? "   AT CLOSED LIMIT" : ""));
@@ -501,10 +512,21 @@ public class ShootingSequence extends LinearOpMode {
     }
 
     private static double startPosition() {
-        return WhichRobot.get() == WhichRobot.Robot.R5618 ? PIVOT_START_5618 : PIVOT_START_6494;
+        return PIVOT_ARM_POSITION;
     }
 
+    /**
+     * For display only. WhichRobot throws when the config name does not start
+     * with a robot number, which is right for drive code -- driving the wrong
+     * way is worse than refusing to start. But nothing here depends on the
+     * answer any more, so a label must not be able to kill the op mode partway
+     * through a shooting test.
+     */
     private static String robotName() {
-        return WhichRobot.number();
+        try {
+            return WhichRobot.number();
+        } catch (RuntimeException e) {
+            return "unknown (config name does not start with 5618 or 6494)";
+        }
     }
 }
