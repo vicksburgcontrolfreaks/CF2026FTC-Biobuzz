@@ -89,6 +89,6 @@ public class DeflectorZero extends LinearOpMode {
                     d.isOnTarget() ? "  ON TARGET" : "");
         }
         telemetry.addData("Servo total", "%.0f deg  (2687 = 90 deg of deflector)", d.getServoTotal());
-        telemetry.addData("Power", "%.2f", d.getPower());
+        telemetry.addData("Power", "%.2f   max step %.0f/180 servo deg per loop", d.getPower(), d.getMaxStepSeen());
     }
 }

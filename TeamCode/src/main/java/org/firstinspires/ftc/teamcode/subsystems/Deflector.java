@@ -57,6 +57,7 @@ public class Deflector {
     private double appliedPower = 0;
     private boolean jogging = false;
     private double jogPower = 0;
+    private double maxStepSeen = 0;   // biggest servo-degree change in one loop
 
     public Deflector(HardwareMap hardwareMap) {
         servo = hardwareMap.tryGet(CRServo.class, SERVO_NAME);
@@ -91,7 +92,10 @@ public class Deflector {
     public void update(boolean allowMotion) {
         if (!isPresent()) return;
         double raw = readRaw();
-        total += DeflectorLogic.unwrapStep(lastRaw, raw);
+        double step = DeflectorLogic.unwrapStep(lastRaw, raw);
+        // Near 180 = the unwrap is about to guess wrong (see DeflectorLogic).
+        maxStepSeen = Math.max(maxStepSeen, Math.abs(step));
+        total += step;
         lastRaw = raw;
         remember();
 
@@ -177,4 +181,6 @@ public class Deflector {
     public double getPower()    { return appliedPower; }
     /** Running servo degrees -- for debugging the unwrap. */
     public double getServoTotal() { return total; }
+    /** Biggest servo-degree move between two updates since this op mode started. Near 180 = turns can be miscounted. */
+    public double getMaxStepSeen() { return maxStepSeen; }
 }

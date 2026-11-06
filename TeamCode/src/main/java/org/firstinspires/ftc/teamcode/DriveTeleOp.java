@@ -388,8 +388,10 @@ public class DriveTeleOp extends OpMode {
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
         if (deflector.isPresent()) {
             telemetry.addData("Arc", deflector.isZeroed()
-                    ? String.format("%.1f deg (target %.0f%s)", deflector.getAngle(), deflector.getTarget(),
-                            deflector.isOnTarget() ? "" : ", moving")
+                    ? String.format("%.1f deg (target %.0f%s)  power %+.2f  max step %.0f/180",
+                            deflector.getAngle(), deflector.getTarget(),
+                            deflector.isOnTarget() ? "" : ", moving",
+                            deflector.getPower(), deflector.getMaxStepSeen())
                     : "NOT ZEROED - won't move");
         }
         telemetry.addData("Aim at", "%s%s", targetCell.displayName,
