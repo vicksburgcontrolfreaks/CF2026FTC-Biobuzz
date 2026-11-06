@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.shooting;
 import org.firstinspires.ftc.teamcode.shooting.NectarGuard.Gap;
 import org.firstinspires.ftc.teamcode.shooting.NectarGuard.State;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -30,6 +31,8 @@ public class NectarGuardTest {
         NectarGuard.BLIND_AFTER_SEC = 0.5;
         NectarGuard.MIN_ALIVE_AMPS = 0.05;
         NectarGuard.JAM_DIP_RPM = 400;
+        NectarGuard.BACKSTOP_ENABLED = true;   // the backstop tests need it on
+        NectarGuard.JAM_HOLD_SEC = 0.15;
         NectarGuard.TRIP_HOLD_SEC = 0.10;
         NectarGuard.STUCK_CLEAR_SEC = 4.0;
         NectarGuard.STUCK_AT_SPEED_RPM = 100;
@@ -128,7 +131,7 @@ public class NectarGuardTest {
     @Test
     public void bigDipAtPollenGap_faults_andOpensTheGap() {
         run(10, false, 0, 10);    // at speed -> armed
-        step(true, EMPTY_AMPS, false, 450);
+        run(10, true, EMPTY_AMPS, 450);   // 0.2 s of big dip: past JAM_HOLD_SEC
         assertTrue(g.isFault());
         assertEquals(Gap.OPEN, g.gap());
         // Latched: nothing un-faults it but reset().
@@ -235,5 +238,37 @@ public class NectarGuardTest {
         g.requestNectar();
         run(210, true, EMPTY_AMPS, 20);
         assertEquals(Gap.POLLEN, g.gap());
+    }
+
+    // ---- Backstop: bumps (6494, 2026-11-06) ----
+
+    @Test
+    public void bumpBlip_doesNotFault() {
+        run(10, false, 0, 10);
+        run(3, false, 0, 450);   // 0.06 s sag from a hit
+        run(10, false, 0, 10);
+        assertFalse(g.isFault());
+    }
+
+    @Test
+    public void backstopDisabled_neverFaults() {
+        NectarGuard.BACKSTOP_ENABLED = false;
+        run(10, false, 0, 10);
+        run(100, true, EMPTY_AMPS, 900);   // 2 s of a huge dip
+        assertFalse(g.isFault());
+        assertEquals(Gap.POLLEN, g.gap());
+    }
+
+    // Read once, before setUp() switches it on for the other tests.
+    private static boolean shippedBackstop;
+
+    @BeforeClass
+    public static void readShippedDefaults() {
+        shippedBackstop = NectarGuard.BACKSTOP_ENABLED;
+    }
+
+    @Test
+    public void backstopShipsOff() {
+        assertFalse("BACKSTOP_ENABLED must ship OFF until bumps are sorted out", shippedBackstop);
     }
 }

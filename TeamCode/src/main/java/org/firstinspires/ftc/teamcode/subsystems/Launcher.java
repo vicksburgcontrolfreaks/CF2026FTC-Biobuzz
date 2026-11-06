@@ -105,6 +105,7 @@ public class Launcher {
 
         if (guard.isFault()) {
             allStop();
+            updateCollector(c);   // the driver keeps the collector even during a jam fault
             return;
         }
 
@@ -150,19 +151,7 @@ public class Launcher {
         }
         indexerForward = shooterOwns || indexerCmd == Motion.FORWARD;
 
-        // ---- Collector (triggers win over buttons) -------------------------
-        Motion collectorWant;
-        if (c.allForward) collectorWant = Motion.FORWARD;
-        else if (c.allBack) collectorWant = Motion.BACK;
-        else if (c.collectIn) collectorWant = Motion.FORWARD;
-        else if (c.collectOut) collectorWant = Motion.BACK;
-        else collectorWant = Motion.STOP;
-        if (collectorWant != collectorCmd) {
-            if (collectorWant == Motion.FORWARD) collection.collect();
-            else if (collectorWant == Motion.BACK) collection.eject();
-            else collection.stopCollector();
-            collectorCmd = collectorWant;
-        }
+        updateCollector(c);
 
         // ---- The guard -----------------------------------------------------
         // Current is an extra hub read, so only while it matters.
@@ -184,13 +173,30 @@ public class Launcher {
         applyGap(guard.gap());
     }
 
+    /** Collector: triggers win over buttons. Runs even during a jam fault. */
+    private void updateCollector(Controls c) {
+        Motion collectorWant;
+        if (c.allForward) collectorWant = Motion.FORWARD;
+        else if (c.allBack) collectorWant = Motion.BACK;
+        else if (c.collectIn) collectorWant = Motion.FORWARD;
+        else if (c.collectOut) collectorWant = Motion.BACK;
+        else collectorWant = Motion.STOP;
+        if (collectorWant != collectorCmd) {
+            if (collectorWant == Motion.FORWARD) collection.collect();
+            else if (collectorWant == Motion.BACK) collection.eject();
+            else collection.stopCollector();
+            collectorCmd = collectorWant;
+        }
+    }
+
+    // Jam fault: flywheel + indexer only. The collector isn't what gets hurt,
+    // and cutting it mid-drive cost us (6494, 2026-11-06).
     private void allStop() {
         flywheelOn = false;
         shooter.stop();
         shooter.update();
-        collection.stopAll();
+        collection.stopIndexer();
         indexerCmd = Motion.STOP;
-        collectorCmd = Motion.STOP;
         indexerForward = false;
         applyGap(Gap.OPEN);   // release whatever is pinched
     }

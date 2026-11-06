@@ -22,9 +22,11 @@ package org.firstinspires.ftc.teamcode.shooting;
  *      rose above MIN_ALIVE_AMPS, the reading is broken and layer 1 is blind.
  *      Fail SAFE: nectar gap (pollen shots get weak, nothing breaks) + alert.
  *
- *   3. BACKSTOP. A flywheel dip far bigger than a pollen shot's (~120 RPM on
+ *   3. BACKSTOP -- OFF by default (BACKSTOP_ENABLED; bumps tripped it).
+ *      A flywheel dip far bigger than a pollen shot's (~120 RPM on
  *      6494) while the gap is at POLLEN means something big is in the wheels.
- *      FAULT: everything off, gap OPEN to release it. Latched until reset().
+ *      FAULT: flywheel + indexer off (collector keeps going), gap OPEN to
+ *      release it. Latched until reset().
  *      This is after the fact -- it limits the damage, it doesn't prevent it.
  *
  * Recovering from a wrong trip (pollen read as nectar): at the nectar gap a
@@ -109,6 +111,16 @@ public class NectarGuard {
      * comfortably above the biggest real pollen dip.
      */
     public static double JAM_DIP_RPM = 400;
+    /**
+     * OFF (2026-11-06, Shane): on 6494 it kept firing when the robot bumped into
+     * things -- a hit can sag the wheels or the battery enough to look like a
+     * jam -- and stopping everything mid-drive was worse than what it protects
+     * against. The LOAD TRIP (layer 1) stays on. Before turning this back on, get
+     * the real biggest pollen dip from the shot log and check bumps don't trip it.
+     */
+    public static boolean BACKSTOP_ENABLED = false;
+    /** The big dip must last this long to count (a bump is a blip; a jam stays). */
+    public static double JAM_HOLD_SEC = 0.15;
 
     // ---- State ----------------------------------------------------------------
     private State state = State.CLEAR;
@@ -119,6 +131,7 @@ public class NectarGuard {
     private double lastRunPeakAmps = 0;        // frozen when the run ends -- for calibration
     private int trips = 0;
     private boolean jamArmed = false;
+    private double jamSinceSec = Double.NaN;
     private double aboveSinceSec = Double.NaN;   // current at/above TRIP_AMPS since, NaN = below
     private boolean tripArmed = true;            // false after a trip until current drops below again
     private double stuckSec = 0;                 // wide gap + at speed + pushing, no shot
@@ -151,10 +164,16 @@ public class NectarGuard {
         } else if (flywheelDropRpm < JAM_DIP_RPM / 2) {
             jamArmed = true;
         }
-        if (jamArmed && flywheelDropRpm >= JAM_DIP_RPM) {
+        boolean bigDip = jamArmed && flywheelDropRpm >= JAM_DIP_RPM;
+        if (!bigDip) {
+            jamSinceSec = Double.NaN;
+        } else if (Double.isNaN(jamSinceSec)) {
+            jamSinceSec = nowSec;
+        }
+        if (BACKSTOP_ENABLED && bigDip && nowSec - jamSinceSec >= JAM_HOLD_SEC) {
             state = State.FAULT;
-            note = String.format("JAM? %.0f RPM dip at POLLEN gap - all stopped, gap open."
-                    + " Clear it, then Y.", flywheelDropRpm);
+            note = String.format("JAM? %.0f RPM dip at POLLEN gap - flywheel + indexer stopped,"
+                    + " gap open. Clear it, then Y.", flywheelDropRpm);
             return;
         }
 
@@ -244,6 +263,7 @@ public class NectarGuard {
         nectarRequested = false;
         forwardSinceSec = Double.NaN;
         jamArmed = false;
+        jamSinceSec = Double.NaN;
         aboveSinceSec = Double.NaN;
         tripArmed = true;
         stuckSec = 0;
