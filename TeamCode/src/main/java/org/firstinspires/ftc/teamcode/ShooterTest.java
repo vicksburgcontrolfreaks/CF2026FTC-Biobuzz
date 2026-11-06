@@ -31,6 +31,9 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *                 Fire = feed until a wheel DIPS (the ball went through), stop the
  *                 indexer for PAUSE_SEC and until the wheels recover, then the next.
  *                 No dip in NO_BALL_SEC = "no ball?" and it stops. (ShooterLogic DIP mode)
+ *                 The SHOT LOG on screen records each fire (fed / dip / paused time,
+ *                 and "EXTRA DIP" if a 2nd ball got through during the pause) so you
+ *                 can read what happened afterward. START clears it.
  *   B           - stop everything
  *   D-pad left  - pivot to POLLEN gap    D-pad right - pivot to NECTAR gap
  *   Back        - pivot OPEN (pull a stuck ball out)
@@ -80,6 +83,30 @@ public class ShooterTest extends LinearOpMode {
             new com.qualcomm.robotcore.util.ElapsedTime();
     /** Wobble only counts after the wheels have run this long with nothing feeding. */
     private static final double QUIET_SEC = 1.5;
+
+    // ---- Shot log ------------------------------------------------------------
+    // Records what fire (RB / LB) actually did, so you can read it AFTER the
+    // shots instead of watching a fraction-of-a-second pause live. START clears it.
+    //   fed     = how long the indexer ran before the dip (ball reached the wheels)
+    //   dip     = how far the wheels sagged for that shot
+    //   paused  = how long the indexer stayed stopped before the next feed / READY
+    //   "!! EXTRA DIP" = the wheels dipped again while the indexer was STOPPED,
+    //   i.e. a second ball got through on its own -- the pause can't stop that.
+    private final java.util.LinkedList<String> shotLog = new java.util.LinkedList<>();
+    private final com.qualcomm.robotcore.util.ElapsedTime logClock =
+            new com.qualcomm.robotcore.util.ElapsedTime();
+    private ShooterLogic.State prevState = ShooterLogic.State.IDLE;
+    private int prevFired = 0;
+    private boolean prevNoBall = false;
+    private double feedStartSec, pauseStartSec, shotFedSec;
+    private int pendingShot = 0;          // shot # waiting for its pause/dip to finish
+    private boolean recoveredSinceShot;   // wheels came back near target after the dip
+    private boolean extraDipLogged;
+
+    private void logLine(String line) {
+        shotLog.addFirst(line);
+        while (shotLog.size() > 6) shotLog.removeLast();
+    }
 
     @Override
     public void runOpMode() {
@@ -194,7 +221,53 @@ public class ShooterTest extends LinearOpMode {
                 quiet.reset();
             }
             if ((wheelsOn && !wheelsOnPrev) || target != lastTarget) wobble = 0;
-            if (gamepad1.start && !startPrev) wobble = 0;
+            if (gamepad1.start && !startPrev) {
+                wobble = 0;
+                shotLog.clear();
+            }
+
+            // ---- Shot log ----
+            double nowSec = logClock.seconds();
+            ShooterLogic.State st = shooter.getState();
+            int fired = shooter.getShotsFired();
+            double drop = target - Math.min(l, r);
+            if (st == ShooterLogic.State.FEEDING && prevState != ShooterLogic.State.FEEDING) {
+                feedStartSec = nowSec;
+            }
+            if (fired > prevFired) {                       // fire logic saw a dip
+                shotFedSec = nowSec - feedStartSec;
+                pauseStartSec = nowSec;
+                pendingShot = fired;
+                recoveredSinceShot = false;
+                extraDipLogged = false;
+            }
+            if (st == ShooterLogic.State.RECOVERING) {
+                if (drop < ShooterLogic.TOLERANCE_RPM) recoveredSinceShot = true;
+                if (recoveredSinceShot && !extraDipLogged && drop >= ShooterLogic.DIP_RPM) {
+                    logLine(String.format("!! EXTRA DIP %.0f during pause - a 2nd ball got through", drop));
+                    extraDipLogged = true;
+                }
+            }
+            if (pendingShot > 0 && prevState == ShooterLogic.State.RECOVERING
+                    && st != ShooterLogic.State.RECOVERING) {   // pause over
+                logLine(String.format("#%d fed %.1fs -> dip %.0f -> paused %.1fs",
+                        pendingShot, shotFedSec, shooter.getLastDipRpm(), nowSec - pauseStartSec));
+                pendingShot = 0;
+            }
+            // A big dip knocks the logic out of READY in the same loop, so look at
+            // the loop where it LEFT READY without a feed starting.
+            if (prevState == ShooterLogic.State.READY && st != ShooterLogic.State.FEEDING && pendingShot == 0
+                    && !manualFeed && drop >= ShooterLogic.DIP_RPM && !extraDipLogged) {
+                logLine(String.format("!! DIP %.0f while READY, no feed - a ball got through?", drop));
+                extraDipLogged = true;
+            }
+            if (st == ShooterLogic.State.READY && drop < ShooterLogic.TOLERANCE_RPM) extraDipLogged = false;
+            if (shooter.wasNoBall() && !prevNoBall) {
+                logLine(String.format("no ball? fed %.1fs with no dip", ShooterLogic.NO_BALL_SEC));
+            }
+            prevNoBall = shooter.wasNoBall();
+            prevFired = fired;
+            prevState = st;
             if (wheelsOn && target > 0 && quiet.seconds() > QUIET_SEC) {
                 wobble = Math.max(wobble, Math.max(target - l, target - r));
             }
@@ -223,6 +296,10 @@ public class ShooterTest extends LinearOpMode {
             }
             telemetryM.addData("Last shot dip", lastManualDip);
             telemetryM.addData("Recent (L/R, newest first)", recentDips.isEmpty() ? "-" : String.join("  ", recentDips));
+            telemetryM.addLine("");
+            telemetryM.addLine("-- SHOT LOG (RB/LB fire, newest first; START clears) --");
+            if (shotLog.isEmpty()) telemetryM.addLine("  (no shots yet)");
+            for (String line : shotLog) telemetryM.addLine("  " + line);
             telemetryM.addData("Wobble, no ball", quiet.seconds() > QUIET_SEC || wobble > 0
                     ? String.format("%.0f  (START resets)", wobble) : "settling...");
             telemetryM.addData("Collector RPM", collection.getCollectorRPM());

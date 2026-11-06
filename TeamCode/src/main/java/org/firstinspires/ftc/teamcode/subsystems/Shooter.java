@@ -126,4 +126,5 @@ public class Shooter {
     public int getShotsQueued()         { return logic.getShotsQueued(); }
     public int getShotsFired()          { return logic.getShotsFired(); }
     public double getLastDipRpm()       { return logic.getLastDipRpm(); }
+    public boolean wasNoBall()          { return logic.wasNoBall(); }
 }
