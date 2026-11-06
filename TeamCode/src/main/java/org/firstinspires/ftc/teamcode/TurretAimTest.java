@@ -146,7 +146,7 @@ public class TurretAimTest extends LinearOpMode {
 
     // Which cell to aim at. Hive tags come in clusters of four; TurretAim
     // averages whichever of them it can see, which roughly halves the noise.
-    private FieldAprilTags.Cell cell = FieldAprilTags.Cell.RED_FAR;
+    private FieldAprilTags.Cell cell = FieldAprilTags.Cell.RED_SCORING;
     /** The cell the camera can actually see right now, or null if it sees none. */
     private FieldAprilTags.Cell seenCell = null;
 

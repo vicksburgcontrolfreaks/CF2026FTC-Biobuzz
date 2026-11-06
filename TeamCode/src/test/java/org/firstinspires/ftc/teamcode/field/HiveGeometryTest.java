@@ -14,9 +14,9 @@ public class HiveGeometryTest {
     private static final double EPS = 1e-9;
 
     @Test public void eachAllianceLaunchesIntoItsOwnUpCell() {
-        assertEquals(Cell.RED_FAR,       HiveGeometry.upCell(Alliance.RED,  Tilt.FAR_UP));
+        assertEquals(Cell.RED_SCORING,       HiveGeometry.upCell(Alliance.RED,  Tilt.FAR_UP));
         assertEquals(Cell.RED_AUDIENCE,  HiveGeometry.upCell(Alliance.RED,  Tilt.AUDIENCE_UP));
-        assertEquals(Cell.BLUE_FAR,      HiveGeometry.upCell(Alliance.BLUE, Tilt.FAR_UP));
+        assertEquals(Cell.BLUE_SCORING,      HiveGeometry.upCell(Alliance.BLUE, Tilt.FAR_UP));
         assertEquals(Cell.BLUE_AUDIENCE, HiveGeometry.upCell(Alliance.BLUE, Tilt.AUDIENCE_UP));
     }
 
@@ -28,8 +28,8 @@ public class HiveGeometryTest {
     @Test public void symmetryWithMadeUpNumbers() {
         // Pretend the red audience opening is at (60, 50), 40 in. up.
         assertArrayEquals(new double[] {60, 50, 40}, HiveGeometry.openingOf(Cell.RED_AUDIENCE, 60, 50, 40), EPS);
-        assertArrayEquals(new double[] {60, 94, 40}, HiveGeometry.openingOf(Cell.RED_FAR, 60, 50, 40), EPS);
-        assertArrayEquals(new double[] {84, 94, 40}, HiveGeometry.openingOf(Cell.BLUE_FAR, 60, 50, 40), EPS);
+        assertArrayEquals(new double[] {60, 94, 40}, HiveGeometry.openingOf(Cell.RED_SCORING, 60, 50, 40), EPS);
+        assertArrayEquals(new double[] {84, 94, 40}, HiveGeometry.openingOf(Cell.BLUE_SCORING, 60, 50, 40), EPS);
         assertArrayEquals(new double[] {84, 50, 40}, HiveGeometry.openingOf(Cell.BLUE_AUDIENCE, 60, 50, 40), EPS);
     }
 

@@ -94,10 +94,10 @@ public class TagLocalizerTest {
 
     @Test public void fromAnAngleAndOtherCells() {
         assertRecovers(30, 36, Cell.RED_AUDIENCE, Tilt.AUDIENCE_UP);
-        assertRecovers(60, 120, Cell.RED_FAR, Tilt.FAR_UP);
-        assertRecovers(60, 120, Cell.RED_FAR, Tilt.AUDIENCE_UP);
+        assertRecovers(60, 120, Cell.RED_SCORING, Tilt.FAR_UP);
+        assertRecovers(60, 120, Cell.RED_SCORING, Tilt.AUDIENCE_UP);
         assertRecovers(100, 24, Cell.BLUE_AUDIENCE, Tilt.FAR_UP);
-        assertRecovers(110, 115, Cell.BLUE_FAR, Tilt.AUDIENCE_UP);
+        assertRecovers(110, 115, Cell.BLUE_SCORING, Tilt.AUDIENCE_UP);
     }
 
     @Test public void wrongTiltIsWayOffLevel() {

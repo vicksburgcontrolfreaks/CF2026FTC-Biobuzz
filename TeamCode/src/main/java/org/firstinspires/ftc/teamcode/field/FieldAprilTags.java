@@ -37,10 +37,10 @@ public final class FieldAprilTags {
      * audience hive" instead of making someone memorise which IDs are which.
      */
     public enum Cell {
-        RED_FAR("Red far", 30, 31, 32, 33),
+        RED_SCORING("Red scoring", 30, 31, 32, 33),
         RED_AUDIENCE("Red audience", 34, 35, 36, 37),
         BLUE_AUDIENCE("Blue audience", 38, 39, 40, 41),
-        BLUE_FAR("Blue far", 42, 43, 44, 45);
+        BLUE_SCORING("Blue scoring", 42, 43, 44, 45);
 
         /** For telemetry -- "Blue audience", not "BLUE_AUDIENCE". */
         public final String displayName;
@@ -75,10 +75,10 @@ public final class FieldAprilTags {
 
     // Kept so existing code reads the same. These are the SAME arrays the enum
     // holds, not copies -- edit the enum, not these.
-    public static final int[] RED_FAR_CELL       = Cell.RED_FAR.tagIds;
+    public static final int[] RED_SCORING_CELL   = Cell.RED_SCORING.tagIds;
     public static final int[] RED_AUDIENCE_CELL  = Cell.RED_AUDIENCE.tagIds;
     public static final int[] BLUE_AUDIENCE_CELL = Cell.BLUE_AUDIENCE.tagIds;
-    public static final int[] BLUE_FAR_CELL      = Cell.BLUE_FAR.tagIds;
+    public static final int[] BLUE_SCORING_CELL  = Cell.BLUE_SCORING.tagIds;
 
     // Hand this to AprilTagProcessor.Builder.setTagLibrary(...)
     public static AprilTagLibrary getLibrary() {

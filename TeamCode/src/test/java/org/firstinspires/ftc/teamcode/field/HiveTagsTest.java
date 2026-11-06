@@ -30,10 +30,10 @@ public class HiveTagsTest {
     }
 
     @Test public void farUpLiftsTheFarCell() {
-        double far = HiveTags.tagPose(Cell.RED_FAR.tagIds[0], Tilt.FAR_UP).z();
+        double far = HiveTags.tagPose(Cell.RED_SCORING.tagIds[0], Tilt.FAR_UP).z();
         double audience = HiveTags.tagPose(Cell.RED_AUDIENCE.tagIds[0], Tilt.FAR_UP).z();
         assertTrue(far > audience);
-        far = HiveTags.tagPose(Cell.RED_FAR.tagIds[0], Tilt.AUDIENCE_UP).z();
+        far = HiveTags.tagPose(Cell.RED_SCORING.tagIds[0], Tilt.AUDIENCE_UP).z();
         audience = HiveTags.tagPose(Cell.RED_AUDIENCE.tagIds[0], Tilt.AUDIENCE_UP).z();
         assertTrue(audience > far);
     }
@@ -50,11 +50,11 @@ public class HiveTagsTest {
     }
 
     @Test public void blueIsRedSpun180() {
-        // Spinning the field 180 deg sends red audience -> blue far, and a tip
+        // Spinning the field 180 deg sends red audience -> blue scoring, and a tip
         // that lifts red's audience cell lifts blue's far cell.
         for (int k = 0; k < 4; k++) {
             Rigid3 red = HiveTags.tagPose(Cell.RED_AUDIENCE.tagIds[k], Tilt.AUDIENCE_UP);
-            Rigid3 blue = HiveTags.tagPose(Cell.BLUE_FAR.tagIds[k], Tilt.FAR_UP);
+            Rigid3 blue = HiveTags.tagPose(Cell.BLUE_SCORING.tagIds[k], Tilt.FAR_UP);
             assertEquals(FieldConstants.FIELD_SIZE - red.x(), blue.x(), EPS);
             assertEquals(FieldConstants.FIELD_SIZE - red.y(), blue.y(), EPS);
             assertEquals(red.z(), blue.z(), EPS);
@@ -64,7 +64,7 @@ public class HiveTagsTest {
     @Test public void stickerBottomEdgePointsTowardThePivot() {
         // Tag "down" (y) runs toward the hive's middle, per manual Figure 9-16.
         assertTrue(HiveTags.tagPose(Cell.RED_AUDIENCE.tagIds[0], Tilt.FAR_UP).axis(1)[1] > 0);
-        assertTrue(HiveTags.tagPose(Cell.RED_FAR.tagIds[0], Tilt.FAR_UP).axis(1)[1] < 0);
+        assertTrue(HiveTags.tagPose(Cell.RED_SCORING.tagIds[0], Tilt.FAR_UP).axis(1)[1] < 0);
     }
 
     @Test public void stickerRowMatchesManualFigure915() {

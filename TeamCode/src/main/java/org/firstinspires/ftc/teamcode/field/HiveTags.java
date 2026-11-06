@@ -68,11 +68,11 @@ public final class HiveTags {
     public static final Tilt REFERENCE = Tilt.FAR_UP;
 
     public static Alliance allianceOf(Cell cell) {
-        return (cell == Cell.RED_FAR || cell == Cell.RED_AUDIENCE) ? Alliance.RED : Alliance.BLUE;
+        return (cell == Cell.RED_SCORING || cell == Cell.RED_AUDIENCE) ? Alliance.RED : Alliance.BLUE;
     }
 
-    private static boolean isFar(Cell cell) {
-        return cell == Cell.RED_FAR || cell == Cell.BLUE_FAR;
+    private static boolean isScoring(Cell cell) {
+        return cell == Cell.RED_SCORING || cell == Cell.BLUE_SCORING;
     }
 
     /** How far a hive is rotated from level about +x, in radians. FAR_UP lifts the +y side. */
@@ -92,7 +92,7 @@ public final class HiveTags {
         if (cell == null) throw new IllegalArgumentException("Tag " + id + " is not a hive tag");
 
         double hiveX = allianceOf(cell) == Alliance.RED ? RED_HIVE_X : FieldConstants.FIELD_SIZE - RED_HIVE_X;
-        double side = isFar(cell) ? +1 : -1;   // far cell sits toward +y
+        double side = isScoring(cell) ? +1 : -1;   // far cell sits toward +y
         double cx = hiveX;
         double cy = PIVOT_Y + side * CELL_ARM;
         double cz = FieldConstants.HIVE_PIVOT_HEIGHT - CELL_DROP;

@@ -56,9 +56,9 @@ public final class HiveGeometry {
     /** Which cell an alliance launches into, given how its hive is tipped. */
     public static Cell upCell(Alliance alliance, Tilt tilt) {
         if (alliance == Alliance.RED) {
-            return tilt == Tilt.FAR_UP ? Cell.RED_FAR : Cell.RED_AUDIENCE;
+            return tilt == Tilt.FAR_UP ? Cell.RED_SCORING : Cell.RED_AUDIENCE;
         }
-        return tilt == Tilt.FAR_UP ? Cell.BLUE_FAR : Cell.BLUE_AUDIENCE;
+        return tilt == Tilt.FAR_UP ? Cell.BLUE_SCORING : Cell.BLUE_AUDIENCE;
     }
 
     /** {x, y, z}: where to aim for this alliance's up cell. Feed x, y to TurretGeometry.aimAngle(). */
@@ -72,9 +72,9 @@ public final class HiveGeometry {
         double size = FieldConstants.FIELD_SIZE;
         switch (cell) {
             case RED_AUDIENCE:  return new double[] { redAudX,        redAudY,        z };
-            case RED_FAR:       return new double[] { redAudX,        size - redAudY, z };  // mirror in y
-            case BLUE_FAR:      return new double[] { size - redAudX, size - redAudY, z };  // red audience spun 180
-            case BLUE_AUDIENCE: return new double[] { size - redAudX, redAudY,        z };  // red far spun 180
+            case RED_SCORING:       return new double[] { redAudX,        size - redAudY, z };  // mirror in y
+            case BLUE_SCORING:      return new double[] { size - redAudX, size - redAudY, z };  // red audience spun 180
+            case BLUE_AUDIENCE: return new double[] { size - redAudX, redAudY,        z };  // red scoring spun 180
             default: throw new IllegalArgumentException("Unknown cell " + cell);
         }
     }
