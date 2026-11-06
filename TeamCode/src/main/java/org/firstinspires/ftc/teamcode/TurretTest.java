@@ -61,7 +61,9 @@ public class TurretTest extends LinearOpMode {
         telemetry.addLine("Triggers = jog (L = left, R = right) | Y = jog/hold | D-pad 10, bumpers 2 deg | X = home | B = call this 0");
         telemetry.addLine("Gear ratio (servo revs per turret rev): " + Turret.gearRatio());
         telemetry.addLine("");
-        telemetry.addLine("NOT HOMED on start: soft limits are OFF. Jog gently.");
+        telemetry.addLine(turret.wasHomingKept()
+                ? "HOMED from an earlier op mode (HOLD). X re-homes; Y to jog."
+                : "NOT HOMED on start: soft limits are OFF. Jog gently.");
         telemetry.update();
 
         waitForStart();

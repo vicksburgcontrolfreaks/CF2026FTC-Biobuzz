@@ -109,7 +109,7 @@ public class Turret {
     // the numbers THERE. The defaults written here are 6494's, only so laptop code
     // that reads them before any init() sees sane values.
     public static double MIN_ANGLE = -90.0;
-    public static double MAX_ANGLE = 106.0;
+    public static double MAX_ANGLE = 90.0;
 
     // ---- Homing -------------------------------------------------------------
     // MEASURED 2026-10-15 on the rebuilt magnet mount, three Turret Range Test
@@ -134,6 +134,13 @@ public class Turret {
     // -75.5 then parked 10 deg CW of forward (Shane jogged it, read the angle): -85.5.
     // Per robot -- see loadRobotNumbers().
     public static double HOME_SWITCH_ANGLE = -85.5;
+
+    // Width of the magnet's trip band, measured from HOME_SWITCH_ANGLE going in
+    // HOMING_DIRECTION. Only used to sanity-check a kept homing: if the switch
+    // trips somewhere the band can't be, the zero is wrong. Per robot.
+    public static double MAGNET_BAND_DEG = 10.1;
+    /** Slack on that check, for loop timing when the turret passes the band fast. */
+    public static double MAGNET_CHECK_SLACK_DEG = 5.0;
 
     // Which way to search FIRST, and -- more importantly -- the direction the final
     // approach always comes from. Clockwise (-): the side with cable slack, and the
@@ -243,6 +250,24 @@ public class Turret {
     private boolean backoffReleased = false;   // has the switch let go yet?
     private int backoffStartTicks = 0;         // reading when it let go
 
+    // ---- Homing kept between op modes (Shane, 2026-11-06) -------------------
+    // Home ONCE per power-up, not once per op mode: auto homes, TeleOp reuses it.
+    // Saves match time, and means homing happens when the robot is being set up
+    // by hand -- the easy moment to follow "start the turret roughly forward".
+    //
+    // Why this is safe:
+    //   - The hub keeps counting the encoder between op modes; nothing in this
+    //     repo resets lf's encoder (see the class comment, rule 2).
+    //   - STATIC fields live as long as the Robot Controller app. A power cycle or
+    //     a redeploy restarts the app, wipes these, and homing is required again --
+    //     exactly when the encoder count has also been lost.
+    //   - Belt and braces: while READY, if the magnet trips where its band can't
+    //     be (checkMagnetAgreesWithAngle), the zero is wrong -> back to NOT_HOMED.
+    // X always re-homes from scratch, kept homing or not.
+    private static boolean keptHomed = false;
+    private static double keptTickOffset = 0.0;
+    private static double keptReferenceAngle = 0.0;
+
     public void init(HardwareMap hardwareMap) {
         init(hardwareMap, hardwareMap.get(DcMotorEx.class, ENCODER_MOTOR_NAME));
     }
@@ -265,6 +290,45 @@ public class Turret {
         referenceAngle = 0.0;
         state = State.NOT_HOMED;
         statusNote = "not homed";
+
+        if (keptHomed && isMeasured()) {
+            homeTickOffset = keptTickOffset;
+            referenceAngle = keptReferenceAngle;
+            state = State.READY;
+            controlMode = ControlMode.HOLD;
+            targetAngle = getAngle();   // hold where it is; don't lurch on init
+            statusNote = "homed (kept from an earlier op mode)";
+        }
+    }
+
+    /** True if init() reused an earlier op mode's homing instead of starting NOT_HOMED. */
+    public boolean wasHomingKept() {
+        return keptHomed && state == State.READY;
+    }
+
+    private static void forgetHoming() {
+        keptHomed = false;
+    }
+
+    /**
+     * While READY, a tripped switch must be inside the magnet's band. If it isn't,
+     * the zero is wrong (encoder reset, belt slipped, ...): drop to NOT_HOMED.
+     */
+    private void checkMagnetAgreesWithAngle() {
+        if (state != State.READY || Double.isNaN(MAGNET_BAND_DEG) || !homeSwitch.isPressed()) {
+            return;
+        }
+        double bandFar = HOME_SWITCH_ANGLE + HOMING_DIRECTION * MAGNET_BAND_DEG;
+        double lo = Math.min(HOME_SWITCH_ANGLE, bandFar) - MAGNET_CHECK_SLACK_DEG;
+        double hi = Math.max(HOME_SWITCH_ANGLE, bandFar) + MAGNET_CHECK_SLACK_DEG;
+        double angle = getAngle();
+        if (angle < lo || angle > hi) {
+            forgetHoming();
+            state = State.NOT_HOMED;
+            controlMode = ControlMode.JOG;
+            statusNote = String.format("ZERO LOST - magnet seen at %.0f deg, expected %.0f..%.0f."
+                    + " Press X to re-home.", angle, lo, hi);
+        }
     }
 
     // ---- Commands -----------------------------------------------------------
@@ -287,11 +351,14 @@ public class Turret {
                 // Range Test sweep; -85.5 after two by-eye forward corrections, so the
                 // band is about -95.6..-85.5 in this frame. Homing repeatable (Shane).
                 HOME_SWITCH_ANGLE = -85.5;
+                MAGNET_BAND_DEG = 10.1;   // Range Test sweep
                 // -90, not -106: INSIDE the magnet band, so a homed turret can never
                 // park on the far side of the magnet, where homing can't find it
                 // (long-way test failed, 2026-11-06). Costs 16 deg of clockwise reach.
                 MIN_ANGLE = -90.0;
-                MAX_ANGLE = 106.0;
+                // +90, not +106: symmetric with -90, and keeps well off the tight
+                // side of the cable (Shane, 2026-11-06).
+                MAX_ANGLE = 90.0;
                 HOMING_DIRECTION = -1.0;   // toward the slack
                 // Finds the magnet from any start between it and +64.5 (-85.5 + 150),
                 // i.e. anywhere roughly forward. Beyond that: FAILED, turn it by hand.
@@ -308,6 +375,7 @@ public class Turret {
                 //   3. Turret Test: home, point it truly forward with the bumpers,
                 //      read Angle A; HOME_SWITCH_ANGLE -= A.
                 HOME_SWITCH_ANGLE = Double.NaN;
+                MAGNET_BAND_DEG = Double.NaN;
                 MIN_ANGLE = -90.0;   // placeholders; only used once homed, which
                 MAX_ANGLE = 90.0;    // can't happen until the magnet is measured
                 HOMING_DIRECTION = -1.0;
@@ -329,6 +397,7 @@ public class Turret {
                     + " turret NOT MEASURED - run Turret Range Test (see Turret.loadRobotNumbers)";
             return;
         }
+        forgetHoming();   // re-homing from scratch; kept again only if it succeeds
         state = State.HOMING;
         controlMode = ControlMode.HOLD;
         homingSearchDir = HOMING_DIRECTION;
@@ -373,6 +442,7 @@ public class Turret {
         homeTickOffset = readRawTicks();
         referenceAngle = assumedAngle;
         targetAngle = assumedAngle;
+        forgetHoming();   // a hand-set zero must never carry into the next op mode
         if (state == State.READY) {
             state = State.NOT_HOMED;
             controlMode = ControlMode.JOG;
@@ -383,6 +453,7 @@ public class Turret {
     /** Run every loop. This is the only place the servo is actually written to. */
     public void update() {
         double power;
+        checkMagnetAgreesWithAngle();
 
         switch (state) {
             case HOMING:
@@ -508,6 +579,9 @@ public class Turret {
             controlMode = ControlMode.HOLD;
             targetAngle = Range.clip(PARK_ANGLE, MIN_ANGLE, MAX_ANGLE);
             statusNote = "homed, parking";
+            keptTickOffset = homeTickOffset;     // later op modes reuse this
+            keptReferenceAngle = referenceAngle;
+            keptHomed = true;
             return 0.0;
         }
 
