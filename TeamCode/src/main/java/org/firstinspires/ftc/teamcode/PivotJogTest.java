@@ -158,7 +158,7 @@ public class PivotJogTest extends LinearOpMode {
         commanded = start;
 
         telemetry.addLine("PIVOT JOG TEST");
-        telemetry.addData("Robot", WhichRobot.number());
+        BuildInfo.show(telemetry);
         telemetry.addLine();
         telemetry.addLine("NOTHING WILL MOVE until you press Y.");
         telemetry.addData("Y will command", start);
@@ -186,7 +186,7 @@ public class PivotJogTest extends LinearOpMode {
                 pivot.setPosition(commanded);
             }
 
-            telemetry.addData("Robot", WhichRobot.number());
+            BuildInfo.show(telemetry);
             telemetry.addLine(inControl
                     ? "LB/RB fine | triggers coarse | X open end | B closed end"
                     : "PRESS Y TO TAKE CONTROL - nothing has moved yet");

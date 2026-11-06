@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.Auton;
 
+import org.firstinspires.ftc.teamcode.BuildInfo;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
 import org.firstinspires.ftc.teamcode.field.Alliance;
@@ -102,6 +103,7 @@ public class SelectAuto extends RouteAuto {
             }
             applyMenu(); // something changed -- rebuild the paths and recheck them
         }
+        BuildInfo.show(telemetry);
         menu.show(telemetry);
         telemetry.addLine("");
         addRouteTelemetry();

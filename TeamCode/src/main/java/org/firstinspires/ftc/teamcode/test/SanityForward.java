@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-import org.firstinspires.ftc.teamcode.WhichRobot;
+import org.firstinspires.ftc.teamcode.BuildInfo;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 /*
@@ -41,7 +41,7 @@ public class SanityForward extends OpMode {
         // Never hardcode them here -- that's how one robot drives wrong.
         Constants.applyDriveDirections(lf, lr, rf, rr);
 
-        telemetry.addData("Robot", WhichRobot.number());
+        BuildInfo.show(telemetry);
         telemetry.update();
     }
 

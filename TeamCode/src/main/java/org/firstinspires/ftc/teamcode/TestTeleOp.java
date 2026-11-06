@@ -31,6 +31,7 @@ public class TestTeleOp extends OpMode {
 
     @Override
     public void init() {
+        BuildInfo.show(telemetry);
         hardware = new RobotHardware();
         hardware.init(hardwareMap);
         shooter = new ShootAprilTag(hardware);

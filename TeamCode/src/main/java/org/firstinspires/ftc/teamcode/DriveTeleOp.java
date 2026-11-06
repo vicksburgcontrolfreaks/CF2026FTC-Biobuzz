@@ -16,13 +16,13 @@ public class DriveTeleOp extends OpMode {
 
     @Override
     public void init() {
+        BuildInfo.show(telemetry);
         hardware = new RobotHardware();
         hardware.init(hardwareMap);
         shooter = new ShootAprilTag(hardware);
         try {
             follower = Constants.createFollower(hardwareMap);
             telemetry.addData("Status", "Follower initialized");
-            telemetry.addData("Robot", WhichRobot.number());
         } catch (Exception e) {
             telemetry.addData("Error", "Follower failed: " + e.getMessage());
         }

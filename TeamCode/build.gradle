@@ -16,8 +16,42 @@ apply plugin: 'com.android.application'
 apply from: '../build.common.gradle'
 apply from: '../build.dependencies.gradle'
 
+// ---- Build info: which branch/commit is running on the robot ----
+// Baked into BuildConfig at build time and shown at INIT by BuildInfo.show(),
+// so a deploy from the wrong branch is visible BEFORE anyone presses start.
+// Falls back to "unknown" if git isn't available to the build.
+def gitOut = { List<String> gitArgs ->
+    try {
+        return providers.exec {
+            commandLine(['git'] + gitArgs)
+            ignoreExitValue = true
+        }.standardOutput.asText.get().trim()
+    } catch (Exception ignored) {
+        return ''
+    }
+}
+def gitBranch = gitOut(['rev-parse', '--abbrev-ref', 'HEAD']) ?: 'unknown'
+def gitCommit = gitOut(['rev-parse', '--short', 'HEAD']) ?: 'unknown'
+// "Dirty" = uncommitted changes to robot code. Only code paths count, so the
+// auto-regenerated VERSIONS.md doesn't flag every build.
+def gitDirty = !gitOut(['status', '--porcelain', '--',
+                        'TeamCode', 'FtcRobotController', 'build.common.gradle',
+                        'build.dependencies.gradle', 'build.gradle']).isEmpty()
+def buildTime = new Date().format('MM/dd HH:mm')
+
 android {
     namespace = 'org.firstinspires.ftc.teamcode'
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    defaultConfig {
+        buildConfigField 'String', 'GIT_BRANCH', "\"${gitBranch}\""
+        buildConfigField 'String', 'GIT_COMMIT', "\"${gitCommit}\""
+        buildConfigField 'boolean', 'GIT_DIRTY', "${gitDirty}"
+        buildConfigField 'String', 'BUILD_TIME', "\"${buildTime}\""
+    }
 
     // Pedro Pathing / Panels dependencies pull in AndroidX libraries that require
     // compiling against a newer Android API than the stock FTC SDK's compileSdk 30.
