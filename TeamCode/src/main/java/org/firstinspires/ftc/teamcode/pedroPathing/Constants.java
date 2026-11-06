@@ -92,18 +92,45 @@ public class Constants {
                 .leftFrontMotorName("lf"); //CH1 - also carries the turret encoder
     }
 
-    public static PinpointConstants localizerConstants = new PinpointConstants()
-            .forwardPodY(6.89) //175mm 6.89in
-            .strafePodX(0) // 0
-            .distanceUnit(DistanceUnit.INCH)
-            .hardwareMapName("pinpoint") //CH I2C Bus 0
-            .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
-            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
-            .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+    /*
+     * ODOMETRY (PINPOINT) SETUP: ONE PER ROBOT, like the drive directions.
+     * Check with Tuning > Localization > Localization Test (start pose faces 90 deg):
+     *   push forward 24"  -> y goes UP by 24
+     *   push left 24"     -> x goes DOWN by 24
+     *   spin one full turn in place -> total heading +6.28, x/y back within ~1"
+     */
+    public static PinpointConstants localizerConstants() {
+        switch (WhichRobot.get()) {
+            case R5618:
+                // NOT YET CHECKED on the 2026 robot -- still the 2025 port values.
+                return sharedLocalizer()
+                        .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
+                        .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+            case R6494:
+            default:
+                // Localization Test on 6494, 2026-11-05: forward push read y 72 -> 48
+                // (backwards), so the forward pod is REVERSED. Strafe was right
+                // (push right: x 72 -> 96), heading +6.3 per turn, spin drift < 1".
+                return sharedLocalizer()
+                        .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
+                        .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        }
+    }
+
+    /** Pinpoint settings that are the same on both robots. */
+    private static PinpointConstants sharedLocalizer() {
+        return new PinpointConstants()
+                // Spin test on 6494 (drift < 1") says these offsets are close enough.
+                .forwardPodY(6.89) //175mm 6.89in
+                .strafePodX(0) // 0
+                .distanceUnit(DistanceUnit.INCH)
+                .hardwareMapName("pinpoint") //CH I2C Bus 0
+                .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+    }
 
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
-                .pinpointLocalizer(localizerConstants)
+                .pinpointLocalizer(localizerConstants())
                 .pathConstraints(pathConstraints)
                 .mecanumDrivetrain(driveConstants())
                 .build();
