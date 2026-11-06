@@ -101,9 +101,13 @@ public class RobotHardware {
         shooterPivot = hardwareMap.get(Servo.class, "shooterPivot"); // EH servo 0
 
         // OPTIONAL: ShooterPivot already runs without its beam break (2026-10-31),
-        // and as of 2026-11-05 robot 5618's config has no "pivotHome" at all. It
-        // has analog "pivotPos" (EH analog 3) and "deflectorPos" (EH analog 1)
-        // instead, which nothing in code reads yet. null when it's not configured.
+        // and as of 2026-11-05 neither robot's config has "pivotHome" at all. The
+        // two analog feedback wires replaced it: "pivotPos" (EH analog 3) for the
+        // shooter pivot, and "deflectorPos" (CONTROL hub analog 1) for the
+        // deflector. Both robots' configs match on these (checked at the robot
+        // 2026-11-06; this comment used to say deflectorPos was EH analog 1,
+        // which was wrong). "deflectorPos" is read by the Prematch op mode;
+        // nothing reads "pivotPos" yet. null when it's not configured.
         pivotHome = hardwareMap.tryGet(DigitalChannel.class, "pivotHome"); // EH digital 0
         if (pivotHome != null) {
             pivotHome.setMode(DigitalChannel.Mode.INPUT);
