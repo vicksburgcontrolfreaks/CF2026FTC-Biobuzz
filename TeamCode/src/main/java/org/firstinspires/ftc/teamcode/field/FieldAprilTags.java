@@ -1,6 +1,9 @@
 package org.firstinspires.ftc.teamcode.field;
 
+import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Quaternion;
+import org.firstinspires.ftc.teamcode.geometry.Rigid3;
 import org.firstinspires.ftc.vision.apriltag.AprilTagLibrary;
 
 /*
@@ -83,6 +86,26 @@ public final class FieldAprilTags {
         for (Cell cell : Cell.values()) {
             for (int id : cell.tagIds) {
                 builder.addTag(id, cell.displayName + " cell #" + id, TAG_SIZE, DistanceUnit.INCH);
+            }
+        }
+        return builder.build();
+    }
+
+    /**
+     * Like getLibrary(), but each tag also knows where it is on the field, so
+     * the SDK can fill in detection.robotPose. Positions are for the hives tipped
+     * HiveTags.REFERENCE -- TagLocalizer corrects for the real tilt. Uses the
+     * MADE-UP numbers in HiveTags until those are measured.
+     */
+    public static AprilTagLibrary getLocalizationLibrary() {
+        AprilTagLibrary.Builder builder = new AprilTagLibrary.Builder();
+        for (Cell cell : Cell.values()) {
+            for (int id : cell.tagIds) {
+                Rigid3 pose = HiveTags.tagPose(id, HiveTags.REFERENCE);
+                double[] q = pose.toQuaternion();
+                builder.addTag(id, cell.displayName + " cell #" + id, TAG_SIZE,
+                        new VectorF((float) pose.x(), (float) pose.y(), (float) pose.z()), DistanceUnit.INCH,
+                        new Quaternion((float) q[0], (float) q[1], (float) q[2], (float) q[3], 0));
             }
         }
         return builder.build();
