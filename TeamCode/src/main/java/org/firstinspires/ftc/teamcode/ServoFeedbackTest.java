@@ -32,7 +32,9 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 @TeleOp(name = "Servo Feedback Test", group = "Test")
 public class ServoFeedbackTest extends LinearOpMode {
 
-    private static final String SERVO_NAME = "deflectorPivot";
+    // 6494 config (Shane, 2026-11-06). Same name as the feedback input: that works,
+    // because hardwareMap.get(type, name) only matches devices of that type.
+    private static final String SERVO_NAME = "deflectorPos";
     // Was "pivotPos" -- renamed in the config to keep it apart from the shooter pivot.
     private static final String FEEDBACK_NAME = "deflectorPos";
 
