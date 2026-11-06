@@ -15,6 +15,7 @@ import org.firstinspires.ftc.teamcode.field.PoseHandoff;
 import org.firstinspires.ftc.teamcode.geometry.FieldCentric;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.shooting.NectarGuard;
+import org.firstinspires.ftc.teamcode.subsystems.Deflector;
 import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
@@ -41,6 +42,9 @@ import java.util.List;
  *   LT (hold)    collector + indexer backward
  *   Y            flywheel on / off (after a JAM fault: clears it and spins up)
  *   Right stick X  turret by hand -- overrides aiming while held
+ *   Left stick   FLICK up / down: deflector (shot arc) one position higher /
+ *                lower -- 0 / 70 / 75 / 80 / 90 deg. Return to center between
+ *                flicks. Needs the pre-match zero (see Deflector).
  *   D-pad Up     park the turret forward / resume aiming
  *   D-pad Down   "a NECTAR is next": nectar gap until the next shot
  *   D-pad L / R  aim at our AUDIENCE / SCORING cell (with "Our side": until the
@@ -105,6 +109,8 @@ public class DriveTeleOp extends OpMode {
     private Turret turret;
     private TurretCamera camera;
     private TurretAim aim;
+    private Deflector deflector;
+    private boolean deflectorStickArmed = true;
 
     private final Launcher.Controls controls = new Launcher.Controls();
     private final ElapsedTime loopTimer = new ElapsedTime();
@@ -125,6 +131,7 @@ public class DriveTeleOp extends OpMode {
         launcher = new Launcher(hardware, hardwareMap);
         turret = hardware.turret;
         camera = new TurretCamera(hardwareMap);
+        deflector = new Deflector(hardwareMap);
 
         if (PoseHandoff.has() && PoseHandoff.ageSeconds() < AUTO_POSE_FRESH_SEC) {
             if (PoseHandoff.alliance() != null) alliance.set(PoseHandoff.alliance());
@@ -137,6 +144,7 @@ public class DriveTeleOp extends OpMode {
     public void init_loop() {
         menu.update(gamepad1);
         camera.update();
+        deflector.update(false);   // keep counting turns, never move during INIT
 
         BuildInfo.show(telemetry);
         menu.show(telemetry);
@@ -167,6 +175,9 @@ public class DriveTeleOp extends OpMode {
                     + ": pivot won't move, nectar guard can't protect.");
         }
         telemetry.addData("Camera", camera.getNote());
+        if (deflector.isPresent() && !deflector.isZeroed()) {
+            telemetry.addLine(">>> Deflector NOT ZEROED - it won't move. Run the pre-match zero first.");
+        }
         telemetry.update();
     }
 
@@ -206,6 +217,7 @@ public class DriveTeleOp extends OpMode {
         drive();
         operateLauncher();
         operateTurret(dt);
+        operateDeflector();
         feedback();
         showTelemetry(dt);
     }
@@ -290,6 +302,20 @@ public class DriveTeleOp extends OpMode {
         turret.update();
     }
 
+    // ---- Gamepad 2: deflector (shot arc) --------------------------------------
+
+    private void operateDeflector() {
+        // A flick, not a dial: one step per push, re-armed back near center.
+        double y = -gamepad2.left_stick_y;   // up = +
+        if (deflectorStickArmed && Math.abs(y) > 0.6) {
+            if (y > 0) deflector.stepUp(); else deflector.stepDown();
+            deflectorStickArmed = false;
+        } else if (Math.abs(y) < 0.3) {
+            deflectorStickArmed = true;
+        }
+        deflector.update(true);
+    }
+
     private void setTarget(FieldAprilTags.Cell cell) {
         if (cell == targetCell) return;
         targetCell = cell;
@@ -333,6 +359,12 @@ public class DriveTeleOp extends OpMode {
                 guard.getState(), guard.getNote());
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
+        if (deflector.isPresent()) {
+            telemetry.addData("Arc", deflector.isZeroed()
+                    ? String.format("%.1f deg (target %.0f%s)", deflector.getAngle(), deflector.getTarget(),
+                            deflector.isOnTarget() ? "" : ", moving")
+                    : "NOT ZEROED - won't move");
+        }
         telemetry.addData("Aim at", "%s%s", targetCell.displayName,
                 !bySide ? "" : targetCell == lastSideCell ? "  (our side)" : "  (picked - until we cross the middle)");
         telemetry.addLine("");
@@ -350,6 +382,7 @@ public class DriveTeleOp extends OpMode {
     @Override
     public void stop() {
         if (turret != null) turret.stop();
+        if (deflector != null) deflector.stop();
         if (camera != null) camera.close();
     }
 }
