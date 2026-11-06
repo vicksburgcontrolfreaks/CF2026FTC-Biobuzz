@@ -55,6 +55,8 @@ public class Deflector {
     private double target;       // deflector degrees
     private int index;
     private double appliedPower = 0;
+    private boolean jogging = false;
+    private double jogPower = 0;
 
     public Deflector(HardwareMap hardwareMap) {
         servo = hardwareMap.tryGet(CRServo.class, SERVO_NAME);
@@ -93,8 +95,34 @@ public class Deflector {
         lastRaw = raw;
         remember();
 
-        appliedPower = (allowMotion && zeroed) ? DeflectorLogic.power(getAngle(), target) : 0;
+        if (!allowMotion) {
+            appliedPower = 0;
+        } else if (jogging) {
+            appliedPower = jogPower * DeflectorLogic.POWER_SIGN;
+            if (zeroed) {   // limits mean something only once zeroed
+                double a = getAngle();
+                if (a >= DeflectorLogic.MAX_ANGLE && jogPower > 0) appliedPower = 0;
+                if (a <= DeflectorLogic.MIN_ANGLE && jogPower < 0) appliedPower = 0;
+            }
+        } else {
+            appliedPower = zeroed ? DeflectorLogic.power(getAngle(), target) : 0;
+        }
         servo.setPower(appliedPower);
+    }
+
+    /**
+     * Drive by hand, every loop: + = up. Works BEFORE zeroing (that's how you
+     * get it level). Pass 0 to let go: it then holds where it stopped (if zeroed).
+     * Soft limits apply once zeroed.
+     */
+    public void jog(double power) {
+        boolean nowJogging = power != 0;
+        if (jogging && !nowJogging && zeroed) {
+            target = DeflectorLogic.clipToLimits(getAngle());   // hold here, don't snap back
+            index = DeflectorLogic.nearestIndex(target);
+        }
+        jogging = nowJogging;
+        jogPower = Math.max(-1, Math.min(1, power));
     }
 
     /** "It's level right now": this is 0 degrees. Kept for later op modes. */
