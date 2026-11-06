@@ -86,7 +86,8 @@ import java.util.concurrent.TimeUnit;
  *   - Moving the robot makes it re-aim in steps and settle again.
  *   - Briefly blocking the camera makes it HOLD its last angle, not wander.
  *   - Blocking it for longer puts Phase into SEARCHING: the turret steps across
- *     its travel pausing to look, stops the moment it sees any hive, and hands
+ *     its travel pausing to look, stops the moment it sees the hive it wants
+ *     (any hive with AUTO_CELL on; only the picked one in manual), and hands
  *     back to TRACKING. Cover the camera completely and it finishes the sweep,
  *     goes PARKED at 0 deg, and waits there.
  *
@@ -207,6 +208,10 @@ public class TurretAimTest extends LinearOpMode {
             // Order matters: decide the target first, then let the turret act on
             // it in the same loop. TurretAim only ever calls setTargetAngle();
             // turret.update() is still the only thing that writes to the servo.
+            // AUTO_CELL retargets to whatever hive is in view, so any hive may
+            // end a search. A D-pad-picked cell searches for THAT cell only --
+            // which is how match code will behave.
+            aim.setAcceptAnyHive(AUTO_CELL);
             aim.update(detections, turret, aiming);
             turret.update();
 
