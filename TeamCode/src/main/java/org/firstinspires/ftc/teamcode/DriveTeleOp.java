@@ -8,7 +8,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @TeleOp(name = "DriveTeleOp", group = "TeleOp")
 public class DriveTeleOp extends OpMode {
-    private static final double DRIVE_SPEED = 0.5; // 1.0 = full power; 0.5 for practice
+    private static final double DRIVE_SPEED = 1.0; // 1.0 = full power. Lower (e.g. 0.5) only for new-driver practice.
     private RobotHardware hardware;
     private ShootAprilTag shooter;
     private Follower follower;
