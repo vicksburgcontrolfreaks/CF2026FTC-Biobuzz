@@ -126,16 +126,36 @@ public class Turret {
     public static double HOME_SWITCH_ANGLE = -80.5;
 
     // Which way to search FIRST, and -- more importantly -- the direction the final
-    // approach always comes from. The magnet is just below center, so searching
-    // negative finds it quickly from most positions. If the first direction stalls
-    // against a stop, homing reverses automatically.
+    // approach always comes from. Clockwise (-): the side with cable slack, and the
+    // magnet (-80.5) is near that end, so clockwise finds it from almost anywhere.
+    // See HOMING_SEARCH_MAX_DEG for the rare start below the magnet.
     public static double HOMING_DIRECTION = -1.0;
     public static double HOMING_POWER = 0.25;
 
-    // Per-direction budget, not a total. Worst case is a full 165 degrees of travel
-    // to reach the magnet, so 6.0 is probably too short -- expect to raise it once
-    // the turret's actual speed at HOMING_POWER is known.
-    public static double HOMING_TIMEOUT_SEC = 6.0;
+    // ---- Homing: how far to search (6494, 2026-11-06) ------------------------
+    // There are no hard stops any more, so "search until you stall, then reverse"
+    // no longer works -- nothing stops it. The search is limited by DISTANCE instead,
+    // measured on the encoder (which counts fine before homing; only the zero is
+    // unknown).
+    //
+    // The cable is what limits travel, and it is NOT symmetric (Shane): plenty of
+    // slack past -106 (clockwise, HOMING_DIRECTION), tight past +106 (CCW). So:
+    //   1. Search clockwise up to HOMING_SEARCH_MAX_DEG. From anywhere at or above
+    //      the magnet (-80.5 .. +106, almost all of travel) that finds it.
+    //   2. Not found -> the turret started in the ~16 deg below the magnet, and has
+    //      now overshot into the slack side. Reverse, CCW, at most as far as leg 1
+    //      went plus HOMING_REVERSE_MARGIN_DEG -- so leg 2 can never end up more
+    //      than that margin above where homing STARTED, which keeps it well clear
+    //      of the tight +106 end. It meets the magnet from below on the way.
+    // 200 = the 186.5 deg from +106 down to the magnet, plus margin.
+    public static double HOMING_SEARCH_MAX_DEG = 200.0;
+    public static double HOMING_REVERSE_MARGIN_DEG = 30.0;
+
+    // Backstop only: if a leg takes longer than this, the servo is too slow or not
+    // moving, so FAIL (don't reverse). Distance, not time, decides the reversal --
+    // at ~27 deg/s, 186 deg is ~7 s, which the old 6 s timer could cut short and
+    // then send the turret CCW into the tight cable.
+    public static double HOMING_TIMEOUT_SEC = 15.0;
 
     // ---- Homing: the final approach -----------------------------------------
     // The magnet trigger band is WIDE -- measured at 942 ticks, about 12 degrees.
@@ -208,6 +228,8 @@ public class Turret {
     // hard stop before reaching it; when that happens the search flips once.
     private double homingSearchDir = HOMING_DIRECTION;
     private boolean homingReversed = false;
+    private int searchLegStartTicks = 0;       // reading when this search leg began
+    private double firstLegDeg = 0.0;          // how far leg 1 went before reversing
     private HomingPhase homingPhase = HomingPhase.SEARCH;
     private boolean backoffReleased = false;   // has the switch let go yet?
     private int backoffStartTicks = 0;         // reading when it let go
@@ -243,6 +265,8 @@ public class Turret {
         controlMode = ControlMode.HOLD;
         homingSearchDir = HOMING_DIRECTION;
         homingReversed = false;
+        searchLegStartTicks = readRawTicks();
+        firstLegDeg = 0.0;
         homingPhase = HomingPhase.SEARCH;
         backoffReleased = false;
         homingTimer.reset();
@@ -353,26 +377,39 @@ public class Turret {
             return 0.0;
         }
 
-        // Either the search ran out of time or it ran into a hard stop. Both mean
-        // "the magnet is not this way", so flip once and try the other direction.
-        boolean timedOut = homingTimer.seconds() > HOMING_TIMEOUT_SEC;
+        // See HOMING_SEARCH_MAX_DEG: distance decides the reversal, not time.
+        double legDeg = Math.abs(readRawTicks() - searchLegStartTicks) / TICKS_PER_DEGREE;
+        double legMax = homingReversed
+                ? firstLegDeg + HOMING_REVERSE_MARGIN_DEG
+                : HOMING_SEARCH_MAX_DEG;
+        boolean wentFarEnough = legDeg >= legMax;
         boolean hitSomething = isStalled();
 
-        if (timedOut || hitSomething) {
+        if (homingTimer.seconds() > HOMING_TIMEOUT_SEC) {
+            state = State.FAILED;
+            statusNote = String.format(
+                    "HOMING FAILED - only %.0f deg in %.0f s; servo slow or not moving?",
+                    legDeg, HOMING_TIMEOUT_SEC);
+            return 0.0;
+        }
+
+        if (wentFarEnough || hitSomething) {
             if (!homingReversed) {
                 homingReversed = true;
+                firstLegDeg = legDeg;
                 homingSearchDir = -homingSearchDir;
+                searchLegStartTicks = readRawTicks();
                 homingTimer.reset();
                 resetStallWatch();
-                statusNote = (hitSomething ? "hit a stop" : "timed out")
-                        + ", reversing search";
+                statusNote = String.format("%s after %.0f deg, reversing search",
+                        hitSomething ? "stalled" : "no magnet", legDeg);
                 return 0.0;   // pause a loop before driving the other way
             }
 
             state = State.FAILED;
             statusNote = hitSomething
-                    ? "HOMING FAILED - hit stops both ways, never saw the magnet"
-                    : "HOMING FAILED - timed out both ways; raise HOMING_TIMEOUT_SEC";
+                    ? "HOMING FAILED - stalled; something blocking the turret?"
+                    : "HOMING FAILED - no magnet either way; check the switch wiring";
             return 0.0;
         }
 

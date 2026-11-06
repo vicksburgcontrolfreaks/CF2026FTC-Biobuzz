@@ -2,6 +2,8 @@
 
 How to test the turret subsystem the first time it goes on the robot.
 
+> **2026-11-06, 6494 rebuild (Shane):** the turret has **no hard stops** now -- the cable is the limit (slack clockwise, tight counter-clockwise). Re-measured: `HOME_SWITCH_ANGLE` -80.5, limits +/-106. Homing now reverses on **distance** (`HOMING_SEARCH_MAX_DEG`), not on stall/timeout. The 286 deg / +/-143 numbers below are the old build.
+
 **Status:** **ran under power for the first time on 2026-10-20.** Steps 6, 7 and 8
 were exercised on the robot: homing completes, the closed loop holds a target, and
 the soft limits do stop the turret. The committed defaults were good enough as they
