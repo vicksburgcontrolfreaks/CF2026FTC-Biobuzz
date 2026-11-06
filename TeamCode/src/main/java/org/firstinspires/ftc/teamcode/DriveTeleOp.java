@@ -30,7 +30,8 @@ import java.util.List;
  * GAMEPAD 1 (driver)
  *   Left stick   drive (field-centric: forward = away from OUR drivers)
  *   Right stick  turn
- *   BACK         "the robot faces away from me right now" -- heading reset, rumbles
+ *   X            "the robot faces away from me right now" -- heading reset, rumbles
+ *                (was BACK until 2026-11-06; BACK didn't register reliably on 6494)
  *
  * GAMEPAD 2 (operator)                             (all "hold" = only while held)
  *   RB (hold)    FIRE: starts the flywheel if it's off, then one ball at a time
@@ -127,7 +128,7 @@ public class DriveTeleOp extends OpMode {
     private boolean cameraPicks = false;               // "our cells, camera picks"
     private FieldAprilTags.Cell lastSideCell = null;   // what "our side" said last loop
     private boolean turretParked = false;
-    private int headingResets = 0;                      // gamepad1 BACK presses seen
+    private int headingResets = 0;                      // gamepad1 X presses seen
     private final ElapsedTime headingResetTimer = new ElapsedTime();
     private boolean turretManual = false;
     private boolean wasReady = false;
@@ -238,7 +239,7 @@ public class DriveTeleOp extends OpMode {
     // ---- Gamepad 1 ------------------------------------------------------------
 
     private void drive() {
-        if (gamepad1.backWasPressed()) {
+        if (gamepad1.xWasPressed()) {
             Pose p = follower.getPose();
             follower.setPose(new Pose(p.getX(), p.getY(), alliance.get().awayFromDriversHeading()));
             gamepad1.rumble(300);
@@ -405,9 +406,9 @@ public class DriveTeleOp extends OpMode {
         Pose p = follower.getPose();
         telemetry.addData("Pose", "(%.1f, %.1f) %.1f deg  [%s]", p.getX(), p.getY(),
                 Math.toDegrees(p.getHeading()), alliance.get());
-        // BACK check: the count goes up on every press the code sees. Right after a
+        // X check: the count goes up on every press the code sees. Right after a
         // press, heading should read the "away" heading (red 0, blue 180).
-        telemetry.addData("Heading reset", headingResets == 0 ? "never (gamepad1 BACK)"
+        telemetry.addData("Heading reset", headingResets == 0 ? "never (gamepad1 X)"
                 : String.format("%d times, last %.0f s ago (sets %.0f deg)", headingResets,
                         headingResetTimer.seconds(), Math.toDegrees(alliance.get().awayFromDriversHeading())));
         // For recalibrating the nectar trip at the real feed speed.
