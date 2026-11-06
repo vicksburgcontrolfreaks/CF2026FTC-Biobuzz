@@ -52,10 +52,11 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 @TeleOp(name = "Shooter Test", group = "Test")
 public class ShooterTest extends LinearOpMode {
 
-    // 6494 tops out ~1300 at full power (HD Hex + 3:1 + flywheel), so 1500 never
-    // reached READY. 1250 chosen on the robot 2026-11-06 (1100 reached READY);
-    // close to the max, so watch how fast the wheels recover between shots.
-    public static double START_RPM = 1250;
+    // 1300 chosen on 6494, 2026-11-06, with the indexer at 25 RPM. That's about
+    // the wheels' max at full power (HD Hex + 3:1 + flywheel; 1500 never reached
+    // READY). With no headroom, a tired battery may never reach READY, and the
+    // wheels recover slowly between shots. If READY won't come on, drop to 1250.
+    public static double START_RPM = 1300;
     public static double RPM_STEP = 50;
 
     private boolean aPrev, upPrev, downPrev, rbPrev, lbPrev, bPrev;
