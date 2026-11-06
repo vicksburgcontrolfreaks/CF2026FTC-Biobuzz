@@ -9,6 +9,8 @@ import com.qualcomm.robotcore.hardware.TouchSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
+import org.firstinspires.ftc.teamcode.WhichRobot;
+
 /**
  * Turret subsystem: a continuous-rotation servo turning a 30T drive gear into a
  * 69T turret gear (2.3:1 reduction), with a REV Through Bore encoder for position
@@ -101,6 +103,11 @@ public class Turret {
     // wrap is the real limit. Shane swept by hand to where it should stop: +/-109.4
     // either side of the sweep's middle, so +/-106 with the same 3 deg margin.
     // Everything above about 286 deg / stops at +/-143 is the OLD build.
+    //
+    // PER ROBOT: MIN_ANGLE, MAX_ANGLE, HOME_SWITCH_ANGLE and HOMING_DIRECTION are
+    // overwritten by init() from loadRobotNumbers(). Edit the numbers THERE. The
+    // defaults written here are 6494's, only so laptop code that reads them before
+    // any init() sees sane values.
     public static double MIN_ANGLE = -106.0;
     public static double MAX_ANGLE = 106.0;
 
@@ -124,12 +131,14 @@ public class Turret {
     // 10.1 deg (-90.6 to -80.5). The magnet moved ~59 deg in the 2026 rebuild, which
     // is why homing parked ~65 deg off forward. The 10-15 history above is the old mount.
     // -80.5 parked ~5 deg CCW of true forward (Shane, by eye), so +5: -75.5.
-    public static double HOME_SWITCH_ANGLE = -75.5;
+    // -75.5 then parked 10 deg CW of forward (Shane jogged it, read the angle): -85.5.
+    // Per robot -- see loadRobotNumbers().
+    public static double HOME_SWITCH_ANGLE = -85.5;
 
     // Which way to search FIRST, and -- more importantly -- the direction the final
     // approach always comes from. Clockwise (-): the side with cable slack, and the
     // magnet (-80.5) is near that end, so clockwise finds it from almost anywhere.
-    // See HOMING_SEARCH_MAX_DEG for the rare start below the magnet.
+    // See HOMING_SEARCH_MARGIN_DEG for the rare start below the magnet. Per robot.
     public static double HOMING_DIRECTION = -1.0;
     public static double HOMING_POWER = 0.25;
 
@@ -141,15 +150,16 @@ public class Turret {
     //
     // The cable is what limits travel, and it is NOT symmetric (Shane): plenty of
     // slack past -106 (clockwise, HOMING_DIRECTION), tight past +106 (CCW). So:
-    //   1. Search clockwise up to HOMING_SEARCH_MAX_DEG. From anywhere at or above
+    //   1. Search clockwise up to searchMaxDeg(). From anywhere at or above
     //      the magnet (-80.5 .. +106, almost all of travel) that finds it.
     //   2. Not found -> the turret started in the ~16 deg below the magnet, and has
     //      now overshot into the slack side. Reverse, CCW, at most as far as leg 1
     //      went plus HOMING_REVERSE_MARGIN_DEG -- so leg 2 can never end up more
     //      than that margin above where homing STARTED, which keeps it well clear
     //      of the tight +106 end. It meets the magnet from below on the way.
-    // 200 = the 186.5 deg from +106 down to the magnet, plus margin.
-    public static double HOMING_SEARCH_MAX_DEG = 200.0;
+    // Leg 1's cap is worked out per robot in searchMaxDeg(): the distance from the
+    // far soft limit to the magnet, plus this margin (6494: 106 + 85.5 + 15 = 206.5).
+    public static double HOMING_SEARCH_MARGIN_DEG = 15.0;
     public static double HOMING_REVERSE_MARGIN_DEG = 30.0;
 
     // Backstop only: if a leg takes longer than this, the servo is too slow or not
@@ -249,6 +259,7 @@ public class Turret {
         homeSwitch = hardwareMap.get(TouchSensor.class, "turretHome");
 
         servo.setPower(0.0);
+        loadRobotNumbers();
 
         // Treat wherever we booted up as angle 0 until homing proves otherwise.
         // Soft limits stay OFF while NOT_HOMED, because this number is a guess.
@@ -260,8 +271,66 @@ public class Turret {
 
     // ---- Commands -----------------------------------------------------------
 
+    /**
+     * The numbers that differ between the two robots' turrets: where the magnet
+     * is, where the cable says stop, and which way has the slack. Same idea as
+     * pedroPathing/Constants for the drivetrain: one place, picked by the config
+     * name, so deploying to the other robot can't run this one's numbers.
+     *
+     * NaN HOME_SWITCH_ANGLE = "not measured": jogging works, homing refuses. That
+     * stops a guessed magnet position from parking the turret wrong or homing it
+     * toward the tight side of its cable.
+     */
+    private static void loadRobotNumbers() {
+        switch (WhichRobot.get()) {
+            case R6494:
+                // Shane, 2026-11-06. No hard stops; cable has slack clockwise (-),
+                // tight counter-clockwise (+). Magnet band -90.6..-80.5 on the
+                // Range Test sweep; -85.5 after two by-eye forward corrections.
+                HOME_SWITCH_ANGLE = -85.5;
+                MIN_ANGLE = -106.0;
+                MAX_ANGLE = 106.0;
+                HOMING_DIRECTION = -1.0;   // toward the slack
+                break;
+            case R5618:
+            default:
+                // NOT MEASURED YET (parts still arriving, 2026-11-06). To fill in:
+                //   1. Turret Range Test: sweep by hand to where the cable says stop,
+                //      both ways, passing the magnet. Copy HOME_SWITCH_ANGLE and the
+                //      suggested MIN/MAX.
+                //   2. Ask which way the cable has slack; HOMING_DIRECTION points
+                //      that way (-1 clockwise, +1 counter-clockwise).
+                //   3. Turret Test: home, point it truly forward with the bumpers,
+                //      read Angle A; HOME_SWITCH_ANGLE -= A.
+                HOME_SWITCH_ANGLE = Double.NaN;
+                MIN_ANGLE = -90.0;   // placeholders; only used once homed, which
+                MAX_ANGLE = 90.0;    // can't happen until the magnet is measured
+                HOMING_DIRECTION = -1.0;
+                break;
+        }
+    }
+
+    /** True once this robot's magnet position has been measured (see loadRobotNumbers). */
+    public static boolean isMeasured() {
+        return !Double.isNaN(HOME_SWITCH_ANGLE);
+    }
+
+    /** Leg-1 search cap: far soft limit to the magnet, plus margin. */
+    private static double searchMaxDeg() {
+        double farToMagnet = HOMING_DIRECTION < 0
+                ? MAX_ANGLE - HOME_SWITCH_ANGLE
+                : HOME_SWITCH_ANGLE - MIN_ANGLE;
+        return farToMagnet + HOMING_SEARCH_MARGIN_DEG;
+    }
+
     /** Begin homing. It finishes inside update() over the next few seconds. */
     public void startHoming() {
+        if (!isMeasured()) {
+            state = State.NOT_HOMED;
+            statusNote = "robot " + WhichRobot.number()
+                    + " turret NOT MEASURED - run Turret Range Test (see Turret.loadRobotNumbers)";
+            return;
+        }
         state = State.HOMING;
         controlMode = ControlMode.HOLD;
         homingSearchDir = HOMING_DIRECTION;
@@ -378,11 +447,11 @@ public class Turret {
             return 0.0;
         }
 
-        // See HOMING_SEARCH_MAX_DEG: distance decides the reversal, not time.
+        // See HOMING_SEARCH_MARGIN_DEG: distance decides the reversal, not time.
         double legDeg = Math.abs(readRawTicks() - searchLegStartTicks) / TICKS_PER_DEGREE;
         double legMax = homingReversed
                 ? firstLegDeg + HOMING_REVERSE_MARGIN_DEG
-                : HOMING_SEARCH_MAX_DEG;
+                : searchMaxDeg();
         boolean wentFarEnough = legDeg >= legMax;
         boolean hitSomething = isStalled();
 
