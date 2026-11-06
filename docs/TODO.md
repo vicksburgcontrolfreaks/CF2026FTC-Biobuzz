@@ -13,6 +13,41 @@ would otherwise get lost in commit messages.
 > the pivot band, which the whole repo's pivot safety depends on. Most measured
 > numbers in this file are now suspect.
 
+### 0. Odometry (Pinpoint) problems on both robots — found 2026-11-05
+**Why:** auto can only be as accurate as the odometry. Pedro follows where the
+robot *thinks* it is.
+
+**6494: phantom sideways drift.**
+- Tuning > Tests > Line drifts the robot ~6" LEFT over 6 round trips.
+- Localization Test, pushing it straight forward/back 24" by hand along a
+  tile seam: **y read -4.3 after ~6 round trips** (should stay ~0). The robot
+  thinks it slides right, so Pedro steers left.
+- Same drift with the old (2025) and new (measured) tuning numbers, so it's
+  NOT the tuning.
+- It accumulates instead of cancelling on the way back, so it's direction-
+  dependent: suspect the **strafe pod**. Check, robot lifted: rollers on the
+  pod wheel spin freely both ways (push the wheel along its axle); spring
+  presses it down firmly and flat; mount tight and square to the forward pod;
+  compare to the forward pod, which works. Also note heading after the push
+  test (if heading drifts > ~0.03 per round trip, it's heading, not the pod).
+- **Done when:** push test keeps y within ~0.5" over 6 round trips, and Line
+  stops drifting.
+
+**5618: two open issues.**
+- "x didn't move more than an inch" in Localization Test. If that was the
+  SIDEWAYS push, the strafe pod isn't counting (pod not touching, cable, or
+  dead pod). Re-check: push sideways 24", x should change by ~24.
+- Total heading read **+6.6 per full turn** (should be 6.28; 6494 read 6.3).
+  Redo carefully against a tile seam. If it's really 6.6, check the Pinpoint
+  is mounted flat and solid; there's a heading-scale setting to correct it.
+- Don't run autos or Pedro tuners on 5618 until both are resolved.
+
+**Already done:** both robots' forward pods are REVERSED (fixed in code);
+6494 velocities + zero-power acceleration measured on a fresh battery; Tuning
+start pose fixed to (0, 0, 0). Still to do: weigh both robots (`mass`), PID
+tuning if routes need more precision, all of Stage 2 on 5618, and maybe
+voltage compensation (off for now, so run auto on a fresh battery).
+
 ### 1. Pull the robot config XML into the repo
 **Blocked on:** building the config once on the Driver Station.
 

@@ -52,8 +52,9 @@ public abstract class RouteAuto extends OpMode {
     // hive) -- the launcher isn't built yet. Time the real one and fix this.
     private static final double LAUNCH_SECONDS = 3;
 
-    // Top speed while testing (1.0 = full speed). Raise it once the robot stops where it should.
-    private static final double MAX_POWER = 0.85;
+    // 0.5 for the first 2026-robot runs (2026-11-05): 6494 odometry still drifts
+    // ~1" per round trip (see docs/TODO.md). Raise in steps once routes end where they should.
+    private static final double MAX_POWER = 0.5;
 
     private Alliance alliance;
     private Route route;
