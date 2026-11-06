@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Autonomous(name = "MotorCurrentTest", group = "Test")
 public class MotorCurrentTest extends LinearOpMode {
@@ -21,11 +22,8 @@ public class MotorCurrentTest extends LinearOpMode {
         lr = hardwareMap.get(DcMotorEx.class, "lr");
         rr = hardwareMap.get(DcMotorEx.class, "rr");
 
-        // Set directions for mechanum (adjust if needed)
-        lf.setDirection(DcMotor.Direction.FORWARD);
-        lr.setDirection(DcMotor.Direction.FORWARD);
-        rf.setDirection(DcMotor.Direction.REVERSE);
-        rr.setDirection(DcMotor.Direction.REVERSE);
+        // Directions come from Constants, per robot (5618 and 6494 differ).
+        Constants.applyDriveDirections(lf, lr, rf, rr);
 
         telemetry.addData("Status", "Ready to test");
         telemetry.update();

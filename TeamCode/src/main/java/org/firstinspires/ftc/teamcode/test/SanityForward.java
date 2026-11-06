@@ -6,6 +6,9 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.teamcode.WhichRobot;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+
 /*
  * Sanity check: drive straight forward for 1 second, slowly.
  *
@@ -34,10 +37,12 @@ public class SanityForward extends OpMode {
         rf = hardwareMap.get(DcMotor.class, "rf");
         rr = hardwareMap.get(DcMotor.class, "rr");
 
-        lf.setDirection(DcMotorSimple.Direction.REVERSE);
-        lr.setDirection(DcMotorSimple.Direction.REVERSE);
-        rf.setDirection(DcMotorSimple.Direction.FORWARD);
-        rr.setDirection(DcMotorSimple.Direction.FORWARD);
+        // Directions come from Constants, per robot (5618 and 6494 differ).
+        // Never hardcode them here -- that's how one robot drives wrong.
+        Constants.applyDriveDirections(lf, lr, rf, rr);
+
+        telemetry.addData("Robot", WhichRobot.number());
+        telemetry.update();
     }
 
     @Override

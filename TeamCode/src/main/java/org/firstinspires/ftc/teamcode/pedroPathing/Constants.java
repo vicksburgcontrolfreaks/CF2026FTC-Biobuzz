@@ -66,6 +66,20 @@ public class Constants {
         }
     }
 
+    /**
+     * Sets this robot's drive directions on raw motors, for code that drives
+     * without Pedro (RobotHardware, sanity tests). The ONLY way anything outside
+     * Pedro should set a drive direction -- never hardcode them.
+     */
+    public static void applyDriveDirections(DcMotorSimple lf, DcMotorSimple lr,
+                                            DcMotorSimple rf, DcMotorSimple rr) {
+        MecanumConstants drive = driveConstants();
+        lf.setDirection(drive.leftFrontMotorDirection);
+        lr.setDirection(drive.leftRearMotorDirection);
+        rf.setDirection(drive.rightFrontMotorDirection);
+        rr.setDirection(drive.rightRearMotorDirection);
+    }
+
     /** The parts of the drive setup that are the same on both robots. */
     private static MecanumConstants sharedDrive() {
         return new MecanumConstants()

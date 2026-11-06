@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
@@ -71,11 +72,9 @@ public class RobotHardware {
         rf = hardwareMap.get(DcMotorEx.class, "rf"); // EH1
         lr = hardwareMap.get(DcMotorEx.class, "lr"); // CH0
         lf = hardwareMap.get(DcMotorEx.class, "lf"); // CH1, carries the turret encoder
-        // Directions from Constants
-        lf.setDirection(DcMotorSimple.Direction.REVERSE);
-        lr.setDirection(DcMotorSimple.Direction.FORWARD);
-        rf.setDirection(DcMotorSimple.Direction.FORWARD);
-        rr.setDirection(DcMotorSimple.Direction.REVERSE);
+        // Directions come from Constants, per robot (5618 and 6494 differ).
+        // Pedro sets the same values again when createFollower() runs.
+        Constants.applyDriveDirections(lf, lr, rf, rr);
 
         // Collection system
         collector = hardwareMap.get(DcMotorEx.class, "collector"); // CH3
