@@ -24,6 +24,7 @@ public class ShooterLogicTest {
     private double now;
 
     private double savedTol, savedSettle, savedFeed, savedCont, savedMinRec, savedWarn, savedDisagree;
+    private double savedDip, savedPause, savedNoBall;
     private ShooterLogic.FeedMode savedMode;
 
     @Before public void setUp() {
@@ -35,6 +36,9 @@ public class ShooterLogicTest {
         savedWarn = ShooterLogic.SPINUP_WARN_SEC;
         savedDisagree = ShooterLogic.DISAGREE_RPM;
         savedMode = ShooterLogic.FEED_MODE;
+        savedDip = ShooterLogic.DIP_RPM;
+        savedPause = ShooterLogic.PAUSE_SEC;
+        savedNoBall = ShooterLogic.NO_BALL_SEC;
 
         ShooterLogic.TOLERANCE_RPM = 50;
         ShooterLogic.SETTLE_SEC = 0.10;
@@ -43,7 +47,10 @@ public class ShooterLogicTest {
         ShooterLogic.MIN_RECOVERY_SEC = 0.10;
         ShooterLogic.SPINUP_WARN_SEC = 1.0;
         ShooterLogic.DISAGREE_RPM = 100;
-        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.PULSE;
+        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.PULSE;   // DIP tests switch it themselves
+        ShooterLogic.DIP_RPM = 60;
+        ShooterLogic.PAUSE_SEC = 0.25;
+        ShooterLogic.NO_BALL_SEC = 2.0;
 
         shooter = new ShooterLogic();
         now = 0;
@@ -58,6 +65,9 @@ public class ShooterLogicTest {
         ShooterLogic.SPINUP_WARN_SEC = savedWarn;
         ShooterLogic.DISAGREE_RPM = savedDisagree;
         ShooterLogic.FEED_MODE = savedMode;
+        ShooterLogic.DIP_RPM = savedDip;
+        ShooterLogic.PAUSE_SEC = savedPause;
+        ShooterLogic.NO_BALL_SEC = savedNoBall;
     }
 
     /** Run the loop for `sec` seconds with both wheels at `rpm`. */
@@ -244,5 +254,79 @@ public class ShooterLogicTest {
         run(0.02, 2000);
         shooter.fire(1);
         assertEquals(2, shooter.getShotsQueued());
+    }
+
+    // ---------------- DIP mode: feed until it shoots ----------------
+
+    @Test public void dipModeFeedsUntilADipThenStopsTheIndexer() {
+        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.DIP;
+        getReady(1250);
+        shooter.fire(1);
+        run(0.02, 1250);
+        assertTrue(shooter.ownsIndexer());
+        run(1.0, 1240);                  // ball still on its way: small wobble, keep feeding
+        assertTrue("a 10 RPM wobble is not a shot", shooter.ownsIndexer());
+        assertEquals(0, shooter.getShotsFired());
+        run(0.02, 1130);                 // 120 RPM dip: the ball went through
+        assertFalse("indexer stops the moment the dip shows up", shooter.ownsIndexer());
+        assertEquals(ShooterLogic.State.RECOVERING, shooter.getState());
+        assertEquals(1, shooter.getShotsFired());
+    }
+
+    @Test public void dipModePausesEvenIfTheWheelsRecoverFast() {
+        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.DIP;
+        getReady(1250);
+        shooter.fire(2);
+        run(0.04, 1250);
+        run(0.02, 1130);                 // first shot
+        run(0.16, 1250);                 // wheels back at speed almost at once...
+        assertFalse("...but the indexer holds the next ball for PAUSE_SEC", shooter.ownsIndexer());
+        run(0.20, 1250);
+        assertTrue(shooter.ownsIndexer());   // second ball goes
+    }
+
+    @Test public void dipModeWaitsForTheWheelsAfterThePause() {
+        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.DIP;
+        getReady(1250);
+        shooter.fire(2);
+        run(0.04, 1250);
+        run(0.02, 1130);
+        run(1.0, 1150);                  // wheels slow to recover
+        assertEquals("never feed into a sagging wheel", ShooterLogic.State.RECOVERING, shooter.getState());
+        run(0.2, 1250);
+        assertTrue(shooter.ownsIndexer());
+    }
+
+    @Test public void dipModeThreeShots() {
+        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.DIP;
+        getReady(1250);
+        shooter.fire(3);
+        // Each feed takes 0.3 s to reach the wheels, dips for 0.1 s, then the wheels recover.
+        double feedingFor = 0, dipLeft = 0;
+        for (int i = 0; i < 500 && shooter.isBusy(); i++) {
+            now += DT;
+            if (shooter.ownsIndexer()) feedingFor += DT; else feedingFor = 0;
+            if (feedingFor >= 0.3 && dipLeft <= 0) dipLeft = 0.1;
+            double rpm = dipLeft > 0 ? 1130 : 1250;
+            dipLeft -= DT;
+            shooter.update(now, rpm, rpm);
+        }
+        assertEquals(3, shooter.getShotsFired());
+        assertFalse(shooter.isBusy());
+        assertEquals(ShooterLogic.State.READY, shooter.getState());
+    }
+
+    @Test public void dipModeNoBallStopsAndSaysSo() {
+        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.DIP;
+        getReady(1250);
+        shooter.fire(3);
+        run(2.1, 1250);                  // fed past NO_BALL_SEC, never a dip
+        assertFalse(shooter.ownsIndexer());
+        assertFalse(shooter.isBusy());
+        assertEquals(0, shooter.getShotsFired());
+        assertTrue(shooter.wasNoBall());
+        assertTrue(shooter.getNote().contains("no ball"));
+        shooter.fire(1);                 // trying again clears it
+        assertFalse(shooter.wasNoBall());
     }
 }

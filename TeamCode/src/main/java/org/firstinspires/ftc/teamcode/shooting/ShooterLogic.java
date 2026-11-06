@@ -13,7 +13,9 @@ package org.firstinspires.ftc.teamcode.shooting;
  *                                                              |
  *                     +------------------ fire(n) ------------+
  *                     v
- *                  FEEDING --FEED_SEC--> RECOVERING --back at speed--> FEEDING (more shots)
+ *                  FEEDING --a dip (DIP mode) or FEED_SEC (PULSE)--> RECOVERING
+ *                     |  (DIP: no dip in NO_BALL_SEC = "no ball?" --> READY)
+ *                  RECOVERING --PAUSE_SEC and back at speed--> FEEDING (more shots)
  *                                                                  --> READY   (done)
  *
  * "AT SPEED" means BOTH wheels within TOLERANCE_RPM of the target, continuously,
@@ -31,6 +33,15 @@ public class ShooterLogic {
 
     /** How the indexer pushes pieces in. TODO(on robot): nobody knows which yet. */
     public enum FeedMode {
+        /**
+         * THE DEFAULT. Run the indexer until either wheel sags DIP_RPM below target
+         * -- that's a ball going through -- then STOP the indexer for at least
+         * PAUSE_SEC and until the wheels are back at speed, then feed the next.
+         * The pause also holds back a second ball sitting right behind the first.
+         * No dip within NO_BALL_SEC = nothing there: stop and say "no ball?".
+         * There's no ball sensor, so the dip is the only reliable "it shot" signal.
+         */
+        DIP,
         /** Run the indexer FEED_SEC per piece, then wait for the wheels to recover. */
         PULSE,
         /** Run the indexer non-stop for CONTINUOUS_SEC_PER_PIECE x pieces. No recovery waits. */
@@ -42,7 +53,17 @@ public class ShooterLogic {
     // ---- Tuning (starting guesses -- tune on the robot) ---------------------
     public static double TOLERANCE_RPM = 50;
     public static double SETTLE_SEC = 0.15;
-    public static FeedMode FEED_MODE = FeedMode.PULSE;
+    public static FeedMode FEED_MODE = FeedMode.DIP;
+    /**
+     * DIP mode: a sag this big (either wheel, below target) counts as a shot.
+     * Hand-fed shots on 6494, 2026-11-06, dipped ~120 RPM; this is half that.
+     * Must stay above the wheels' normal wobble (and above TOLERANCE_RPM).
+     */
+    public static double DIP_RPM = 60;
+    /** DIP mode: indexer stays stopped at least this long after each shot. */
+    public static double PAUSE_SEC = 0.25;
+    /** DIP mode: feeding this long with no dip means there was no ball. */
+    public static double NO_BALL_SEC = 2.0;
     // NOT used by Shooter any more: the indexer feeds at CollectionSystem.FEED_RPM
     // (closed loop). getIndexerPower() still reports it for the laptop tests.
     public static double FEED_POWER = 1.0;
@@ -68,6 +89,7 @@ public class ShooterLogic {
     private double lastDipRpm = 0;
     private boolean spinUpSlow = false;
     private boolean wheelsDisagree = false;
+    private boolean noBall = false;   // last DIP feed timed out with no dip; cleared by fire()
     private String note = "idle";
 
     // ---- Commands -----------------------------------------------------------
@@ -90,6 +112,7 @@ public class ShooterLogic {
     public void fire(int n) {
         if (state == State.IDLE || n <= 0) return;
         shotsQueued += n;
+        noBall = false;
     }
 
     /** Wheels off, indexer off, queued shots dropped. */
@@ -147,7 +170,18 @@ public class ShooterLogic {
                 break;
 
             case FEEDING:
-                if (inState >= feedSecThisRun) {
+                if (FEED_MODE == FeedMode.DIP) {
+                    double drop = targetRpm - Math.min(leftRpm, rightRpm);
+                    if (drop >= DIP_RPM) {
+                        shotsQueued--;          // a ball went through
+                        shotsFired++;
+                        enter(State.RECOVERING, nowSec);   // indexer stops right now
+                    } else if (inState >= NO_BALL_SEC) {
+                        shotsQueued = 0;        // nothing there -- don't keep grinding
+                        noBall = true;
+                        enter(State.READY, nowSec);
+                    }
+                } else if (inState >= feedSecThisRun) {
                     if (FEED_MODE == FeedMode.CONTINUOUS) {
                         shotsFired += shotsQueued;
                         shotsQueued = 0;
@@ -162,7 +196,9 @@ public class ShooterLogic {
                 break;
 
             case RECOVERING:
-                if (inState >= MIN_RECOVERY_SEC && atSpeed) {
+                double minPause = FEED_MODE == FeedMode.DIP
+                        ? Math.max(MIN_RECOVERY_SEC, PAUSE_SEC) : MIN_RECOVERY_SEC;
+                if (inState >= minPause && atSpeed) {
                     finishShot();
                     if (shotsQueued > 0) {
                         startFeed(nowSec);
@@ -231,5 +267,10 @@ public class ShooterLogic {
     public double getLastDipRpm() { return lastDipRpm; }
     public boolean isSpinUpSlow() { return spinUpSlow; }
     public boolean doWheelsDisagree() { return wheelsDisagree; }
-    public String getNote() { return wheelsDisagree ? note + " | WHEELS DISAGREE" : note; }
+    /** True if the last DIP feed ran NO_BALL_SEC with no dip (nothing was there). */
+    public boolean wasNoBall() { return noBall; }
+    public String getNote() {
+        String n = noBall && state == State.READY ? "no ball? fed " + NO_BALL_SEC + " s, no dip" : note;
+        return wheelsDisagree ? n + " | WHEELS DISAGREE" : n;
+    }
 }

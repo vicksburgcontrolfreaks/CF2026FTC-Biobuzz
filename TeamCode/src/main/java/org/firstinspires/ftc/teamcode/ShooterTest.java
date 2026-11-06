@@ -28,6 +28,9 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *   A           - wheels on / off
  *   D-pad up/dn - target RPM +/- RPM_STEP (applies live)
  *   Right bumper- fire 1        Left bumper - fire 3
+ *                 Fire = feed until a wheel DIPS (the ball went through), stop the
+ *                 indexer for PAUSE_SEC and until the wheels recover, then the next.
+ *                 No dip in NO_BALL_SEC = "no ball?" and it stops. (ShooterLogic DIP mode)
  *   B           - stop everything
  *   D-pad left  - pivot to POLLEN gap    D-pad right - pivot to NECTAR gap
  *   Back        - pivot OPEN (pull a stuck ball out)
@@ -37,7 +40,7 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *                 The pivot does NOT move until you press one.
  *   Y (hold)    - collector in at COLLECT_RPM (200), to load pieces. Works while firing too: hold Y
  *                 during a shot if the collector has to push a ball into the indexer.
- *   RT (hold)   - indexer FEED toward the shooter, 50 RPM. Hold it until a ball
+ *   RT (hold)   - indexer FEED toward the shooter at FEED_RPM, NO auto-pause. Hold it until a ball
  *                 shoots, then let go: the screen records that shot's DIP (how far
  *                 each wheel sagged below target). "Wobble, no ball" is the sag
  *                 with nothing feeding. START resets the wobble.
@@ -50,8 +53,9 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 public class ShooterTest extends LinearOpMode {
 
     // 6494 tops out ~1300 at full power (HD Hex + 3:1 + flywheel), so 1500 never
-    // reached READY. 1100 (~85%) leaves headroom to recover after each shot.
-    public static double START_RPM = 1100;
+    // reached READY. 1250 chosen on the robot 2026-11-06 (1100 reached READY);
+    // close to the max, so watch how fast the wheels recover between shots.
+    public static double START_RPM = 1250;
     public static double RPM_STEP = 50;
 
     private boolean aPrev, upPrev, downPrev, rbPrev, lbPrev, bPrev;

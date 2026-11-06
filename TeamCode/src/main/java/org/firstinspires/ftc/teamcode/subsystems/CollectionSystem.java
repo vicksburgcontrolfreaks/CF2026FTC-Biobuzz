@@ -48,7 +48,7 @@ public class CollectionSystem {
     // Indexer speeds, closed loop, in indexer RPM (after the 20:1). 50 RPM is
     // what Collection System Test, Load Recovery and the ball classifier use;
     // full power (~300 RPM) was far too fast (seen on 6494, 2026-11-05).
-    public static double FEED_RPM = 50.0;   // forward = up into the flywheels
+    public static double FEED_RPM = 75.0;   // forward = up into the flywheels. 75 chosen on 6494, 2026-11-06
     public static double UNJAM_RPM = 50.0;  // run in reverse by unjam()
 
     private static final double TICKS_PER_REV = RobotHardware.TICKS_PER_MOTOR_REV;
