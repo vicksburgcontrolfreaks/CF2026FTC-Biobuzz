@@ -96,8 +96,13 @@ public class Turret {
     // Because ticks-per-degree and these limits both trace back to the same 22449
     // tick sweep, the limits land on the real stops even if the degree scale is
     // later revised -- a scale error shifts the labels, not where the turret stops.
-    public static double MIN_ANGLE = -140.0;
-    public static double MAX_ANGLE = 140.0;
+    //
+    // 6494, 2026-11-06 (Shane): the turret NO LONGER HAS HARD STOPS -- the cable
+    // wrap is the real limit. Shane swept by hand to where it should stop: +/-109.4
+    // either side of the sweep's middle, so +/-106 with the same 3 deg margin.
+    // Everything above about 286 deg / stops at +/-143 is the OLD build.
+    public static double MIN_ANGLE = -106.0;
+    public static double MAX_ANGLE = 106.0;
 
     // ---- Homing -------------------------------------------------------------
     // MEASURED 2026-10-15 on the rebuilt magnet mount, three Turret Range Test
