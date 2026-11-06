@@ -35,8 +35,12 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *                 there. On 5618 they'd hit a hard stop, so they're blocked
  *                 until 5618's band is measured with Pivot Jog Test.
  *                 The pivot does NOT move until you press one.
- *   Y (hold)    - collector in, to load pieces
- *   X (hold)    - indexer unjam (only when the shooter isn't feeding)
+ *   Y (hold)    - collector in, to load pieces. Works while firing too: hold Y
+ *                 during a shot if the collector has to push a ball into the indexer.
+ *   RT (hold)   - indexer FEED toward the shooter, 50 RPM (manual; checks direction)
+ *   X (hold)    - indexer UNJAM: runs BACKWARD, away from the shooter, 50 RPM
+ *                 Both only when the shooter isn't feeding. Speeds: CollectionSystem
+ *                 FEED_RPM / UNJAM_RPM. A fired shot feeds at FEED_RPM too.
  */
 @Configurable
 @TeleOp(name = "Shooter Test", group = "Test")
@@ -71,6 +75,7 @@ public class ShooterTest extends LinearOpMode {
         BuildInfo.show(telemetry);
         telemetry.addLine("A = wheels | dpad U/D = RPM | RB = fire 1 | LB = fire 3 | B = stop");
         telemetry.addLine("dpad L = pollen gap | dpad R = nectar gap | Back = open");
+        telemetry.addLine("Y = collector in | RT = indexer feed | X = indexer unjam (backward)");
         telemetry.addData("Pivot", pivotSetting);
         telemetry.update();
 
@@ -123,7 +128,9 @@ public class ShooterTest extends LinearOpMode {
             if (gamepad1.y) collection.collect(); else collection.stopCollector();
             // The shooter owns the indexer only mid-feed; otherwise it's ours.
             if (!shooter.ownsIndexer()) {
-                if (gamepad1.x) collection.unjam(); else collection.stopIndexer();
+                if (gamepad1.right_trigger > 0.5) collection.feed();
+                else if (gamepad1.x) collection.unjam();
+                else collection.stopIndexer();
             }
 
             shooter.update();
@@ -141,6 +148,7 @@ public class ShooterTest extends LinearOpMode {
             telemetryM.addLine("");
             telemetryM.addData("Queued / fired", shooter.getShotsQueued() + " / " + shooter.getShotsFired());
             telemetryM.addData("Last dip (RPM)", shooter.getLastDipRpm());
+            telemetryM.addData("Indexer RPM", collection.getIndexerRPM());
             telemetryM.addData("Indexer amps", collection.getIndexerCurrentAmps());
             telemetryM.update(telemetry);
         }

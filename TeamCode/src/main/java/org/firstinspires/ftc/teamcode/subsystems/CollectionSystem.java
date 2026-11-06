@@ -42,8 +42,12 @@ public class CollectionSystem {
     // Default powers. Tunable live so they can be dialed in without a redeploy.
     public static double COLLECT_POWER = 0.5;
     public static double EJECT_POWER = -0.5;
-    public static double FEED_POWER = 1.0;
-    public static double UNJAM_POWER = -0.6;
+
+    // Indexer speeds, closed loop, in indexer RPM (after the 20:1). 50 RPM is
+    // what Collection System Test, Load Recovery and the ball classifier use;
+    // full power (~300 RPM) was far too fast (seen on 6494, 2026-11-05).
+    public static double FEED_RPM = 50.0;   // forward = up into the flywheels
+    public static double UNJAM_RPM = 50.0;  // run in reverse by unjam()
 
     private static final double TICKS_PER_REV = RobotHardware.TICKS_PER_MOTOR_REV;
     private static final double COLLECTOR_RATIO = RobotHardware.COLLECTOR_GEAR_RATIO;
@@ -91,14 +95,14 @@ public class CollectionSystem {
 
     // ---- Indexer ------------------------------------------------------------
 
-    /** Feeds a piece up into the flywheels at FEED_POWER. */
+    /** Feeds a piece up into the flywheels at FEED_RPM. */
     public void feed() {
-        indexer.setPower(FEED_POWER);
+        setIndexerRPM(FEED_RPM);
     }
 
-    /** Backs the indexer up to clear a stuck piece. */
+    /** Backs the indexer up (AWAY from the shooter) at UNJAM_RPM to clear a stuck piece. */
     public void unjam() {
-        indexer.setPower(UNJAM_POWER);
+        setIndexerRPM(-UNJAM_RPM);
     }
 
     public void stopIndexer() {

@@ -95,7 +95,9 @@ public class Shooter {
         }
 
         if (logic.ownsIndexer()) {
-            collection.setIndexerPower(logic.getIndexerPower());
+            // Feed speed is CollectionSystem.FEED_RPM (closed loop), not
+            // ShooterLogic.FEED_POWER: full power was far too fast on 6494.
+            collection.feed();
             hadIndexer = true;
         } else if (hadIndexer) {
             collection.stopIndexer();   // once, on letting go

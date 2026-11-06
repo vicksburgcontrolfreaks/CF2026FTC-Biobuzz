@@ -43,6 +43,8 @@ public class ShooterLogic {
     public static double TOLERANCE_RPM = 50;
     public static double SETTLE_SEC = 0.15;
     public static FeedMode FEED_MODE = FeedMode.PULSE;
+    // NOT used by Shooter any more: the indexer feeds at CollectionSystem.FEED_RPM
+    // (closed loop). getIndexerPower() still reports it for the laptop tests.
     public static double FEED_POWER = 1.0;
     public static double FEED_SEC = 0.25;
     public static double CONTINUOUS_SEC_PER_PIECE = 0.35;
