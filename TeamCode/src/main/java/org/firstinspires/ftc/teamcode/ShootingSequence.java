@@ -54,10 +54,19 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  * Driver Station config: "shooterPivot", "shooterLeft", "shooterRight",
  * "indexer", "deflector", "deflectorPos", and optionally "pivotPos".
  *
+ * DURING INIT, before anything is written to the servo
+ *   dpad up / down       move the position ARM will command
+ *
+ * Set that near where the pivot actually is. ARM commands it at whatever speed
+ * the servo likes and nothing can slow that down, so a value past a hard stop
+ * slams into it -- which is what the per-robot defaults did on 5618.
+ *
  * CONTROLS -- gamepad1, the shot shape
- *   Y                    ARM. Nothing moves before this. Commands the pivot to
- *                        START_POSITION for this robot; expect one jump.
+ *   Y                    ARM. Nothing moves before this. Commands the position
+ *                        set during INIT; expect one jump.
  *   triggers             jog the pivot. RT tightens, LT widens. Rate limited.
+ *   B                    go wide open. The escape hatch if ARM landed on the
+ *                        closed stop -- rate limited, so a traverse not a slam.
  *   bumpers              pivot fine step, one press at a time
  *   dpad left / right    pivot to the POLLEN / NECTAR position
  *   X                    capture the pivot reference here (do this at a stop)
@@ -90,20 +99,45 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 public class ShootingSequence extends LinearOpMode {
 
     // ---- Pivot -------------------------------------------------------------
-    // Per robot, and deliberately mid-band rather than at an end of travel: an
-    // end is the first number a reassembly invalidates, and ARM commands this
-    // position at whatever speed the servo likes. Same values as Pivot Jog Test.
+    // Starting point for the ARM command, per robot. Both are GUESSES carried
+    // over from Pivot Jog Test, which says so itself about 5618. They are only
+    // the DEFAULT now -- dpad up/down during INIT moves it before anything is
+    // written to the servo, which is the fix for a guess that lands past a stop.
     public static double PIVOT_START_6494 = 0.42;
     public static double PIVOT_START_5618 = 0.6;
+
+    /**
+     * Travel limit for jogging. Deliberately NOT ShooterPivot's band, because the
+     * two records in this repo disagree:
+     *
+     *   ShooterPivot   MIN_SAFE 0.27  MAX_SAFE 0.744
+     *   Pivot Jog Test header: "the 0.166-0.679 band measured 2026-10-30"
+     *
+     * 0.744 is past the other record's closed end, and 0.166 is past the other
+     * record's open end, so trusting either one alone can drive into a stop.
+     * These default to the overlap, which cannot exceed either. Widen them once
+     * you have measured the band on THIS robot -- that is what the stick-click
+     * captures and the pivotPos readout are for.
+     */
+    public static double PIVOT_MIN_POSITION = 0.27;
+    public static double PIVOT_MAX_POSITION = 0.679;
 
     /** One bumper press, in servo position units. */
     public static double PIVOT_FINE_STEP = 0.002;
 
-    /** Full trigger, position units per second. */
-    public static double PIVOT_COARSE_RATE = 0.06;
+    /**
+     * Full trigger, position units per second. Was 0.06, which is what Pivot Jog
+     * Test uses for a deliberate hunt. Too slow here: if ARM lands past a hard
+     * stop, the commanded number has to walk back across the dead zone before
+     * the pivot moves at all, and 0.06/s makes that look like dead triggers.
+     */
+    public static double PIVOT_COARSE_RATE = 0.12;
 
-    /** Ceiling on how fast the commanded position may change, per second. */
-    public static double PIVOT_MAX_RATE = 0.10;
+    /**
+     * Ceiling on how fast the commanded position may change, per second. Must
+     * stay above PIVOT_COARSE_RATE or it silently throttles the triggers.
+     */
+    public static double PIVOT_MAX_RATE = 0.20;
 
     // ---- Flywheels ---------------------------------------------------------
     public static double RPM_STEP = 100.0;
@@ -128,6 +162,7 @@ public class ShootingSequence extends LinearOpMode {
     private final Deflector deflector = new Deflector();
 
     private boolean armed = false;
+    private double armPosition;
     private double pivotTarget;
     private double pivotCommanded;
 
@@ -147,7 +182,7 @@ public class ShootingSequence extends LinearOpMode {
 
     private final ElapsedTime loop = new ElapsedTime();
     private boolean lastY1, lastX1, lastA1, lastRb1, lastLb1, lastDl1, lastDr1, lastDu1, lastDd1;
-    private boolean lastLs1, lastRs1;
+    private boolean lastLs1, lastRs1, lastB1;
     private boolean lastY2, lastB2, lastA2, lastRb2, lastLb2, lastDu2, lastDd2;
 
     @Override
@@ -178,18 +213,39 @@ public class ShootingSequence extends LinearOpMode {
         shooterRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         indexer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        pivotTarget = startPosition();
-        pivotCommanded = pivotTarget;
+        armPosition = startPosition();
+        pivotTarget = armPosition;
+        pivotCommanded = armPosition;
 
+        // ARM commands a position at whatever speed the servo likes, and nothing
+        // in software can slow that down -- it cannot know where the pivot is, so
+        // it cannot creep there. The per-robot defaults are GUESSES (Pivot Jog
+        // Test says so for 5618), and a guess past a hard stop slams. So the arm
+        // position is adjustable HERE, before anything is written to the servo.
+        boolean lastUp = false, lastDown = false;
         while (opModeInInit()) {
             deflector.update();
+            boolean up = gamepad1.dpad_up, down = gamepad1.dpad_down;
+            if (up && !lastUp) armPosition += 0.02;
+            if (down && !lastDown) armPosition -= 0.02;
+            armPosition = Range.clip(armPosition, 0.05, 0.95);
+            lastUp = up; lastDown = down;
+
+            pivotTarget = armPosition;
+            pivotCommanded = armPosition;
+
             telemetry.addLine("NOT ARMED -- the pivot is not being written to at all.");
-            telemetry.addLine("Park the pivot by hand, then read the numbers below.");
             telemetry.addLine();
-            telemetry.addData("Pivot would ARM to", "%.3f  (%s)", startPosition(), robotName());
+            telemetry.addData("ARM will command", "%.3f   <-- dpad up/down to change", armPosition);
+            telemetry.addData("Robot", "%s   (default %.3f)", robotName(), startPosition());
+            telemetry.addLine();
+            telemetry.addLine("Set this NEAR WHERE THE PIVOT IS NOW, not at an end of travel.");
+            telemetry.addLine("If a previous run slammed and buzzed, the stop is on that side:");
+            telemetry.addLine("move this the other way before arming.");
+            telemetry.addLine();
             showPivotFeedback();
             telemetry.addLine();
-            telemetry.addLine("Press START, then gamepad1 Y to arm.");
+            telemetry.addLine("START, then gamepad1 Y to arm.  B at any time = go wide open.");
             telemetry.update();
         }
 
@@ -223,9 +279,17 @@ public class ShootingSequence extends LinearOpMode {
 
         if (y && !lastY1 && !armed) {
             armed = true;
-            pivotTarget = startPosition();
-            pivotCommanded = pivotTarget;
+            pivotTarget = armPosition;
+            pivotCommanded = armPosition;
             pivot.setPosition(pivotCommanded);
+        }
+
+        // ESCAPE HATCH. If ARM landed past the closed stop, the pivot is leaning
+        // on it and walking the triggers back across the dead zone is slow and
+        // feels like nothing is happening. B drives straight for wide open.
+        // Still rate limited, so it is a traverse you can hear, not a slam.
+        if (gamepad1.b && !lastB1 && armed) {
+            pivotTarget = ShooterPivot.OPEN_POSITION;
         }
 
         if (x && !lastX1 && pivotPos != null) {
@@ -264,8 +328,7 @@ public class ShootingSequence extends LinearOpMode {
                 pivotTarget += jog * PIVOT_COARSE_RATE * dt;
             }
 
-            pivotTarget = Range.clip(pivotTarget,
-                    ShooterPivot.MIN_SAFE_POSITION, ShooterPivot.MAX_SAFE_POSITION);
+            pivotTarget = Range.clip(pivotTarget, PIVOT_MIN_POSITION, PIVOT_MAX_POSITION);
 
             // Creep toward the target. A wrong preset becomes a slow traverse you
             // can hear coming, not a slam.
@@ -277,6 +340,7 @@ public class ShootingSequence extends LinearOpMode {
         lastY1 = y; lastX1 = x; lastA1 = a; lastRb1 = rb; lastLb1 = lb;
         lastDl1 = dl; lastDr1 = dr; lastDu1 = du; lastDd1 = dd;
         lastLs1 = gamepad1.left_stick_button; lastRs1 = gamepad1.right_stick_button;
+        lastB1 = gamepad1.b;
     }
 
     // ---- gamepad2: deflector and indexer -----------------------------------
@@ -349,8 +413,13 @@ public class ShootingSequence extends LinearOpMode {
 
         telemetry.addLine("--- PIVOT ---");
         telemetry.addData("Commanded", "%.3f   (target %.3f)", pivotCommanded, pivotTarget);
-        telemetry.addData("Presets", "pollen %.3f   nectar %.3f",
-                ShooterPivot.POLLEN_POSITION, ShooterPivot.NECTAR_POSITION);
+        telemetry.addData("Presets", "pollen %.3f   nectar %.3f   open %.3f",
+                ShooterPivot.POLLEN_POSITION, ShooterPivot.NECTAR_POSITION,
+                ShooterPivot.OPEN_POSITION);
+        telemetry.addData("Jog limited to", "%.3f .. %.3f%s",
+                PIVOT_MIN_POSITION, PIVOT_MAX_POSITION,
+                (pivotTarget <= PIVOT_MIN_POSITION + 1e-6 ? "   AT OPEN LIMIT"
+                        : pivotTarget >= PIVOT_MAX_POSITION - 1e-6 ? "   AT CLOSED LIMIT" : ""));
         showPivotFeedback();
         if (!Double.isNaN(pollenCapture)) {
             telemetry.addData("Captured pollen", "%.3f   (%.3f V)", pollenCapture, pollenVolts);
