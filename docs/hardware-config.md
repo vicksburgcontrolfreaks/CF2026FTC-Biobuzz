@@ -41,7 +41,7 @@ character for character.
 ### Analog
 | Port | Name | Notes |
 |---|---|---|
-| 1 | `deflectorPos` | **6494** (Shane, 2026-11-06): deflector pivot servo's feedback wire (Axon, 0-3.3 V per turn, wraps). Was `pivotPos`. Read by Servo Feedback Test. 5618's notes (11-05) had it on EH analog 1 instead -- check per robot |
+| 1 | `deflectorPos` | **6494** (Shane, 2026-11-06): feedback wire of the `deflector` CR servo (Axon, 0-3.3 V per turn, wraps). Was `pivotPos`. Read by Servo Feedback Test. 5618's notes (11-05) had it on EH analog 1 instead -- check per robot |
 
 ### I2C
 | Bus | Name | Notes |
