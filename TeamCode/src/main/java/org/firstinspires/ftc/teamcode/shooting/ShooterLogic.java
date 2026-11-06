@@ -62,8 +62,12 @@ public class ShooterLogic {
     public static double DIP_RPM = 60;
     /** DIP mode: indexer stays stopped at least this long after each shot. */
     public static double PAUSE_SEC = 0.25;
-    /** DIP mode: feeding this long with no dip means there was no ball. */
-    public static double NO_BALL_SEC = 2.0;
+    /**
+     * DIP mode: feeding this long with no dip means there was no ball. Sized for
+     * CollectionSystem.FEED_RPM = 25 (6 s = 2.5 indexer turns, same travel as 2 s
+     * at 75). Change one, change the other.
+     */
+    public static double NO_BALL_SEC = 6.0;
     // NOT used by Shooter any more: the indexer feeds at CollectionSystem.FEED_RPM
     // (closed loop). getIndexerPower() still reports it for the laptop tests.
     public static double FEED_POWER = 1.0;
