@@ -23,6 +23,25 @@ import com.qualcomm.robotcore.util.Range;
  * NO FLYWHEELS, NO INDEXER, NO DEFLECTOR. Shooting Sequence does all of that;
  * this is for tuning the pivot with nothing spinning.
  *
+ * WHAT "POSITION" MEANS HERE, BECAUSE THERE ARE TWO OF THEM
+ *
+ *   The 0-1 number we ASK FOR. setPosition(0.345) means "go to 34.5% of your
+ *   travel". It is a request, not a reading: the servo has its own pot and
+ *   control loop inside it, moves its shaft there and holds it, and never tells
+ *   the SDK anything. Servo.getPosition() only echoes the last number sent. You
+ *   do not need to know any of these numbers in advance -- finding them is the
+ *   whole job, and the ones you find are what go into
+ *   ShooterPivot.POLLEN_POSITION and NECTAR_POSITION.
+ *
+ *   The ANGLE the shaft actually reached, from pivotPos. This is a real
+ *   measurement, and zeroing it at a hard stop is what makes it mean something:
+ *   "pollen is 45 degrees off the closed stop" is a physical fact about the
+ *   mechanism, where "0.345" is only a fact about the servo.
+ *
+ * Record both. The 0-1 is what the code runs on. The degrees are how you find
+ * out, after a rebuild, that 0.345 is no longer the pollen gap -- the failure
+ * ShooterPivot's dormant homing code exists to catch.
+ *
  * THE ONE JUMP THAT CANNOT BE AVOIDED
  * Servo.getPosition() is not a sensor -- it reports the last value commanded,
  * which at op mode start is 0.0 regardless of where the pivot physically is. So
@@ -188,7 +207,13 @@ public class PivotFinder extends LinearOpMode {
             telemetry.addLine();
         }
 
-        telemetry.addData("Commanded", engaged ? String.format("%.3f", commanded) : "not engaged");
+        // "Commanded" is what we ASK the servo for, 0-1 across its travel. It is
+        // not a measurement -- the servo keeps its own position loop and never
+        // reports back. This number is the one to write down: it is what
+        // ShooterPivot.POLLEN_POSITION and NECTAR_POSITION are.
+        telemetry.addData("Asked servo for", engaged
+                ? String.format("%.3f  of 0-1   <-- THIS is the number to record", commanded)
+                : "nothing yet -- press a step button");
         telemetry.addData("Step size", "%.3f   (bumpers %.3f)", STEP, BIG_STEP);
 
         if (pivotPos == null) {
@@ -208,6 +233,8 @@ public class PivotFinder extends LinearOpMode {
 
         if (!Double.isNaN(pollen) || !Double.isNaN(nectar)) {
             telemetry.addLine();
+            telemetry.addLine("Record BOTH numbers. The 0-1 is what the code uses;");
+            telemetry.addLine("the degrees prove it still means the same gap later.");
             if (!Double.isNaN(pollen)) {
                 telemetry.addData("POLLEN", "%.3f   (%+.1f deg from stop)", pollen, pollenDeg);
             }
