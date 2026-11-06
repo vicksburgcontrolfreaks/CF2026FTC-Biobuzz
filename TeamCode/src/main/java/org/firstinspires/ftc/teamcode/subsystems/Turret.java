@@ -40,9 +40,9 @@ import com.qualcomm.robotcore.util.Range;
  *      position mid-match.
  *
  * Direction is handled for us: the SDK negates getCurrentPosition() when a motor
- * is REVERSE (DcMotorImpl.adjustPosition), and this repo sets lf's direction
- * differently in different op modes -- Pedro's Constants says FORWARD while
- * RobotHardware says REVERSE. readRawTicks() divides that out so turret angles
+ * is REVERSE (DcMotorImpl.adjustPosition), and lf's direction belongs to the
+ * drivetrain -- it has changed before (Pedro's Constants vs RobotHardware) and
+ * may change again. readRawTicks() divides that out so turret angles
  * mean the same thing everywhere, and ENCODER_DIRECTION stays the only sign knob.
  *
  * Call init() once, then update() every loop. Nothing moves unless update() runs.

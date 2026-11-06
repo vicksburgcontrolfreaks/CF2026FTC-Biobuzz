@@ -221,6 +221,16 @@ balls were not varied.
 - Still open: a MECHANICAL problem in the collection path, not a code problem
 - Not captured yet: the `Indexer Amps` jam number any future unjam logic needs
 
+### 4. Bring up the non-blocking Shooter
+**Why:** `subsystems/Shooter` (+ `shooting/ShooterLogic`) replaces the
+`sleep()`-based `ShootAprilTag.shoot()` so TeleOp and auto keep running while it
+fires. Its logic is laptop-tested; nothing about the real mechanism is.
+
+Run **Shooter Test** and follow the four checks in its header: wheels agree,
+READY comes on, one shot launches (tune `FEED_SEC`), a 3-volley goes 3 times the
+same distance. It also settles the PULSE vs CONTINUOUS feed question below.
+Needs item 1's indexer direction confirmed first.
+
 ---
 
 ## Needs a decision, not the robot
