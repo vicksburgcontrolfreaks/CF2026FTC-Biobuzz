@@ -39,13 +39,13 @@ public class Launcher {
 
     /** What the operator is holding this loop. */
     public static class Controls {
-        /** Fire while held: one ball at a time, only when the wheels are at speed. */
+        /** Fire while held: starts the flywheel; one ball at a time, only when the wheels are at speed. */
         public boolean fire;
         /** Indexer backward. */
         public boolean indexerBack;
         public boolean collectIn;
         public boolean collectOut;
-        /** Collector + indexer forward. With the flywheel on, the indexer part fires like {@link #fire}. */
+        /** Collector + indexer forward: starts the flywheel and fires like {@link #fire}, collector helping. */
         public boolean allForward;
         /** Collector + indexer backward. */
         public boolean allBack;
@@ -84,7 +84,7 @@ public class Launcher {
         applyGap(guard.gap());
     }
 
-    /** Y. After a FAULT, the first press clears it and spins back up. */
+    /** Y. On/off (RB/RT also turn it on). After a FAULT, the first press clears it and spins back up. */
     public void toggleFlywheel() {
         if (guard.isFault()) {
             guard.reset();
@@ -110,6 +110,10 @@ public class Launcher {
         }
 
         // ---- Flywheels + firing --------------------------------------------
+        // RB or RT starts the flywheel (Shane, 2026-11-06); it stays on until Y.
+        // Backward controls never start it and never stop it. The Shooter still
+        // holds the first ball until the wheels are at speed.
+        if (c.fire || c.allForward) flywheelOn = true;
         if (flywheelOn) {
             shooter.spinUp(FLYWHEEL_RPM);
         } else {
@@ -134,14 +138,9 @@ public class Launcher {
                 indexerCmd = null;   // Shooter just let go (and stopped it); re-assert ours
                 shooterHadIndexer = false;
             }
-            Motion want;
-            if (c.allBack || c.indexerBack) {
-                want = Motion.BACK;
-            } else if (c.allForward && !flywheelOn) {
-                want = Motion.FORWARD;   // moving balls up with the wheels stopped
-            } else {
-                want = Motion.STOP;
-            }
+            // Forward only ever goes through the Shooter now (RB/RT start the
+            // flywheel), so the at-speed gate and the nectar guard see every ball.
+            Motion want = (c.allBack || c.indexerBack) ? Motion.BACK : Motion.STOP;
             if (want != indexerCmd) {
                 if (want == Motion.FORWARD) collection.feed();
                 else if (want == Motion.BACK) collection.unjam();

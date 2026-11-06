@@ -33,14 +33,16 @@ import java.util.List;
  *   BACK         "the robot faces away from me right now" -- heading reset, rumbles
  *
  * GAMEPAD 2 (operator)                             (all "hold" = only while held)
- *   RB (hold)    FIRE: one ball at a time, only when the flywheel is at speed,
- *                pausing for it to recover after each shot
+ *   RB (hold)    FIRE: starts the flywheel if it's off, then one ball at a time
+ *                once it's at speed, pausing for it to recover after each shot
  *   LB (hold)    indexer backward
  *   A  (hold)    collector in            X (hold)   collector out
- *   RT (hold)    collector + indexer forward (with the flywheel on, the indexer
- *                part FIRES like RB)
+ *   RT (hold)    collector + indexer forward: starts the flywheel and FIRES like
+ *                RB, with the collector helping push balls up
  *   LT (hold)    collector + indexer backward
- *   Y            flywheel on / off (after a JAM fault: clears it and spins up)
+ *   Y            flywheel on / off. RB/RT turn it on; it STAYS on until Y.
+ *                (After a JAM fault: clears it and spins up.)
+ *                Backward controls (LB, LT, X) never start or stop it.
  *   Right stick X  turret by hand -- overrides aiming while held
  *   Left stick   FLICK up / down: deflector (shot arc) one position higher /
  *                lower -- 0 / 70 / 75 / 80 / 90 deg. Return to center between
