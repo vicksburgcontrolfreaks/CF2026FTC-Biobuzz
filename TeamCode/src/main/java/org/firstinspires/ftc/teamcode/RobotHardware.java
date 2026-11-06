@@ -85,6 +85,16 @@ public class RobotHardware {
     }
 
     public void init(HardwareMap hardwareMap) {
+        init(hardwareMap, true);
+    }
+
+    /**
+     * @param withVision false = don't open "Webcam 1" here. The default portal
+     *                   below has no BIOBUZZ tag library (so no tag poses), and a
+     *                   webcam can only be opened once -- an op mode that sets up
+     *                   its own camera (DriveTeleOp, via TurretCamera) passes false.
+     */
+    public void init(HardwareMap hardwareMap, boolean withVision) {
         // Drive motors (mecanum, match Constants naming).
         // Port map confirmed 2026-10-27: the left side lives on the Control Hub
         // now, which is why these comments no longer all say EH.
@@ -148,7 +158,8 @@ public class RobotHardware {
         // and homing both need re-verifying on the robot.
         turret.init(hardwareMap, lf); // "turret" = CH servo 0
 
-        // AprilTag vision
+        // AprilTag vision (DECODE-era defaults -- see init(hardwareMap, withVision)).
+        if (!withVision) return;
         aprilTagProcessor = AprilTagProcessor.easyCreateWithDefaults();
         visionPortal = VisionPortal.easyCreateWithDefaults(
                 hardwareMap.get(WebcamName.class, "Webcam 1"), aprilTagProcessor);

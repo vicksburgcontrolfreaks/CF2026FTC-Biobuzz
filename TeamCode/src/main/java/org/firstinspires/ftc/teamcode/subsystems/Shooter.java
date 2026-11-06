@@ -73,6 +73,8 @@ public class Shooter {
     public void spinUp(double rpm) { logic.spinUp(rpm); }
     public void fire(int pieces)   { logic.fire(pieces); }
     public void stop()             { logic.stop(); }
+    /** Drop queued shots, keep the wheels spinning (fire button let go). */
+    public void cancelShots()      { logic.cancelShots(); }
 
     /** Run every loop. The only place the motors are written. */
     public void update() {

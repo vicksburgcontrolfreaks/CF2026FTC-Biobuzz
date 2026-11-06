@@ -329,4 +329,33 @@ public class ShooterLogicTest {
         shooter.fire(1);                 // trying again clears it
         assertFalse(shooter.wasNoBall());
     }
+
+    // ---------------- cancelShots (TeleOp: fire button let go) ----------------
+
+    @Test public void cancelShots_stopsAFeedButKeepsTheWheels() {
+        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.DIP;
+        getReady(1300);
+        shooter.fire(1);
+        run(0.04, 1300);
+        assertTrue(shooter.ownsIndexer());
+        shooter.cancelShots();
+        assertFalse(shooter.ownsIndexer());
+        assertEquals(0, shooter.getShotsQueued());
+        assertEquals(1300, shooter.getTargetRpm(), EPS);
+        run(0.1, 1300);
+        assertEquals(ShooterLogic.State.READY, shooter.getState());
+    }
+
+    @Test public void cancelShots_whileRecovering_finishesRecoveryThenReady() {
+        ShooterLogic.FEED_MODE = ShooterLogic.FeedMode.DIP;
+        getReady(1300);
+        shooter.fire(2);
+        run(0.04, 1300);
+        run(0.04, 1200);                 // dip: shot 1 went
+        assertEquals(ShooterLogic.State.RECOVERING, shooter.getState());
+        shooter.cancelShots();
+        run(0.5, 1300);
+        assertEquals(ShooterLogic.State.READY, shooter.getState());
+        assertEquals(1, shooter.getShotsFired());
+    }
 }

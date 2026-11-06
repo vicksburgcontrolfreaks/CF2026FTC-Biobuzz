@@ -119,6 +119,18 @@ public class ShooterLogic {
         noBall = false;
     }
 
+    /**
+     * Drop queued shots but keep the wheels spinning (TeleOp: fire button let go).
+     * A feed in progress stops now; a shot already through still recovers first.
+     */
+    public void cancelShots() {
+        shotsQueued = 0;
+        if (state == State.FEEDING) {
+            state = State.READY;   // READY re-checks speed next loop
+            note = "ready";
+        }
+    }
+
     /** Wheels off, indexer off, queued shots dropped. */
     public void stop() {
         state = State.IDLE;
