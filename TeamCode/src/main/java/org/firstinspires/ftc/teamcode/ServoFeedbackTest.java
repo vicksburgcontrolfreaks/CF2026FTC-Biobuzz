@@ -17,7 +17,11 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *
  * Config (Driver Station robot config):
  *   - Servo           -> servo port,  type "Continuous Rotation Servo", named SERVO_NAME below
- *   - Feedback wire   -> Expansion Hub analog port, type "Analog Input", named "pivotPos"
+ *   - Feedback wire   -> analog port, type "Analog Input", named FEEDBACK_NAME below
+ *                        (6494: Control Hub analog 1, "deflectorPos" -- Shane, 2026-11-06)
+ *
+ * If a name doesn't match the config, the INIT screen lists the names it DID
+ * find for that device type, instead of crashing.
  *
  * Controls:
  *   Left stick up/down  = spin the servo (power is capped at MAX_POWER)
@@ -29,7 +33,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 public class ServoFeedbackTest extends LinearOpMode {
 
     private static final String SERVO_NAME = "deflectorPivot";
-    private static final String FEEDBACK_NAME = "pivotPos";
+    // Was "pivotPos" -- renamed in the config to keep it apart from the shooter pivot.
+    private static final String FEEDBACK_NAME = "deflectorPos";
 
     // Max power from the stick. Kept low on purpose: a pivot has hard stops,
     // and a continuous servo will happily drive straight into them.
@@ -51,8 +56,25 @@ public class ServoFeedbackTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        servo = hardwareMap.get(CRServo.class, SERVO_NAME);
-        feedback = hardwareMap.get(AnalogInput.class, FEEDBACK_NAME);
+        servo = hardwareMap.tryGet(CRServo.class, SERVO_NAME);
+        feedback = hardwareMap.tryGet(AnalogInput.class, FEEDBACK_NAME);
+        if (servo == null || feedback == null) {
+            // Say what IS there, so fixing the name is one look, not a guessing game.
+            while (opModeInInit()) {
+                telemetry.addLine("CONFIG NAME MISMATCH - nothing will run.");
+                if (servo == null) {
+                    telemetry.addLine("No Continuous Rotation Servo named \"" + SERVO_NAME + "\".");
+                    telemetry.addData("CR servos in this config", namesOf(CRServo.class));
+                }
+                if (feedback == null) {
+                    telemetry.addLine("No Analog Input named \"" + FEEDBACK_NAME + "\".");
+                    telemetry.addData("Analog inputs in this config", namesOf(AnalogInput.class));
+                }
+                telemetry.addLine("Fix the name here or in the DS config, then redeploy / re-INIT.");
+                telemetry.update();
+            }
+            return;
+        }
 
         // Before START: nothing moves, but we can still read the wire.
         // Turn the pivot gently by hand and watch the angle change.
@@ -151,5 +173,14 @@ public class ServoFeedbackTest extends LinearOpMode {
         telemetry.addData("Feedback voltage", "%.3f V", feedback.getVoltage());
         telemetry.addData("Angle (0-360)", "%.1f deg", lastAngle);
         telemetry.addData("Total (counts turns)", "%.1f deg", totalDegrees);
+    }
+
+    /** Every configured name for this device type, e.g. "[turret, deflector]". */
+    private <T extends com.qualcomm.robotcore.hardware.HardwareDevice> String namesOf(Class<T> type) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (T device : hardwareMap.getAll(type)) {
+            names.addAll(hardwareMap.getNamesOf(device));
+        }
+        return names.isEmpty() ? "none" : names.toString();
     }
 }
