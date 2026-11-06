@@ -35,10 +35,9 @@ package org.firstinspires.ftc.teamcode.shooting;
  * a nectar already on the ramp can't be re-detected, so clearing by hand is
  * exactly the driver error this exists to stop.
  *
- * CALIBRATION WARNING: TRIP_AMPS comes from BallLoadClassifier, measured at
- * 50 RPM indexer from rest (2026-10-30). The feed runs at
- * CollectionSystem.FEED_RPM = 25 now, so RE-RUN Indexer Load Test at the
- * feed speed and update these before trusting it. Then prove it with the
+ * CALIBRATION: TRIP_AMPS was measured at FEED_RPM 25 (2026-11-06), indexer
+ * alone. Still to check: pollen pushed by the COLLECTOR too (RT), which adds
+ * load the load test doesn't. Then prove it with the
  * flywheels OFF: 10 nectars must open the gap before reaching the wheels,
  * 10 pollens must not.
  *
@@ -63,14 +62,25 @@ public class NectarGuard {
     // ---- Tuning ---------------------------------------------------------------
     /**
      * Indexer current (A, normalized to 12 V) that means nectar.
-     * BallLoadClassifier: empty peak 0.79 + midpoint rise 0.72 = 1.51 A.
-     * MEASURED AT 50 RPM -- recalibrate at the real FEED_RPM.
+     *
+     * RECALIBRATED 2026-11-06 on 6494, Indexer Load Test at FEED_RPM 25, indexer
+     * alone (no collector), peak per pass:
+     *   empty   0.48 / 0.54 / 0.58 A        (min / mean / max)
+     *   pollen  0.75 / 1.19 / 1.65 A        (rise 0.21 / 0.65 / 1.11)
+     *   nectar  3.79 / 4.97 / 7.67 A        (rise 3.25 / 4.43 / 7.13)
+     * Gap 2.14 A (wider than 50 RPM's 1.32); threshold at the midpoint, ~1.07 A
+     * margin each way. The old 1.51 (from the 50 RPM data) sat BELOW the heaviest
+     * pollen at 25 -- that was the false trips.
+     *
+     * NOT the same number as BallLoadClassifier's: that one is the 50 RPM
+     * calibration and Load Sort Test / LoadRecovery still run at 50.
+     * Change FEED_RPM -> re-run Indexer Load Test -> update this.
      */
-    public static double TRIP_AMPS = 1.51;
+    public static double TRIP_AMPS = 2.72;
     /**
      * Ignore this long after the indexer starts forward (motor start-up surge).
-     * 0 because the 1.51 A threshold already sits above the measured empty
-     * start-up peak (0.86 A max). Raise if start-up alone ever trips it.
+     * 0 because TRIP_AMPS (2.72) sits far above the measured empty start-up
+     * peak (0.58 A max at 25 RPM, 0.86 at 50). Raise if start-up alone ever trips it.
      */
     public static double BLANK_SEC = 0.0;
     /**
