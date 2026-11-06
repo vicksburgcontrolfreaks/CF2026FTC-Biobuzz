@@ -37,7 +37,10 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *                 The pivot does NOT move until you press one.
  *   Y (hold)    - collector in at COLLECT_RPM (200), to load pieces. Works while firing too: hold Y
  *                 during a shot if the collector has to push a ball into the indexer.
- *   RT (hold)   - indexer FEED toward the shooter, 50 RPM (manual; checks direction)
+ *   RT (hold)   - indexer FEED toward the shooter, 50 RPM. Hold it until a ball
+ *                 shoots, then let go: the screen records that shot's DIP (how far
+ *                 each wheel sagged below target). "Wobble, no ball" is the sag
+ *                 with nothing feeding. START resets the wobble.
  *   X (hold)    - indexer UNJAM: runs BACKWARD, away from the shooter, 50 RPM
  *                 Both only when the shooter isn't feeding. Speeds: CollectionSystem
  *                 FEED_RPM / UNJAM_RPM. A fired shot feeds at FEED_RPM too.
@@ -50,7 +53,26 @@ public class ShooterTest extends LinearOpMode {
     public static double RPM_STEP = 50;
 
     private boolean aPrev, upPrev, downPrev, rbPrev, lbPrev, bPrev;
-    private boolean leftPrev, rightPrev, backPrev;
+    private boolean leftPrev, rightPrev, backPrev, startPrev;
+
+    // ---- Dip measurement (manual feed) ---------------------------------------
+    // A ball going through the flywheels makes them sag for a moment. To build
+    // "fire = feed until it shoots", we need to know how big a real shot's dip
+    // is compared with the wheels' normal wobble with no ball. RT (manual feed)
+    // records the biggest drop below target while it's held; the wobble line
+    // records the biggest drop while the wheels just spin with nothing feeding.
+    private boolean manualFeedPrev;
+    private double feedMinL, feedMinR;
+    private boolean feedStartedReady;
+    private String lastManualDip = "none yet - hold RT until a ball shoots";
+    private final java.util.LinkedList<String> recentDips = new java.util.LinkedList<>();
+    private double wobble = 0;           // biggest drop below target, no ball
+    private double lastTarget = Double.NaN;
+    private boolean wheelsOnPrev;
+    private final com.qualcomm.robotcore.util.ElapsedTime quiet =
+            new com.qualcomm.robotcore.util.ElapsedTime();
+    /** Wobble only counts after the wheels have run this long with nothing feeding. */
+    private static final double QUIET_SEC = 1.5;
 
     @Override
     public void runOpMode() {
@@ -135,6 +157,44 @@ public class ShooterTest extends LinearOpMode {
 
             shooter.update();
 
+            // ---- Dip measurement ----
+            double target = shooter.getTargetRpm();
+            double l = shooter.getLeftRpm(), r = shooter.getRightRpm();
+            boolean manualFeed = !shooter.ownsIndexer() && gamepad1.right_trigger > 0.5;
+
+            if (manualFeed && !manualFeedPrev) {          // RT just pressed
+                feedMinL = l;
+                feedMinR = r;
+                feedStartedReady = shooter.isReady();
+            }
+            if (manualFeed) {
+                feedMinL = Math.min(feedMinL, l);
+                feedMinR = Math.min(feedMinR, r);
+            }
+            if (!manualFeed && manualFeedPrev && target > 0) {  // RT just released
+                lastManualDip = String.format("L %.0f / R %.0f%s",
+                        target - feedMinL, target - feedMinR,
+                        feedStartedReady ? "" : "  (wheels weren't READY - ignore)");
+                recentDips.addFirst(String.format("%.0f/%.0f", target - feedMinL, target - feedMinR));
+                while (recentDips.size() > 5) recentDips.removeLast();
+            }
+            manualFeedPrev = manualFeed;
+
+            // Wobble: only while the wheels have been spinning a while with nothing
+            // feeding. Reset by START, a new target, or turning the wheels on.
+            if (manualFeed || shooter.ownsIndexer() || target != lastTarget
+                    || (wheelsOn && !wheelsOnPrev) || !wheelsOn) {
+                quiet.reset();
+            }
+            if ((wheelsOn && !wheelsOnPrev) || target != lastTarget) wobble = 0;
+            if (gamepad1.start && !startPrev) wobble = 0;
+            if (wheelsOn && target > 0 && quiet.seconds() > QUIET_SEC) {
+                wobble = Math.max(wobble, Math.max(target - l, target - r));
+            }
+            lastTarget = target;
+            wheelsOnPrev = wheelsOn;
+            startPrev = gamepad1.start;
+
             telemetryM.addData("Robot", WhichRobot.number());
             telemetryM.addData("Pivot", pivotSetting);
             telemetryM.addData("State", shooter.getState());
@@ -148,6 +208,16 @@ public class ShooterTest extends LinearOpMode {
             telemetryM.addLine("");
             telemetryM.addData("Queued / fired", shooter.getShotsQueued() + " / " + shooter.getShotsFired());
             telemetryM.addData("Last dip (RPM)", shooter.getLastDipRpm());
+            telemetryM.addLine("");
+            telemetryM.addLine("-- DIP MEASUREMENT (RT = feed until it shoots) --");
+            if (manualFeed) {
+                telemetryM.addData("Feeding... dip so far", String.format("L %.0f / R %.0f",
+                        target - feedMinL, target - feedMinR));
+            }
+            telemetryM.addData("Last shot dip", lastManualDip);
+            telemetryM.addData("Recent (L/R, newest first)", recentDips.isEmpty() ? "-" : String.join("  ", recentDips));
+            telemetryM.addData("Wobble, no ball", quiet.seconds() > QUIET_SEC || wobble > 0
+                    ? String.format("%.0f  (START resets)", wobble) : "settling...");
             telemetryM.addData("Collector RPM", collection.getCollectorRPM());
             telemetryM.addData("Indexer RPM", collection.getIndexerRPM());
             telemetryM.addData("Indexer amps", collection.getIndexerCurrentAmps());
