@@ -49,7 +49,9 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 @TeleOp(name = "Shooter Test", group = "Test")
 public class ShooterTest extends LinearOpMode {
 
-    public static double START_RPM = 1500;
+    // 6494 tops out ~1300 at full power (HD Hex + 3:1 + flywheel), so 1500 never
+    // reached READY. 1100 (~85%) leaves headroom to recover after each shot.
+    public static double START_RPM = 1100;
     public static double RPM_STEP = 50;
 
     private boolean aPrev, upPrev, downPrev, rbPrev, lbPrev, bPrev;
