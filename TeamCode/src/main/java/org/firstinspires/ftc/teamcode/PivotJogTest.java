@@ -48,7 +48,7 @@ import com.qualcomm.robotcore.util.Range;
  * than any re-seating is likely to shift it.
  *
  * Park the pivot near the middle of its travel before starting and the jump is
- * small. Change START_POSITION in Panels if you want a different spot.
+ * small. Change START_POSITION_5618 / _6494 in Panels for a different spot.
  *
  * Be ready on the stop button the first time, and listen. A servo pressed
  * against a stop buzzes.
@@ -91,10 +91,22 @@ import com.qualcomm.robotcore.util.Range;
 public class PivotJogTest extends LinearOpMode {
 
     /**
-     * Where the pivot is commanded when you press Y. Mid-band, not an end, so it
-     * survives a rebuild -- see "THE ONE MOVE THAT CANNOT BE MADE SAFE" above.
+     * Where the pivot is commanded when you press Y, PER ROBOT (picked by
+     * WhichRobot from the config name). Mid-band, not an end, so it survives a
+     * rebuild -- see "THE ONE MOVE THAT CANNOT BE MADE SAFE" above.
+     *
+     * 6494: 0.42, mid-band of its measured travel.
+     * 5618: 0.6. Its band has never been measured. On 2026-11-05, Y at 0.42 drove
+     * 5618's pivot into a hard stop, so its band sits differently from 6494's.
+     * 0.6 is a guess away from that stop. If it buzzes too, the stop is on the
+     * OTHER side: try ~0.3.
      */
-    public static double START_POSITION = 0.42;
+    public static double START_POSITION_6494 = 0.42;
+    public static double START_POSITION_5618 = 0.6;
+
+    private static double startPosition() {
+        return WhichRobot.get() == WhichRobot.Robot.R5618 ? START_POSITION_5618 : START_POSITION_6494;
+    }
 
     /** One bumper press. */
     public static double FINE_STEP = 0.002;
@@ -141,17 +153,19 @@ public class PivotJogTest extends LinearOpMode {
             return;
         }
 
-        target = START_POSITION;
-        commanded = START_POSITION;
+        double start = startPosition();
+        target = start;
+        commanded = start;
 
         telemetry.addLine("PIVOT JOG TEST");
+        telemetry.addData("Robot", WhichRobot.number());
         telemetry.addLine();
         telemetry.addLine("NOTHING WILL MOVE until you press Y.");
-        telemetry.addData("Y will command", START_POSITION);
+        telemetry.addData("Y will command", start);
         telemetry.addLine();
         telemetry.addLine("The servo cannot be read, so that first move cannot be");
         telemetry.addLine("smoothed - it jumps. Park the pivot mid-travel to keep it small.");
-        telemetry.addLine("If it BUZZES, stop at once and change START_POSITION.");
+        telemetry.addLine("If it BUZZES, stop at once and change START_POSITION_" + WhichRobot.number() + " in Panels.");
         telemetry.addLine();
         telemetry.addLine("After that every move is rate limited and slow.");
         telemetry.update();
@@ -172,6 +186,7 @@ public class PivotJogTest extends LinearOpMode {
                 pivot.setPosition(commanded);
             }
 
+            telemetry.addData("Robot", WhichRobot.number());
             telemetry.addLine(inControl
                     ? "LB/RB fine | triggers coarse | X open end | B closed end"
                     : "PRESS Y TO TAKE CONTROL - nothing has moved yet");
@@ -213,10 +228,11 @@ public class PivotJogTest extends LinearOpMode {
     private void handleTakeControl() {
         boolean y = gamepad1.y;
         if (y && !yPrev && !inControl) {
+            double start = startPosition();
             inControl = true;
-            target = START_POSITION;
-            commanded = START_POSITION;
-            note = String.format("took control at %.3f", START_POSITION);
+            target = start;
+            commanded = start;
+            note = String.format("took control at %.3f", start);
         }
         yPrev = y;
     }
