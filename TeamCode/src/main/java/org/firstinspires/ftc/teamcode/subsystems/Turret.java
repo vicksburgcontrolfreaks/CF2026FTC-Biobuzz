@@ -104,11 +104,11 @@ public class Turret {
     // either side of the sweep's middle, so +/-106 with the same 3 deg margin.
     // Everything above about 286 deg / stops at +/-143 is the OLD build.
     //
-    // PER ROBOT: MIN_ANGLE, MAX_ANGLE, HOME_SWITCH_ANGLE and HOMING_DIRECTION are
-    // overwritten by init() from loadRobotNumbers(). Edit the numbers THERE. The
-    // defaults written here are 6494's, only so laptop code that reads them before
-    // any init() sees sane values.
-    public static double MIN_ANGLE = -106.0;
+    // PER ROBOT: MIN_ANGLE, MAX_ANGLE, HOME_SWITCH_ANGLE, HOMING_DIRECTION and
+    // HOMING_SEARCH_MAX_DEG are overwritten by init() from loadRobotNumbers(). Edit
+    // the numbers THERE. The defaults written here are 6494's, only so laptop code
+    // that reads them before any init() sees sane values.
+    public static double MIN_ANGLE = -90.0;
     public static double MAX_ANGLE = 106.0;
 
     // ---- Homing -------------------------------------------------------------
@@ -137,8 +137,7 @@ public class Turret {
 
     // Which way to search FIRST, and -- more importantly -- the direction the final
     // approach always comes from. Clockwise (-): the side with cable slack, and the
-    // magnet (-80.5) is near that end, so clockwise finds it from almost anywhere.
-    // See HOMING_SEARCH_MARGIN_DEG for the rare start below the magnet. Per robot.
+    // magnet is near that end. See HOMING_SEARCH_MAX_DEG. Per robot.
     public static double HOMING_DIRECTION = -1.0;
     public static double HOMING_POWER = 0.25;
 
@@ -148,19 +147,21 @@ public class Turret {
     // measured on the encoder (which counts fine before homing; only the zero is
     // unknown).
     //
-    // The cable is what limits travel, and it is NOT symmetric (Shane): plenty of
-    // slack past -106 (clockwise, HOMING_DIRECTION), tight past +106 (CCW). So:
-    //   1. Search clockwise up to searchMaxDeg(). From anywhere at or above
-    //      the magnet (-80.5 .. +106, almost all of travel) that finds it.
-    //   2. Not found -> the turret started in the ~16 deg below the magnet, and has
-    //      now overshot into the slack side. Reverse, CCW, at most as far as leg 1
-    //      went plus HOMING_REVERSE_MARGIN_DEG -- so leg 2 can never end up more
-    //      than that margin above where homing STARTED, which keeps it well clear
-    //      of the tight +106 end. It meets the magnet from below on the way.
-    // Leg 1's cap is worked out per robot in searchMaxDeg(): the distance from the
-    // far soft limit to the magnet, plus this margin (6494: 106 + 85.5 + 15 = 206.5).
-    public static double HOMING_SEARCH_MARGIN_DEG = 15.0;
-    public static double HOMING_REVERSE_MARGIN_DEG = 30.0;
+    // ONE direction, a fixed distance, then FAIL -- no reversing. Without an
+    // absolute sensor the turret can't know which side of the magnet it's on, and
+    // a turret that started past the magnet would otherwise run the long way
+    // round: the first try (search ~206 deg, then reverse) did exactly that and had
+    // to be stopped by hand (6494, 2026-11-06).
+    //
+    // So the rule is: the magnet is never behind you when homing starts.
+    //   - MIN_ANGLE sits INSIDE the magnet band, so a homed turret can't park
+    //     past it.
+    //   - Before homing, the drive team sets it roughly forward (by hand, robot
+    //     off). From roughly forward the magnet is well inside this distance.
+    //   - If it's not found anyway: FAILED, "turn it forward by hand, press X".
+    //     Worst case, it went this far the wrong way, into the cable's slack side.
+    // Per robot -- see loadRobotNumbers().
+    public static double HOMING_SEARCH_MAX_DEG = 150.0;
 
     // Backstop only: if a leg takes longer than this, the servo is too slow or not
     // moving, so FAIL (don't reverse). Distance, not time, decides the reversal --
@@ -235,12 +236,9 @@ public class Turret {
     /** Homing runs SEARCH -> BACKOFF -> APPROACH; only APPROACH sets the reference. */
     private enum HomingPhase { SEARCH, BACKOFF, APPROACH }
 
-    // Homing search state. The magnet is mid-travel, so one direction may run into a
-    // hard stop before reaching it; when that happens the search flips once.
+    // Homing search state. One direction only (see HOMING_SEARCH_MAX_DEG).
     private double homingSearchDir = HOMING_DIRECTION;
-    private boolean homingReversed = false;
     private int searchLegStartTicks = 0;       // reading when this search leg began
-    private double firstLegDeg = 0.0;          // how far leg 1 went before reversing
     private HomingPhase homingPhase = HomingPhase.SEARCH;
     private boolean backoffReleased = false;   // has the switch let go yet?
     private int backoffStartTicks = 0;         // reading when it let go
@@ -286,11 +284,18 @@ public class Turret {
             case R6494:
                 // Shane, 2026-11-06. No hard stops; cable has slack clockwise (-),
                 // tight counter-clockwise (+). Magnet band -90.6..-80.5 on the
-                // Range Test sweep; -85.5 after two by-eye forward corrections.
+                // Range Test sweep; -85.5 after two by-eye forward corrections, so the
+                // band is about -95.6..-85.5 in this frame. Homing repeatable (Shane).
                 HOME_SWITCH_ANGLE = -85.5;
-                MIN_ANGLE = -106.0;
+                // -90, not -106: INSIDE the magnet band, so a homed turret can never
+                // park on the far side of the magnet, where homing can't find it
+                // (long-way test failed, 2026-11-06). Costs 16 deg of clockwise reach.
+                MIN_ANGLE = -90.0;
                 MAX_ANGLE = 106.0;
                 HOMING_DIRECTION = -1.0;   // toward the slack
+                // Finds the magnet from any start between it and +64.5 (-85.5 + 150),
+                // i.e. anywhere roughly forward. Beyond that: FAILED, turn it by hand.
+                HOMING_SEARCH_MAX_DEG = 150.0;
                 break;
             case R5618:
             default:
@@ -306,6 +311,7 @@ public class Turret {
                 MIN_ANGLE = -90.0;   // placeholders; only used once homed, which
                 MAX_ANGLE = 90.0;    // can't happen until the magnet is measured
                 HOMING_DIRECTION = -1.0;
+                HOMING_SEARCH_MAX_DEG = 150.0;
                 break;
         }
     }
@@ -313,14 +319,6 @@ public class Turret {
     /** True once this robot's magnet position has been measured (see loadRobotNumbers). */
     public static boolean isMeasured() {
         return !Double.isNaN(HOME_SWITCH_ANGLE);
-    }
-
-    /** Leg-1 search cap: far soft limit to the magnet, plus margin. */
-    private static double searchMaxDeg() {
-        double farToMagnet = HOMING_DIRECTION < 0
-                ? MAX_ANGLE - HOME_SWITCH_ANGLE
-                : HOME_SWITCH_ANGLE - MIN_ANGLE;
-        return farToMagnet + HOMING_SEARCH_MARGIN_DEG;
     }
 
     /** Begin homing. It finishes inside update() over the next few seconds. */
@@ -334,9 +332,7 @@ public class Turret {
         state = State.HOMING;
         controlMode = ControlMode.HOLD;
         homingSearchDir = HOMING_DIRECTION;
-        homingReversed = false;
         searchLegStartTicks = readRawTicks();
-        firstLegDeg = 0.0;
         homingPhase = HomingPhase.SEARCH;
         backoffReleased = false;
         homingTimer.reset();
@@ -447,13 +443,8 @@ public class Turret {
             return 0.0;
         }
 
-        // See HOMING_SEARCH_MARGIN_DEG: distance decides the reversal, not time.
+        // See HOMING_SEARCH_MAX_DEG: one direction, a fixed distance, then give up.
         double legDeg = Math.abs(readRawTicks() - searchLegStartTicks) / TICKS_PER_DEGREE;
-        double legMax = homingReversed
-                ? firstLegDeg + HOMING_REVERSE_MARGIN_DEG
-                : searchMaxDeg();
-        boolean wentFarEnough = legDeg >= legMax;
-        boolean hitSomething = isStalled();
 
         if (homingTimer.seconds() > HOMING_TIMEOUT_SEC) {
             state = State.FAILED;
@@ -462,24 +453,15 @@ public class Turret {
                     legDeg, HOMING_TIMEOUT_SEC);
             return 0.0;
         }
-
-        if (wentFarEnough || hitSomething) {
-            if (!homingReversed) {
-                homingReversed = true;
-                firstLegDeg = legDeg;
-                homingSearchDir = -homingSearchDir;
-                searchLegStartTicks = readRawTicks();
-                homingTimer.reset();
-                resetStallWatch();
-                statusNote = String.format("%s after %.0f deg, reversing search",
-                        hitSomething ? "stalled" : "no magnet", legDeg);
-                return 0.0;   // pause a loop before driving the other way
-            }
-
+        if (isStalled()) {
             state = State.FAILED;
-            statusNote = hitSomething
-                    ? "HOMING FAILED - stalled; something blocking the turret?"
-                    : "HOMING FAILED - no magnet either way; check the switch wiring";
+            statusNote = "HOMING FAILED - stalled; something blocking the turret?";
+            return 0.0;
+        }
+        if (legDeg >= HOMING_SEARCH_MAX_DEG) {
+            state = State.FAILED;
+            statusNote = String.format("HOMING FAILED - no magnet in %.0f deg. Was it past "
+                    + "the magnet? Turn it to face FORWARD by hand, then X.", legDeg);
             return 0.0;
         }
 
