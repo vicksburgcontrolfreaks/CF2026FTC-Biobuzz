@@ -73,8 +73,7 @@ public final class Routes {
 
     // Start against the garden wall, launch the 4 preloads, collect the garden
     // pollen, go around the left of the hive to the far wall, launch again,
-    // then park. Launching is a PLACEHOLDER until the launcher is built -- the
-    // robot just sits still for the launch time (see RouteAuto).
+    // then park. Launches are real: aim, then fire LAUNCH_SHOTS (see RouteAuto).
     public static Route gardenWallLaunch(Park park) {
         Route route = Route.startAt(GARDEN_WALL_START)
                 .launchFrom(LAUNCH_GARDEN_WALL)  // launch the preloads
@@ -96,7 +95,7 @@ public final class Routes {
     // A short auto that stays out of our partner's way. Start against the far
     // wall, back straight off it (LEAVE) and launch the preloads, slide over
     // under the flower into the red/far wall corner, wait there until the
-    // "yield until" time, then park. Launching is a PLACEHOLDER (see RouteAuto).
+    // "yield until" time, then park. Launches are real (see RouteAuto).
     public static Route farWallYield(Park park) {
         Route route = Route.startAt(FAR_WALL_START)
                 .launchFrom(FAR_WALL_EXIT)   // straight off the wall, then launch

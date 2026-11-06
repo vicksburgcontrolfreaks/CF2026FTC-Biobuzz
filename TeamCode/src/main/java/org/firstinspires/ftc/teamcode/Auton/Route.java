@@ -29,8 +29,7 @@ public final class Route {
     public enum Action {
         DRIVE,    // just drive there
         COLLECT,  // run the collector when close to the point, stop on arrival
-        LAUNCH,   // on arrival, launch into the hive. PLACEHOLDER until the
-                  // launcher is built -- see RouteAuto.startLaunch()
+        LAUNCH,   // on arrival, aim and fire into the hive -- see RouteAuto.launchDone()
         YIELD,    // on arrival, hold still until the "yield until" time, to
                   // stay out of our alliance partner's way
     }

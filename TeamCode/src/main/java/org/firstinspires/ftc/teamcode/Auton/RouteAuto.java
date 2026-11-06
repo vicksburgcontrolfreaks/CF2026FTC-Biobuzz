@@ -6,14 +6,21 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.Path;
 import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
+
+
 
 import org.firstinspires.ftc.teamcode.RobotHardware;
 import org.firstinspires.ftc.teamcode.field.Alliance;
+import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
+import org.firstinspires.ftc.teamcode.field.HiveGeometry;
 import org.firstinspires.ftc.teamcode.field.PathSafety;
 import org.firstinspires.ftc.teamcode.field.PoseHandoff;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+import org.firstinspires.ftc.teamcode.subsystems.Deflector;
+import org.firstinspires.ftc.teamcode.subsystems.Launcher;
+import org.firstinspires.ftc.teamcode.subsystems.Turret;
+import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
+import org.firstinspires.ftc.teamcode.vision.TurretCamera;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +38,10 @@ import java.util.List;
  *   2. Drive to each step's point, stopping at each one
  *      - COLLECT steps: collector on once within COLLECT_RADIUS of the
  *        point, off when we get there
- *      - LAUNCH steps: on arrival, launch, wait LAUNCH_SECONDS, move on
+ *      - LAUNCH steps: on arrival, wait for the turret to aim (AIM_WAIT_SEC
+ *        max), fire LAUNCH_SHOTS (or until no ball / LAUNCH_MAX_SEC), move on.
+ *        The flywheel pre-spins from Start; the turret aims by camera the
+ *        whole way at our cell on our side of the field.
  *      - YIELD steps: on arrival, hold still until yieldUntilSeconds
  *   3. Say "Done" on the Driver Station, and show how long the run took
  *
@@ -39,8 +49,6 @@ import java.util.List;
  * built on it, like SelectAuto.
  */
 public abstract class RouteAuto extends OpMode {
-
-    private static final double COLLECTOR_POWER = 0.5; // same as DriveTeleOp
 
     // On a COLLECT step, turn the collector on when the robot gets this close
     // (inches) to the step's point.
@@ -50,25 +58,44 @@ public abstract class RouteAuto extends OpMode {
     // (SelectAuto picks its own wait on the gamepad.)
     private static final double WAIT_SECONDS = 0;
 
-    // How long a LAUNCH step sits still. A GUESS for now (8 pollen tips the
-    // hive) -- the launcher isn't built yet. Time the real one and fix this.
-    private static final double LAUNCH_SECONDS = 3;
+    // ---- Launching (real, 2026-11-06) ----------------------------------------
+    // A LAUNCH step: on arrival, wait for the turret to be on target (up to
+    // AIM_WAIT_SEC -- after that, fire anyway: a miss costs no more than not
+    // shooting), then fire until LAUNCH_SHOTS dips are counted, the shooter says
+    // "no ball", or LAUNCH_MAX_SEC runs out. Starting guesses -- time real runs.
+    public static int LAUNCH_SHOTS = 4;          // the 4 preloads (Routes.gardenWallLaunch)
+    public static double AIM_WAIT_SEC = 2.0;
+    public static double LAUNCH_MAX_SEC = 8.0;
+    /** Deflector (shot arc) for auto, if it was zeroed pre-match. 75 looked great on 6494. */
+    public static double AUTO_ARC_DEG = 75;
 
-    // 0.5 for the first 2026-robot runs (2026-11-05): 6494 odometry still drifts
-    // ~1" per round trip (see docs/TODO.md). Raise in steps once routes end where they should.
-    private static final double MAX_POWER = 0.5;
+    // 1.0 = full speed (Shane, 2026-11-06). Was 0.5 while 6494's odometry drifts
+    // ~1" per round trip (docs/TODO.md item 0) -- at full speed that drift and
+    // braking overshoot both grow, so retest every route on both robots.
+    private static final double MAX_POWER = 1.0;
 
     private Alliance alliance;
     private Route route;
     private double waitSeconds = WAIT_SECONDS;
 
     private Follower follower;
-    private DcMotorEx collector;
     private Timer pathTimer;
     private boolean collectorOn = false;
 
+    // Same pieces as DriveTeleOp, so the nectar guard and at-speed gate come along.
+    private Launcher launcher;
+    private final Launcher.Controls controls = new Launcher.Controls();
+    private Turret turret;
+    private TurretCamera camera;
+    private TurretAim aim;
+    private FieldAprilTags.Cell aimCell;
+    private Deflector deflector;
+
     private Timer launchTimer;
     private boolean launching = false;
+    private boolean launchFiring = false;   // aim wait over, shots going
+    private int shotsAtLaunchStart = 0;
+    private String launchNote = "";
 
     private Timer runTimer;               // seconds since Start
     private double finishedSeconds = -1;  // when the last step finished, -1 = not yet
@@ -158,30 +185,28 @@ public abstract class RouteAuto extends OpMode {
             Pose here = follower.getPose();
             Pose target = targets.get(step);
             if (Math.hypot(here.getX() - target.getX(), here.getY() - target.getY()) <= COLLECT_RADIUS) {
-                collector.setPower(COLLECTOR_POWER);
-                collectorOn = true;
+                collectorOn = true;   // Launcher runs it (controls.collectIn), see loop()
             }
         }
 
         // isBusy() is true until the robot reaches the end of the step.
         if (!follower.isBusy()) {
-            if (collectorOn) {
-                collector.setPower(0);
-                collectorOn = false;
-            }
+            collectorOn = false;
 
             // LAUNCH step: we've arrived, so launch, and stay put until it's done.
             if (route.steps.get(step).action == Route.Action.LAUNCH) {
                 if (!launching) {
                     launching = true;
+                    launchFiring = false;
                     launchTimer.resetTimer();
-                    startLaunch();
+                    launcher.setFlywheel(true);   // normally already spinning (pre-spun at Start)
                 }
-                if (launchTimer.getElapsedTimeSeconds() < LAUNCH_SECONDS) {
+                if (!launchDone()) {
                     return; // still launching -- check again next loop
                 }
-                stopLaunch();
                 launching = false;
+                launchFiring = false;
+                if (!hasLaunchAfter(step)) launcher.setFlywheel(false);   // nothing left to shoot
             }
 
             // YIELD step: we've arrived, so hold still until the yield time.
@@ -202,14 +227,52 @@ public abstract class RouteAuto extends OpMode {
         }
     }
 
-    // PLACEHOLDER: the launcher isn't built yet, so these do nothing. The robot
-    // just sits for LAUNCH_SECONDS, so timing tests still count the launch.
-    // When the launcher works: spin it up / feed pollen in startLaunch(),
-    // turn it all off in stopLaunch().
-    private void startLaunch() {
+    /**
+     * One loop of a LAUNCH step; true once it's finished. Fire waits for the
+     * turret to be on target (or AIM_WAIT_SEC), then keeps firing -- the
+     * Launcher feeds one ball per dip, pausing for the wheels to recover.
+     */
+    private boolean launchDone() {
+        double t = launchTimer.getElapsedTimeSeconds();
+        int shots = launcher.getShooter().getShotsFired() - shotsAtLaunchStart;
+
+        if (!launchFiring) {
+            boolean aimed = aim.isOnTarget() || !Turret.isMeasured();   // no turret = nothing to wait for
+            if (aimed || t >= AIM_WAIT_SEC) {
+                launchFiring = true;
+                shotsAtLaunchStart = launcher.getShooter().getShotsFired();
+                launchNote = aimed ? "aimed - firing" : "aim timed out - firing anyway";
+                // Don't check wasNoBall() yet: it may still be set from the LAST
+                // launch. This loop's launcher.update() calls fire(), which clears it.
+                return false;
+            } else {
+                launchNote = String.format("aiming (%.1f s)  %s", t, aim.getStatus());
+                return false;
+            }
+        }
+
+        if (shots >= LAUNCH_SHOTS) {
+            launchNote = String.format("done: %d shots in %.1f s", shots, t);
+            return true;
+        }
+        if (launcher.getShooter().wasNoBall()) {
+            launchNote = String.format("done: no ball after %d shots (%.1f s)", shots, t);
+            return true;
+        }
+        if (t >= LAUNCH_MAX_SEC) {
+            launchNote = String.format("done: TIMED OUT at %d shots", shots);
+            return true;
+        }
+        launchNote = String.format("firing: %d of %d  (%s)", shots, LAUNCH_SHOTS,
+                launcher.getShooter().getNote());
+        return false;
     }
 
-    private void stopLaunch() {
+    private boolean hasLaunchAfter(int s) {
+        for (int i = s + 1; i < route.steps.size(); i++) {
+            if (route.steps.get(i).action == Route.Action.LAUNCH) return true;
+        }
+        return false;
     }
 
     private void startStep(int newStep) {
@@ -224,8 +287,12 @@ public abstract class RouteAuto extends OpMode {
         launchTimer = new Timer();
         runTimer = new Timer();
 
-        collector = hardwareMap.get(DcMotorEx.class, "collector");
-        RobotHardware.applyCollectionDirections(collector, null);
+        RobotHardware hw = new RobotHardware();
+        hw.init(hardwareMap, false);   // TurretCamera owns the webcam
+        launcher = new Launcher(hw, hardwareMap);
+        turret = hw.turret;
+        camera = new TurretCamera(hardwareMap);
+        deflector = new Deflector(hardwareMap);
 
         follower = Constants.createFollower(hardwareMap);
         follower.setMaxPower(MAX_POWER);
@@ -237,6 +304,8 @@ public abstract class RouteAuto extends OpMode {
     // Runs over and over after INIT is pressed, until Start
     @Override
     public void init_loop() {
+        camera.update();
+        deflector.update(false);   // keep counting turns; nothing moves in INIT
         addRouteTelemetry();
         telemetry.update();
     }
@@ -253,6 +322,19 @@ public abstract class RouteAuto extends OpMode {
                 telemetry.addLine("  " + warning);
             }
         }
+        // Launch readiness -- only matters for routes that launch.
+        if (route != null && route.has(Route.Action.LAUNCH)) {
+            if (!turret.isHomed() && Turret.isMeasured()) {
+                telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
+            }
+            if (deflector.isPresent() && !deflector.isZeroed()) {
+                telemetry.addLine("!! Deflector NOT zeroed -- run Deflector Zero, or the arc stays where it is.");
+            }
+            if (launcher.isPivotBlocked()) {
+                telemetry.addLine("!! Pivot not measured on this robot -- nectar guard can't move it.");
+            }
+            telemetry.addData("Camera", camera.getNote());
+        }
     }
 
     @Override
@@ -264,12 +346,36 @@ public abstract class RouteAuto extends OpMode {
         step = -1;
         pathTimer.resetTimer();
         runTimer.resetTimer();
+
+        if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
+        aimCell = HiveGeometry.sideCell(alliance, startPose.getY(), null);
+        aim = new TurretAim(aimCell.tagIds);
+        launcher.start();
+        if (deflector.isZeroed()) deflector.goTo(AUTO_ARC_DEG);
+        // Pre-spin, so the first launch spot doesn't wait 1-2 s for spin-up.
+        if (route.has(Route.Action.LAUNCH)) launcher.setFlywheel(true);
     }
 
     @Override
     public void loop() {
         follower.update();       // must run every loop or the robot won't move/hold
-        autonomousPathUpdate();
+        camera.update();
+        autonomousPathUpdate();  // BEFORE launcher.update() -- see launchDone()
+
+        // Turret: aim the whole way at OUR cell on the side of the field we're
+        // on, so it's already on target when we arrive at a launch spot.
+        FieldAprilTags.Cell side = HiveGeometry.sideCell(alliance, follower.getPose().getY(), aimCell);
+        if (side != aimCell) {
+            aimCell = side;
+            aim.setTargetTagIds(aimCell.tagIds);
+        }
+        aim.update(camera.getDetections(), turret, turret.isHomed());
+        turret.update();
+
+        controls.collectIn = collectorOn;
+        controls.fire = launching && launchFiring;
+        launcher.update(controls);
+        deflector.update(true);
         // Every loop, not just in stop(): if auto is cut off, TeleOp still gets
         // a pose from a moment ago.
         PoseHandoff.save(follower.getPose(), alliance);
@@ -283,7 +389,14 @@ public abstract class RouteAuto extends OpMode {
         telemetry.addData("Path check problems", warnings.size());
         telemetry.addData("Step", (step + 1) + " of " + paths.size());
         telemetry.addData("Collector", collectorOn ? "ON" : "off");
-        if (launching) telemetry.addLine("LAUNCHING (placeholder -- nothing moves)");
+        if (launching) telemetry.addData("LAUNCH", launchNote);
+        telemetry.addData("Flywheel", "%s  L %.0f / R %.0f", launcher.getShooter().getNote(),
+                launcher.getShooter().getLeftRpm(), launcher.getShooter().getRightRpm());
+        telemetry.addData("Turret", "%s %+.0f deg | %s -> %s", turret.getState(), turret.getAngle(),
+                aimCell.displayName, aim.getStatus());
+        if (launcher.getGuard().getState() != org.firstinspires.ftc.teamcode.shooting.NectarGuard.State.CLEAR) {
+            telemetry.addData("Guard", launcher.getGuard().getNote());
+        }
         if (yielding) telemetry.addLine(String.format("YIELDING until %.0f sec", yieldUntilSeconds));
         telemetry.addData("X", follower.getPose().getX());
         telemetry.addData("Y", follower.getPose().getY());
@@ -293,8 +406,14 @@ public abstract class RouteAuto extends OpMode {
 
     @Override
     public void stop() {
-        // Make sure the collector doesn't keep spinning if Stop is pressed mid-run
-        if (collector != null) collector.setPower(0);
+        // Nothing keeps spinning if Stop is pressed mid-run.
+        if (launcher != null) {
+            launcher.setFlywheel(false);
+            launcher.update(new Launcher.Controls());   // all-false: wheels, indexer, collector off
+        }
+        if (turret != null) turret.stop();
+        if (deflector != null) deflector.stop();
+        if (camera != null) camera.close();
         // Where auto ended, for DriveTeleOp's starting pose.
         // Only after Start: stopped during INIT, the pose is just a default.
         if (follower != null && started) PoseHandoff.save(follower.getPose(), alliance);

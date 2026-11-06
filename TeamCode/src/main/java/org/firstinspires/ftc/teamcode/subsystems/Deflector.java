@@ -146,6 +146,12 @@ public class Deflector {
         keptZeroed = false;
     }
 
+    /** Go to an angle (deflector degrees), clipped to the soft limits. */
+    public void goTo(double degrees) {
+        target = DeflectorLogic.clipToLimits(degrees);
+        index = DeflectorLogic.nearestIndex(target);
+    }
+
     public void goToIndex(int i) {
         index = Math.max(0, Math.min(DeflectorLogic.POSITIONS.length - 1, i));
         target = DeflectorLogic.clipToLimits(DeflectorLogic.POSITIONS[index]);

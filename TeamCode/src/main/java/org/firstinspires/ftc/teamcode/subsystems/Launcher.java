@@ -94,6 +94,11 @@ public class Launcher {
         }
     }
 
+    /** Auto: flywheel on/off directly (pre-spin before a launch spot, off after the last one). */
+    public void setFlywheel(boolean on) {
+        if (!guard.isFault()) flywheelOn = on;
+    }
+
     /** Operator knows a nectar is next: nectar gap until the next shot. */
     public void requestNectar() {
         guard.requestNectar();
