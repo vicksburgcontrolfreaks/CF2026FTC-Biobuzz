@@ -27,8 +27,11 @@ package org.firstinspires.ftc.teamcode.shooting;
  *      FAULT: everything off, gap OPEN to release it. Latched until reset().
  *      This is after the fact -- it limits the damage, it doesn't prevent it.
  *
- * Self-healing: a wrong trip (pollen read as nectar) costs one weak shot, and
- * that shot's dip clears it. There is deliberately NO "force pollen" button:
+ * Recovering from a wrong trip (pollen read as nectar): at the nectar gap a
+ * pollen is NOT gripped -- it sticks in the opening (6494, 2026-11-06), so there
+ * is no dip to clear it. STUCK_CLEAR_SEC handles that: wide gap, wheels at
+ * speed, indexer pushing, nothing shot -> not a nectar -> back to pollen, which
+ * grips and shoots it. There is deliberately NO "force pollen" button:
  * a nectar already on the ramp can't be re-detected, so clearing by hand is
  * exactly the driver error this exists to stop.
  *
@@ -70,6 +73,23 @@ public class NectarGuard {
      * start-up peak (0.86 A max). Raise if start-up alone ever trips it.
      */
     public static double BLANK_SEC = 0.0;
+    /**
+     * Current must stay at/above TRIP_AMPS this long to count. A nectar pushes
+     * hard the whole time it's squeezed through; a start-up surge or a ball
+     * shifting is a blip. Added 2026-11-06 after false trips on 6494.
+     */
+    public static double TRIP_HOLD_SEC = 0.10;
+    /**
+     * STUCK RECOVERY. A nectar at the nectar gap gets gripped and shot. So if
+     * the gap has been wide, the flywheel at speed, and the indexer pushing for
+     * this long with NO shot, what's there isn't a nectar -- it's a pollen the
+     * wide gap can't grip (seen on 6494, 2026-11-06: it just sat in the
+     * opening). Close to pollen so it shoots. The jam backstop still covers a
+     * wrong call. ~2x the slowest ramp travel at FEED_RPM 25.
+     */
+    public static double STUCK_CLEAR_SEC = 4.0;
+    /** "At speed" for STUCK_CLEAR_SEC: the slower wheel within this of target. */
+    public static double STUCK_AT_SPEED_RPM = 100;
     /** Forward this long and never above MIN_ALIVE_AMPS = the reading is dead. */
     public static double BLIND_AFTER_SEC = 0.5;
     public static double MIN_ALIVE_AMPS = 0.05;
@@ -89,6 +109,10 @@ public class NectarGuard {
     private double lastRunPeakAmps = 0;        // frozen when the run ends -- for calibration
     private int trips = 0;
     private boolean jamArmed = false;
+    private double aboveSinceSec = Double.NaN;   // current at/above TRIP_AMPS since, NaN = below
+    private boolean tripArmed = true;            // false after a trip until current drops below again
+    private double stuckSec = 0;                 // wide gap + at speed + pushing, no shot
+    private double lastNowSec = Double.NaN;
     private String note = "clear";
 
     /**
@@ -102,6 +126,8 @@ public class NectarGuard {
      */
     public void update(double nowSec, boolean indexerForward, double indexerAmps,
                        boolean shotSeen, double flywheelDropRpm) {
+        double dt = Double.isNaN(lastNowSec) ? 0 : nowSec - lastNowSec;
+        lastNowSec = nowSec;
         if (state == State.FAULT) return;   // latched; only reset() clears it
 
         // 3. Backstop first: if the gap is at pollen and the wheels just took a
@@ -150,26 +176,54 @@ public class NectarGuard {
             note = "load sensor reading again";
         }
 
-        // 1. Load trip.
-        if (indexerForward && forwardSec >= BLANK_SEC && indexerAmps >= TRIP_AMPS) {
-            if (state != State.NECTAR_COMING) {
-                trips++;
-                note = String.format("NECTAR DETECTED (%.2f A) - nectar gap until it shoots", indexerAmps);
-            }
+        // 1. Load trip: at/above TRIP_AMPS for TRIP_HOLD_SEC straight. Re-arms
+        //    only once the current drops below again, so one long hard push
+        //    (e.g. a stuck ball) can't trip again and again.
+        boolean above = indexerForward && forwardSec >= BLANK_SEC && indexerAmps >= TRIP_AMPS;
+        if (!above) {
+            aboveSinceSec = Double.NaN;
+            tripArmed = true;
+        } else if (Double.isNaN(aboveSinceSec)) {
+            aboveSinceSec = nowSec;
+        }
+        if (above && tripArmed && nowSec - aboveSinceSec >= TRIP_HOLD_SEC) {
+            tripArmed = false;
+            trips++;
+            stuckSec = 0;
             state = State.NECTAR_COMING;
+            note = String.format("NECTAR DETECTED (%.2f A) - nectar gap until it shoots", indexerAmps);
             return;
         }
 
+        boolean wide = state == State.NECTAR_COMING || (state == State.CLEAR && nectarRequested);
+
         // A shot clears a nectar (detected or requested): it's gone.
-        if (shotSeen && (state == State.NECTAR_COMING || nectarRequested)) {
+        if (shotSeen && wide) {
             state = State.CLEAR;
             nectarRequested = false;
+            stuckSec = 0;
             note = "nectar shot - back to pollen";
+            return;
+        }
+
+        // Stuck recovery (see STUCK_CLEAR_SEC).
+        if (wide && indexerForward && flywheelOn && flywheelDropRpm < STUCK_AT_SPEED_RPM) {
+            stuckSec += dt;
+            if (stuckSec >= STUCK_CLEAR_SEC) {
+                state = State.CLEAR;
+                nectarRequested = false;
+                stuckSec = 0;
+                note = String.format("nothing shot in %.0f s at the nectar gap - not a nectar,"
+                        + " back to pollen", STUCK_CLEAR_SEC);
+            }
+        } else if (!wide) {
+            stuckSec = 0;
         }
     }
 
     /** Operator: "a nectar is next." Nectar gap until the next shot. */
     public void requestNectar() {
+        if (!nectarRequested) stuckSec = 0;
         nectarRequested = true;
         if (state == State.CLEAR) note = "nectar requested - nectar gap until the next shot";
     }
@@ -180,6 +234,9 @@ public class NectarGuard {
         nectarRequested = false;
         forwardSinceSec = Double.NaN;
         jamArmed = false;
+        aboveSinceSec = Double.NaN;
+        tripArmed = true;
+        stuckSec = 0;
         note = "clear";
     }
 

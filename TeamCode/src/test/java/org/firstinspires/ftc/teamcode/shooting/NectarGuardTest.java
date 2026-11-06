@@ -12,7 +12,7 @@ import static org.junit.Assert.assertTrue;
 /*
  * NectarGuard on the laptop:  gradlew :TeamCode:testDebugUnitTest
  * Uses the default thresholds: TRIP 1.51 A, BLIND after 0.5 s under 0.05 A,
- * JAM 400 RPM (armed below 200).
+ * JAM 400 RPM (armed below 200), trip must HOLD 0.1 s, stuck clear after 4 s.
  */
 public class NectarGuardTest {
 
@@ -30,6 +30,9 @@ public class NectarGuardTest {
         NectarGuard.BLIND_AFTER_SEC = 0.5;
         NectarGuard.MIN_ALIVE_AMPS = 0.05;
         NectarGuard.JAM_DIP_RPM = 400;
+        NectarGuard.TRIP_HOLD_SEC = 0.10;
+        NectarGuard.STUCK_CLEAR_SEC = 4.0;
+        NectarGuard.STUCK_AT_SPEED_RPM = 100;
         g = new NectarGuard();
         t = 0;
     }
@@ -59,7 +62,7 @@ public class NectarGuardTest {
     @Test
     public void nectarLoadOpensToNectarGap_andStaysUntilItsShot() {
         run(10, true, EMPTY_AMPS, 20);
-        step(true, NECTAR_AMPS, false, 20);
+        run(8, true, NECTAR_AMPS, 20);   // 0.14 s after the first loop, past TRIP_HOLD_SEC
         assertEquals(Gap.NECTAR, g.gap());
         assertEquals(1, g.getTrips());
 
@@ -75,7 +78,7 @@ public class NectarGuardTest {
 
     @Test
     public void nectarDetectedWithFlywheelOff_staysNectarUntilAShot() {
-        step(true, NECTAR_AMPS, false, OFF);
+        run(8, true, NECTAR_AMPS, OFF);   // 0.14 s after the first loop, past TRIP_HOLD_SEC
         run(500, false, 0, OFF);   // sits on the ramp for 10 s
         assertEquals(Gap.NECTAR, g.gap());
     }
@@ -147,7 +150,7 @@ public class NectarGuardTest {
     @Test
     public void bigDipAtNectarGap_isNotAJam() {
         run(10, false, 0, 10);
-        step(true, NECTAR_AMPS, false, 10);   // nectar detected -> nectar gap
+        run(8, true, NECTAR_AMPS, 10);   // 0.14 s after the first loop, past TRIP_HOLD_SEC   // nectar detected -> nectar gap
         step(false, 0, false, 600);           // a nectar shot may dip a lot
         assertFalse(g.isFault());
     }
@@ -155,7 +158,7 @@ public class NectarGuardTest {
     @Test
     public void recoveryAfterANectarShot_doesNotTripTheBackstop() {
         run(10, false, 0, 10);
-        step(true, NECTAR_AMPS, false, 10);
+        run(8, true, NECTAR_AMPS, 10);   // 0.14 s after the first loop, past TRIP_HOLD_SEC
         step(false, 0, true, 600);            // nectar shot: guard clears to pollen
         assertEquals(Gap.POLLEN, g.gap());
         // Wheels still way down while recovering, now at the pollen gap.
@@ -165,7 +168,7 @@ public class NectarGuardTest {
 
     @Test
     public void tripCountsOncePerNectar() {
-        run(5, true, NECTAR_AMPS, 20);   // several loops above threshold
+        run(20, true, NECTAR_AMPS, 20);   // many loops above threshold
         assertEquals(1, g.getTrips());
     }
 
@@ -174,5 +177,63 @@ public class NectarGuardTest {
         run(5, true, 1.2, 20);
         run(2, false, 0, 20);
         assertEquals(1.2, g.getLastRunPeakAmps(), 1e-9);
+    }
+
+    // ---- Less reactive: hold time (6494 false trips, 2026-11-06) ----
+
+    @Test
+    public void briefSpike_doesNotTrip() {
+        run(10, true, EMPTY_AMPS, 20);
+        run(3, true, NECTAR_AMPS, 20);   // 0.06 s: a blip
+        run(10, true, EMPTY_AMPS, 20);
+        assertEquals(Gap.POLLEN, g.gap());
+        assertEquals(0, g.getTrips());
+    }
+
+    // ---- Stuck recovery: a pollen at the nectar gap just sits there ----
+
+    @Test
+    public void stuckAtNectarGap_withWheelsAtSpeed_clearsToPollenAfter4s() {
+        run(8, true, NECTAR_AMPS, 20);           // (false) trip
+        run(190, true, EMPTY_AMPS, 20);          // 3.8 s pushing, nothing shoots
+        assertEquals(Gap.NECTAR, g.gap());
+        run(15, true, EMPTY_AMPS, 20);           // past 4 s
+        assertEquals(Gap.POLLEN, g.gap());
+        assertTrue(g.getNote().contains("not a nectar"));
+    }
+
+    @Test
+    public void stuckRecovery_doesNotRunWithFlywheelOff() {
+        // Nectar staged on the ramp with the wheels stopped: must stay wide.
+        run(8, true, NECTAR_AMPS, OFF);
+        run(500, true, EMPTY_AMPS, OFF);
+        assertEquals(Gap.NECTAR, g.gap());
+    }
+
+    @Test
+    public void stuckRecovery_doesNotRunWhileIndexerStopped() {
+        run(8, true, NECTAR_AMPS, 20);
+        run(500, false, 0, 20);   // wheels at speed, but nobody is pushing
+        assertEquals(Gap.NECTAR, g.gap());
+    }
+
+    @Test
+    public void afterStuckClear_aLongPushDoesNotRetrip_untilCurrentDrops() {
+        run(8, true, NECTAR_AMPS, 20);            // trip; current STAYS high (ball pressed)
+        run(210, true, NECTAR_AMPS, 20);          // 4.2 s, no shot -> stuck clear
+        assertEquals(Gap.POLLEN, g.gap());
+        assertEquals(1, g.getTrips());
+        // Current drops (ball shot), then a NEW nectar comes: that one trips.
+        run(10, true, EMPTY_AMPS, 20);
+        run(8, true, NECTAR_AMPS, 20);
+        assertEquals(Gap.NECTAR, g.gap());
+        assertEquals(2, g.getTrips());
+    }
+
+    @Test
+    public void requestedNectar_alsoClearsWhenStuck() {
+        g.requestNectar();
+        run(210, true, EMPTY_AMPS, 20);
+        assertEquals(Gap.POLLEN, g.gap());
     }
 }
