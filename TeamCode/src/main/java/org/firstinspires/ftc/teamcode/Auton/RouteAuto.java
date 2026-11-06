@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import org.firstinspires.ftc.teamcode.RobotHardware;
 import org.firstinspires.ftc.teamcode.field.Alliance;
 import org.firstinspires.ftc.teamcode.field.PathSafety;
+import org.firstinspires.ftc.teamcode.field.PoseHandoff;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.ArrayList;
@@ -83,6 +84,7 @@ public abstract class RouteAuto extends OpMode {
 
     // Which step we're on. -1 = waiting at the start, steps.size() = done.
     private int step = -1;
+    private boolean started = false;      // Start pressed (stop() during INIT must not hand off a pose)
 
     private final List<String> warnings = new ArrayList<>();
 
@@ -258,6 +260,7 @@ public abstract class RouteAuto extends OpMode {
         // Set here, not in init, because SelectAuto can change the start
         // right up until Start is pressed.
         follower.setStartingPose(startPose); // tell the robot where it is at the beginning
+        started = true;
         step = -1;
         pathTimer.resetTimer();
         runTimer.resetTimer();
@@ -267,6 +270,9 @@ public abstract class RouteAuto extends OpMode {
     public void loop() {
         follower.update();       // must run every loop or the robot won't move/hold
         autonomousPathUpdate();
+        // Every loop, not just in stop(): if auto is cut off, TeleOp still gets
+        // a pose from a moment ago.
+        PoseHandoff.save(follower.getPose(), alliance);
 
         // Auto is 30 seconds -- this shows how much of it the route uses.
         if (finishedSeconds >= 0) {
@@ -289,5 +295,8 @@ public abstract class RouteAuto extends OpMode {
     public void stop() {
         // Make sure the collector doesn't keep spinning if Stop is pressed mid-run
         if (collector != null) collector.setPower(0);
+        // Where auto ended, for DriveTeleOp's starting pose.
+        // Only after Start: stopped during INIT, the pose is just a default.
+        if (follower != null && started) PoseHandoff.save(follower.getPose(), alliance);
     }
 }

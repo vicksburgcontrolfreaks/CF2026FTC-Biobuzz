@@ -17,4 +17,14 @@ public enum Alliance {
     public Pose map(Pose redPose) {
         return this == RED ? redPose : FieldConstants.rotate180(redPose);
     }
+
+    /**
+     * The field heading (radians) that points straight AWAY from this alliance's
+     * drivers. Red drives from the red wall (x = 0) looking toward +x, so 0;
+     * blue drives from the blue wall (x = 144) looking toward -x, so 180 deg.
+     * Field-centric TeleOp uses this as "stick forward".
+     */
+    public double awayFromDriversHeading() {
+        return this == RED ? 0.0 : Math.PI;
+    }
 }
