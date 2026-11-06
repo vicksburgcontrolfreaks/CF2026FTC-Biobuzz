@@ -127,6 +127,8 @@ public class DriveTeleOp extends OpMode {
     private boolean cameraPicks = false;               // "our cells, camera picks"
     private FieldAprilTags.Cell lastSideCell = null;   // what "our side" said last loop
     private boolean turretParked = false;
+    private int headingResets = 0;                      // gamepad1 BACK presses seen
+    private final ElapsedTime headingResetTimer = new ElapsedTime();
     private boolean turretManual = false;
     private boolean wasReady = false;
     private int lastTrips = 0;
@@ -240,6 +242,8 @@ public class DriveTeleOp extends OpMode {
             Pose p = follower.getPose();
             follower.setPose(new Pose(p.getX(), p.getY(), alliance.get().awayFromDriversHeading()));
             gamepad1.rumble(300);
+            headingResets++;
+            headingResetTimer.reset();
         }
 
         double[] robot = FieldCentric.toRobot(
@@ -401,6 +405,11 @@ public class DriveTeleOp extends OpMode {
         Pose p = follower.getPose();
         telemetry.addData("Pose", "(%.1f, %.1f) %.1f deg  [%s]", p.getX(), p.getY(),
                 Math.toDegrees(p.getHeading()), alliance.get());
+        // BACK check: the count goes up on every press the code sees. Right after a
+        // press, heading should read the "away" heading (red 0, blue 180).
+        telemetry.addData("Heading reset", headingResets == 0 ? "never (gamepad1 BACK)"
+                : String.format("%d times, last %.0f s ago (sets %.0f deg)", headingResets,
+                        headingResetTimer.seconds(), Math.toDegrees(alliance.get().awayFromDriversHeading())));
         // For recalibrating the nectar trip at the real feed speed.
         telemetry.addData("Indexer amps", "now %.2f  last run peak %.2f  (trip %.2f)",
                 launcher.getIndexerAmps(), guard.getLastRunPeakAmps(), NectarGuard.TRIP_AMPS);
