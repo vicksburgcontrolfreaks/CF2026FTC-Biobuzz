@@ -10,6 +10,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.teamcode.shooting.ShooterLogic;
 import org.firstinspires.ftc.teamcode.subsystems.CollectionSystem;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
+import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 
 /**
  * Bring-up for the non-blocking Shooter. Answers, in this order:
@@ -28,6 +29,12 @@ import org.firstinspires.ftc.teamcode.subsystems.Shooter;
  *   D-pad up/dn - target RPM +/- RPM_STEP (applies live)
  *   Right bumper- fire 1        Left bumper - fire 3
  *   B           - stop everything
+ *   D-pad left  - pivot to POLLEN gap    D-pad right - pivot to NECTAR gap
+ *   Back        - pivot OPEN (pull a stuck ball out)
+ *                 Pivot buttons work on 6494 only: its positions were measured
+ *                 there. On 5618 they'd hit a hard stop, so they're blocked
+ *                 until 5618's band is measured with Pivot Jog Test.
+ *                 The pivot does NOT move until you press one.
  *   Y (hold)    - collector in, to load pieces
  *   X (hold)    - indexer unjam (only when the shooter isn't feeding)
  */
@@ -39,6 +46,7 @@ public class ShooterTest extends LinearOpMode {
     public static double RPM_STEP = 50;
 
     private boolean aPrev, upPrev, downPrev, rbPrev, lbPrev, bPrev;
+    private boolean leftPrev, rightPrev, backPrev;
 
     @Override
     public void runOpMode() {
@@ -47,13 +55,23 @@ public class ShooterTest extends LinearOpMode {
         CollectionSystem collection = new CollectionSystem(hw.collector, hw.indexer, hw.colorSensor);
         Shooter shooter = new Shooter(hw.shooterLeft, hw.shooterRight, collection);
 
+        // Pivot: only on the robot whose positions were measured (6494). Nothing
+        // is written to the servo until a pivot button is pressed.
+        ShooterPivot pivot = new ShooterPivot(hw.shooterPivot);
+        boolean pivotAllowed = WhichRobot.get() == WhichRobot.Robot.R6494;
+        String pivotSetting = pivotAllowed ? "not set - press dpad L/R"
+                : "BLOCKED on " + WhichRobot.number() + " - measure with Pivot Jog Test first";
+
         TelemetryManager telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         PanelsConfigurables.refreshClass(ShooterTest.class);
         PanelsConfigurables.refreshClass(Shooter.class);
         PanelsConfigurables.refreshClass(ShooterLogic.class);
 
         telemetry.addLine("SHOOTER TEST");
-        telemetry.addLine("A = wheels | dpad = RPM | RB = fire 1 | LB = fire 3 | B = stop");
+        BuildInfo.show(telemetry);
+        telemetry.addLine("A = wheels | dpad U/D = RPM | RB = fire 1 | LB = fire 3 | B = stop");
+        telemetry.addLine("dpad L = pollen gap | dpad R = nectar gap | Back = open");
+        telemetry.addData("Pivot", pivotSetting);
         telemetry.update();
 
         waitForStart();
@@ -81,6 +99,25 @@ public class ShooterTest extends LinearOpMode {
             lbPrev = gamepad1.left_bumper;
             bPrev = gamepad1.b;
 
+            // Pivot presets (6494 only -- see the controls comment).
+            boolean left = gamepad1.dpad_left, right = gamepad1.dpad_right, back = gamepad1.back;
+            if ((left && !leftPrev) || (right && !rightPrev) || (back && !backPrev)) {
+                if (!pivotAllowed) {
+                    // pivotSetting already explains why; leave the servo alone.
+                } else if (left && !leftPrev) {
+                    pivot.goToPollen();
+                    pivotSetting = String.format("POLLEN (%.3f)", pivot.getCommandedPosition());
+                } else if (right && !rightPrev) {
+                    pivot.goToNectar();
+                    pivotSetting = String.format("NECTAR (%.3f)", pivot.getCommandedPosition());
+                } else if (pivot.goToOpen()) {
+                    pivotSetting = String.format("OPEN (%.3f)", pivot.getCommandedPosition());
+                }
+            }
+            leftPrev = left;
+            rightPrev = right;
+            backPrev = back;
+
             if (wheelsOn) shooter.spinUp(rpm);
 
             if (gamepad1.y) collection.collect(); else collection.stopCollector();
@@ -91,6 +128,8 @@ public class ShooterTest extends LinearOpMode {
 
             shooter.update();
 
+            telemetryM.addData("Robot", WhichRobot.number());
+            telemetryM.addData("Pivot", pivotSetting);
             telemetryM.addData("State", shooter.getState());
             telemetryM.addData("Note", shooter.getNote());
             telemetryM.addData("Ready", shooter.isReady());
