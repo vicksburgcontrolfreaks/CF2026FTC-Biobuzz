@@ -262,10 +262,24 @@ public class Turret {
     /**
      * Declare "the turret is physically at this angle right now" without homing.
      * This is for measuring TICKS_PER_DEGREE during testing, not for match code.
+     *
+     * Two things it must also do (both bit on 6494, 2026-11-06):
+     *   - Move the HOLD target with the reference. Otherwise the old target number
+     *     is now measured from the new zero, and the turret lurches to it.
+     *   - Drop out of READY. The soft limits are measured from the HOMED zero; from
+     *     a hand-set zero they no longer line up with the hard stops and can drive
+     *     the turret straight into one. Back to NOT_HOMED (jog only, no limits)
+     *     until X re-homes.
      */
     public void resetReferenceHere(double assumedAngle) {
         homeTickOffset = readRawTicks();
         referenceAngle = assumedAngle;
+        targetAngle = assumedAngle;
+        if (state == State.READY) {
+            state = State.NOT_HOMED;
+            controlMode = ControlMode.JOG;
+            statusNote = "zero set by hand (B) - soft limits OFF, X to re-home";
+        }
     }
 
     /** Run every loop. This is the only place the servo is actually written to. */
