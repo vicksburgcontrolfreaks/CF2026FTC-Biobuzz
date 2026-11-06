@@ -70,11 +70,27 @@ public class Deflector {
     public static double ASSUMED_SPAN_DEG = 360.0;
 
     /**
-     * +1 if positive power makes getAngle() increase, -1 if it decreases.
-     * Mounting and gearing decide this; the Prematch direction test prints it.
-     * Wrong sign means every move runs away from its target until it times out.
+     * STARTING GUESS at which way is which: +1 if positive power makes
+     * getAngle() increase. Mounting and gearing decide it, so nobody can know it
+     * from reading the code -- and a wrong sign means a commanded move drives
+     * AWAY from its target for the whole timeout, which in auto is the deflector
+     * travelling the wrong way for the entire autonomous period.
+     *
+     * So this is only the first attempt. The first commanded move checks it
+     * against what actually happens and flips if it was wrong; see checkSign().
+     * Nothing has to be set by hand, and jogging never cared in the first place
+     * because the driver can see which way it went.
      */
     public static double POWER_SIGN = 1.0;
+
+    /** How long to drive before judging whether the error is growing. */
+    public static double SIGN_CHECK_SEC = 0.4;
+
+    /**
+     * How much the error has to change for the check to call it. Big enough that
+     * sensor noise cannot decide the answer, small enough to settle in one look.
+     */
+    public static double SIGN_CHECK_DEG = 3.0;
 
     /** Travel limit for everything here. A CR servo will drive into a hard stop. */
     public static double MAX_POWER = 0.30;
@@ -136,6 +152,13 @@ public class Deflector {
     private boolean homingBackingOff = false;
     private String failure = null;
 
+    // The sign actually in use. Starts as POWER_SIGN and may flip once, the
+    // first time a commanded move shows it was backwards.
+    private double effectiveSign = 1.0;
+    private boolean signLearned = false;
+    private double signCheckError = 0;
+    private final ElapsedTime signTimer = new ElapsedTime();
+
     public void init(HardwareMap hardwareMap) {
         servo = hardwareMap.get(CRServo.class, SERVO_NAME);
         feedback = hardwareMap.get(AnalogInput.class, FEEDBACK_NAME);
@@ -144,6 +167,8 @@ public class Deflector {
         state = State.UNKNOWN;
         mode = ControlMode.JOG;
         rawPower = 0;
+        effectiveSign = Math.signum(POWER_SIGN) == 0 ? 1.0 : Math.signum(POWER_SIGN);
+        signLearned = false;
     }
 
     /**
@@ -180,13 +205,62 @@ public class Deflector {
         if (moveTimer.seconds() > MOVE_TIMEOUT_SEC) {
             failure = String.format(
                     "deflector move timed out %.0fs short of %.0f deg (at %.0f). "
-                            + "Jammed, or POWER_SIGN is backwards.",
+                            + "Jammed, or the wire stopped reading.",
                     MOVE_TIMEOUT_SEC, targetAngle, totalDegrees);
             return 0;
         }
 
+        checkSign(error);
+
         double speed = Math.abs(error) > APPROACH_DEG ? MAX_POWER : SLOW_POWER;
-        return POWER_SIGN * Math.signum(error) * speed;
+        return effectiveSign * Math.signum(error) * speed;
+    }
+
+    /**
+     * Work out which way is which by watching what happens, instead of asking
+     * somebody to measure it and write it down.
+     *
+     * Drive for SIGN_CHECK_SEC and compare the error to what it was:
+     *
+     *   error shrank  -> the sign is right, stop checking
+     *   error grew    -> we are driving away from the target, so flip it
+     *   neither       -> it has barely moved. That is a jam or a slow start, NOT
+     *                    evidence about direction, so take a fresh baseline and
+     *                    look again rather than guessing.
+     *
+     * That third case is the reason this compares against a threshold rather
+     * than just the sign of the change: a stuck mechanism must not be read as a
+     * wrong direction and get flipped into driving the genuinely wrong way.
+     *
+     * Checked once per power-up, not once per move, so a move that starts inside
+     * SIGN_CHECK_DEG of its target does not get a verdict from noise. If the
+     * check ever did call it wrong, the move timeout still stops the servo.
+     */
+    private void checkSign(double error) {
+        if (signLearned) {
+            return;
+        }
+        // The answer has to be unambiguous, so only judge on a move big enough
+        // that a real response dwarfs the threshold.
+        if (Math.abs(error) < SIGN_CHECK_DEG * 3) {
+            return;
+        }
+        if (signTimer.seconds() < SIGN_CHECK_SEC) {
+            return;
+        }
+
+        double before = Math.abs(signCheckError);
+        double now = Math.abs(error);
+
+        if (now > before + SIGN_CHECK_DEG) {
+            effectiveSign = -effectiveSign;
+            signLearned = true;
+        } else if (now < before - SIGN_CHECK_DEG) {
+            signLearned = true;
+        }
+
+        signCheckError = error;
+        signTimer.reset();
     }
 
     /**
@@ -214,7 +288,7 @@ public class Deflector {
                 rawPower = 0;
                 return;
             }
-            servo.setPower(POWER_SIGN * -HOMING_DIRECTION * HOMING_POWER);
+            servo.setPower(effectiveSign * -HOMING_DIRECTION * HOMING_POWER);
             return;
         }
 
@@ -230,7 +304,7 @@ public class Deflector {
             return;
         }
 
-        servo.setPower(POWER_SIGN * HOMING_DIRECTION * HOMING_POWER);
+        servo.setPower(effectiveSign * HOMING_DIRECTION * HOMING_POWER);
     }
 
     /** Begin homing. Finishes inside update() over the next several seconds. */
@@ -262,6 +336,20 @@ public class Deflector {
         mode = ControlMode.HOLD;
         failure = null;
         moveTimer.reset();
+        // Baseline for the direction check, so it judges this move rather than
+        // whatever the error happened to be before.
+        signCheckError = targetAngle - totalDegrees;
+        signTimer.reset();
+    }
+
+    /** The sign in use: +1 or -1. Differs from POWER_SIGN once a check flipped it. */
+    public double getEffectiveSign() {
+        return effectiveSign;
+    }
+
+    /** True once a commanded move has confirmed or corrected the direction. */
+    public boolean isSignLearned() {
+        return signLearned;
     }
 
     /** Raw power for the triggers, -1..1. Clamped to MAX_POWER. Switches to JOG. */

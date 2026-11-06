@@ -469,6 +469,10 @@ public class ShootingSequence extends LinearOpMode {
         }
         telemetry.addData("Within one turn", "%.1f deg   %.3f V",
                 deflector.getRawAngle(), deflector.getVoltage());
+        telemetry.addData("Direction", deflector.isSignLearned()
+                ? String.format("%+.0f, confirmed by watching a move", deflector.getEffectiveSign())
+                : String.format("%+.0f, still a guess until the first move",
+                        deflector.getEffectiveSign()));
         if (deflector.getFailure() != null) {
             telemetry.addLine(deflector.getFailure());
         }
