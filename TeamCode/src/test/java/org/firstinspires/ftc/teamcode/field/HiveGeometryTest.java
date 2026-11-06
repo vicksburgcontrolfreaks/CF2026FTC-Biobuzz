@@ -66,4 +66,36 @@ public class HiveGeometryTest {
         // Currently "targeting" a blue cell as red makes no sense: decide fresh.
         assertEquals(Cell.RED_AUDIENCE, HiveGeometry.sideCell(Alliance.RED, 70, Cell.BLUE_SCORING));
     }
+
+    // ---- cameraCell: our cells, camera picks (sticky) ----
+
+    private static final int[] NONE = {};
+    private static final int[] RED_AUD = {34, 35, 36};
+    private static final int[] RED_SCO = {30, 31};
+    private static final int[] BLUE_ALL = {38, 39, 40, 41, 42, 43};
+
+    @Test public void cameraCell_picksTheOneOfOursInView() {
+        assertEquals(Cell.RED_AUDIENCE, HiveGeometry.cameraCell(Alliance.RED, RED_AUD, Cell.RED_SCORING));
+        assertEquals(Cell.RED_SCORING, HiveGeometry.cameraCell(Alliance.RED, RED_SCO, Cell.RED_AUDIENCE));
+    }
+
+    @Test public void cameraCell_sticksWhileCurrentIsStillVisible() {
+        // Both in view, even with MORE audience tags: stay on scoring.
+        int[] both = {30, 34, 35, 36};
+        assertEquals(Cell.RED_SCORING, HiveGeometry.cameraCell(Alliance.RED, both, Cell.RED_SCORING));
+    }
+
+    @Test public void cameraCell_nothingOfOursInView_keepsCurrent() {
+        assertEquals(Cell.RED_AUDIENCE, HiveGeometry.cameraCell(Alliance.RED, NONE, Cell.RED_AUDIENCE));
+    }
+
+    @Test public void cameraCell_neverPicksTheOtherAlliance() {
+        assertEquals(Cell.RED_SCORING, HiveGeometry.cameraCell(Alliance.RED, BLUE_ALL, Cell.RED_SCORING));
+        assertEquals(Cell.RED_SCORING, HiveGeometry.cameraCell(Alliance.RED, BLUE_ALL, null));
+    }
+
+    @Test public void cameraCell_blueAlliance() {
+        assertEquals(Cell.BLUE_AUDIENCE, HiveGeometry.cameraCell(Alliance.BLUE, new int[] {38, 39}, null));
+        assertEquals(Cell.BLUE_SCORING, HiveGeometry.cameraCell(Alliance.BLUE, RED_AUD, null));   // none of ours
+    }
 }

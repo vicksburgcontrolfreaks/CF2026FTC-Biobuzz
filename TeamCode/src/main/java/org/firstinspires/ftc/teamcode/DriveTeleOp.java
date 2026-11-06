@@ -52,9 +52,14 @@ import java.util.List;
  *   Rumble       short = ready (at speed + on target); 3 blips = nectar detected;
  *                long = JAM fault, everything stopped
  *
- * WHICH CELL: "Our side of the field" (default when the pose came from auto) =
- * the cell on the robot's half (Pedro y vs 72), up OR down -- if it tips we're
- * already aimed. Otherwise the cell picked in the menu.
+ * WHICH CELL (INIT menu "Aim at"):
+ *   Our side of the field - default when the pose came from auto: the cell on the
+ *                robot's half (Pedro y vs 72), up OR down -- if it tips we're
+ *                already aimed.
+ *   Our cells, camera picks - default otherwise (no trusted position): whichever
+ *                of OUR two cells is in view; sticks while it's visible. Never
+ *                the other alliance's hive.
+ *   Scoring / Audience - that cell only.
  *
  * TURRET: aims at our cell by camera whenever it's in view (TurretAim). Not
  * homed at Start (no auto since power-up)? It homes itself -- so the turret must
@@ -86,7 +91,8 @@ public class DriveTeleOp extends OpMode {
     }
 
     private enum AimCell {
-        BY_SIDE("Our side of the field"), SCORING("Scoring cell"), AUDIENCE("Audience cell");
+        CAMERA("Our cells, camera picks"), BY_SIDE("Our side of the field"),
+        SCORING("Scoring cell"), AUDIENCE("Audience cell");
         private final String label;
         AimCell(String label) { this.label = label; }
         @Override public String toString() { return label; }
@@ -100,7 +106,7 @@ public class DriveTeleOp extends OpMode {
                     .allowWhen(p -> p != StartPose.FROM_AUTO || PoseHandoff.has());
     // BY_SIDE needs a real position, which only the auto handoff gives us.
     private final AutoMenu.Choice<AimCell> aimCell =
-            menu.add("Aim at", AimCell.SCORING, AimCell.AUDIENCE, AimCell.BY_SIDE)
+            menu.add("Aim at", AimCell.CAMERA, AimCell.SCORING, AimCell.AUDIENCE, AimCell.BY_SIDE)
                     .allowWhen(c -> c != AimCell.BY_SIDE || startPose.get() == StartPose.FROM_AUTO);
 
     private RobotHardware hardware;
@@ -116,6 +122,7 @@ public class DriveTeleOp extends OpMode {
     private final ElapsedTime loopTimer = new ElapsedTime();
     private FieldAprilTags.Cell targetCell;
     private boolean bySide = false;
+    private boolean cameraPicks = false;               // "our cells, camera picks"
     private FieldAprilTags.Cell lastSideCell = null;   // what "our side" said last loop
     private boolean turretParked = false;
     private boolean turretManual = false;
@@ -199,6 +206,8 @@ public class DriveTeleOp extends OpMode {
             lastSideCell = HiveGeometry.sideCell(alliance.get(), start.getY(), null);
             targetCell = lastSideCell;
         } else {
+            // BY_SIDE without an auto pose can't work -> camera picks instead.
+            cameraPicks = aimCell.get() == AimCell.CAMERA || aimCell.get() == AimCell.BY_SIDE;
             targetCell = cellFor(aimCell.get() == AimCell.AUDIENCE ? AimCell.AUDIENCE : AimCell.SCORING);
         }
         aim = new TurretAim(targetCell.tagIds);   // default: search for THAT cell only
@@ -272,6 +281,13 @@ public class DriveTeleOp extends OpMode {
                 setTarget(side);
             }
         }
+        // "Camera picks": whichever of OUR cells is in view, sticking with the
+        // current one while it's visible. A D-pad pick is kept the same way --
+        // until that cell is out of view and our other one is in view.
+        List<AprilTagDetection> detections = camera.getDetections();
+        if (cameraPicks) {
+            setTarget(HiveGeometry.cameraCell(alliance.get(), hiveIdsIn(detections), targetCell));
+        }
         if (gamepad2.dpadLeftWasPressed()) setTarget(cellFor(AimCell.AUDIENCE));
         if (gamepad2.dpadRightWasPressed()) setTarget(cellFor(AimCell.SCORING));
 
@@ -296,7 +312,6 @@ public class DriveTeleOp extends OpMode {
         }
         turretManual = manual;
 
-        List<AprilTagDetection> detections = camera.getDetections();
         boolean aimAllowed = !turretParked && !manual && turret.isHomed();
         aim.update(detections, turret, aimAllowed);
         turret.update();
@@ -314,6 +329,16 @@ public class DriveTeleOp extends OpMode {
             deflectorStickArmed = true;
         }
         deflector.update(true);
+    }
+
+    /** IDs of the BIOBUZZ tags in view (metadata == null = not in our library). */
+    private static int[] hiveIdsIn(List<AprilTagDetection> detections) {
+        int n = 0;
+        int[] ids = new int[detections.size()];
+        for (AprilTagDetection d : detections) {
+            if (d.metadata != null) ids[n++] = d.id;
+        }
+        return java.util.Arrays.copyOf(ids, n);
     }
 
     private void setTarget(FieldAprilTags.Cell cell) {
@@ -366,7 +391,8 @@ public class DriveTeleOp extends OpMode {
                     : "NOT ZEROED - won't move");
         }
         telemetry.addData("Aim at", "%s%s", targetCell.displayName,
-                !bySide ? "" : targetCell == lastSideCell ? "  (our side)" : "  (picked - until we cross the middle)");
+                cameraPicks ? "  (camera picks)"
+                        : !bySide ? "" : targetCell == lastSideCell ? "  (our side)" : "  (picked - until we cross the middle)");
         telemetry.addLine("");
         Pose p = follower.getPose();
         telemetry.addData("Pose", "(%.1f, %.1f) %.1f deg  [%s]", p.getX(), p.getY(),

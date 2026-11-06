@@ -85,6 +85,34 @@ public final class HiveGeometry {
         return robotY >= mid ? scoring : audience;
     }
 
+    /**
+     * "Our cells, camera picks": which of OUR two cells to aim at, from the tag
+     * IDs the camera sees right now. For when the robot's position isn't known
+     * (no auto pose), so sideCell() can't be used.
+     *
+     * STICKY: keeps the current cell while ANY of its tags is in view, and only
+     * moves to our other cell once the current one is out of view and the other
+     * is seen. With both in frame it doesn't flip back and forth (every switch
+     * throws away TurretAim's averaged reading). The other alliance's tags are
+     * ignored completely -- that's the whole difference from "any hive".
+     *
+     * @param current the cell targeted now; null or not ours = pick fresh
+     * @return the cell to target (current if nothing of ours is in view)
+     */
+    public static Cell cameraCell(Alliance alliance, int[] visibleIds, Cell current) {
+        Cell audience = alliance == Alliance.RED ? Cell.RED_AUDIENCE : Cell.BLUE_AUDIENCE;
+        Cell scoring = alliance == Alliance.RED ? Cell.RED_SCORING : Cell.BLUE_SCORING;
+        int seenAudience = 0, seenScoring = 0;
+        for (int id : visibleIds) {
+            if (audience.hasTag(id)) seenAudience++;
+            if (scoring.hasTag(id)) seenScoring++;
+        }
+        boolean currentIsOurs = current == audience || current == scoring;
+        if (currentIsOurs && (current == audience ? seenAudience : seenScoring) > 0) return current;
+        if (seenAudience == 0 && seenScoring == 0) return currentIsOurs ? current : scoring;
+        return seenAudience > seenScoring ? audience : scoring;
+    }
+
     /** {x, y, z}: where to aim for this alliance's up cell. Feed x, y to TurretGeometry.aimAngle(). */
     public static double[] aimPoint(Alliance alliance, Tilt tilt) {
         return openingOf(upCell(alliance, tilt),
