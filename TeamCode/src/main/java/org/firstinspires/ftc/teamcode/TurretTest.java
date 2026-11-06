@@ -25,6 +25,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *   X             - start the homing routine
  *   B             - "the turret is at 0 right now" (zeroes the encoder reference)
  *   D-pad L/R     - HOLD mode: nudge the target NUDGE_DEG left (CCW) / right (CW)
+ *   Bumpers L/R   - HOLD mode: fine nudge, FINE_NUDGE_DEG left / right
  *   After homing succeeds the turret is in HOLD at 0; press Y to jog again.
  *   A             - HOLD mode: send the target to 0 (straight ahead)
  *
@@ -36,10 +37,13 @@ public class TurretTest extends LinearOpMode {
 
     public static double JOG_SCALE = 0.35;   // trigger 1.0 -> this much power
     public static double NUDGE_DEG = 10.0;
+    // = Turret.TOLERANCE_DEG: a smaller step can sit inside the "close enough" band
+    // and not move the turret at all.
+    public static double FINE_NUDGE_DEG = 2.0;
 
     private final Turret turret = new Turret();
 
-    private boolean yPrev, xPrev, bPrev, aPrev, dpadLeftPrev, dpadRightPrev;
+    private boolean yPrev, xPrev, bPrev, aPrev, dpadLeftPrev, dpadRightPrev, lbPrev, rbPrev;
 
     private TelemetryManager telemetryM;
 
@@ -54,7 +58,7 @@ public class TurretTest extends LinearOpMode {
         PanelsConfigurables.INSTANCE.refreshClass(turret);
 
         telemetry.addLine("TURRET TEST");
-        telemetry.addLine("Triggers = jog (L = left, R = right) | Y = jog/hold | X = home | B = call this 0");
+        telemetry.addLine("Triggers = jog (L = left, R = right) | Y = jog/hold | D-pad 10, bumpers 2 deg | X = home | B = call this 0");
         telemetry.addLine("Gear ratio (servo revs per turret rev): " + Turret.gearRatio());
         telemetry.addLine("");
         telemetry.addLine("NOT HOMED on start: soft limits are OFF. Jog gently.");
@@ -69,6 +73,8 @@ public class TurretTest extends LinearOpMode {
             boolean a = gamepad1.a;
             boolean dpadLeft = gamepad1.dpad_left;
             boolean dpadRight = gamepad1.dpad_right;
+            boolean lb = gamepad1.left_bumper;
+            boolean rb = gamepad1.right_bumper;
 
             if (y && !yPrev) {
                 turret.setControlMode(turret.getControlMode() == Turret.ControlMode.JOG
@@ -92,6 +98,12 @@ public class TurretTest extends LinearOpMode {
             if (dpadLeft && !dpadLeftPrev) {
                 turret.setTargetAngle(turret.getTargetAngle() + NUDGE_DEG);
             }
+            if (rb && !rbPrev) {
+                turret.setTargetAngle(turret.getTargetAngle() - FINE_NUDGE_DEG);
+            }
+            if (lb && !lbPrev) {
+                turret.setTargetAngle(turret.getTargetAngle() + FINE_NUDGE_DEG);
+            }
 
             yPrev = y;
             xPrev = x;
@@ -99,6 +111,8 @@ public class TurretTest extends LinearOpMode {
             aPrev = a;
             dpadLeftPrev = dpadLeft;
             dpadRightPrev = dpadRight;
+            lbPrev = lb;
+            rbPrev = rb;
 
             // Raw power from the triggers. Deliberately NOT deadband-compensated,
             // so you can feel exactly where the servo starts to move.

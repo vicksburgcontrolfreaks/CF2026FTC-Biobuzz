@@ -123,7 +123,8 @@ public class Turret {
     // RE-MEASURED 6494, 2026-11-06 (Shane, one Turret Range Test sweep): -80.5, band
     // 10.1 deg (-90.6 to -80.5). The magnet moved ~59 deg in the 2026 rebuild, which
     // is why homing parked ~65 deg off forward. The 10-15 history above is the old mount.
-    public static double HOME_SWITCH_ANGLE = -80.5;
+    // -80.5 parked ~5 deg CCW of true forward (Shane, by eye), so +5: -75.5.
+    public static double HOME_SWITCH_ANGLE = -75.5;
 
     // Which way to search FIRST, and -- more importantly -- the direction the final
     // approach always comes from. Clockwise (-): the side with cable slack, and the
