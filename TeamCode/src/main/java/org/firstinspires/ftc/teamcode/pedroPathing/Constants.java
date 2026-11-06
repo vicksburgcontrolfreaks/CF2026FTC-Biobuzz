@@ -94,9 +94,9 @@ public class Constants {
 
     /*
      * ODOMETRY (PINPOINT) SETUP: ONE PER ROBOT, like the drive directions.
-     * Check with Tuning > Localization > Localization Test (start pose faces 90 deg):
-     *   push forward 24"  -> y goes UP by 24
-     *   push left 24"     -> x goes DOWN by 24
+     * Check with Tuning > Localization > Localization Test (starts at 0,0 facing 0 deg):
+     *   push forward 24"  -> x goes UP by 24
+     *   push left 24"     -> y goes UP by 24
      *   spin one full turn in place -> total heading +6.28, x/y back within ~1"
      */
     public static PinpointConstants localizerConstants() {
