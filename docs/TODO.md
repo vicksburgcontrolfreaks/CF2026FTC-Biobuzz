@@ -249,7 +249,11 @@ balls were not varied.
 
 ## Confirmed on the robot 2026-10-29
 
-- Collector and indexer directions are both correct as set in `RobotHardware`
+- Collector and indexer directions: what was checked here was **collector FORWARD,
+  indexer FORWARD** (Collection System Test runs the motors raw). It was first
+  written down as "correct as set in `RobotHardware`", which said collector
+  REVERSE -- wrong, corrected 2026-11-05 (`RobotHardware.applyCollectionDirections`).
+  Original note:
   (`collector` REVERSE, `indexer` FORWARD). The indexer direction was a guess
   until now
 - Collector RPM reads sane, so the 20:1 ratio constant is right

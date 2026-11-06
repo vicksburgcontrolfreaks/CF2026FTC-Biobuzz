@@ -9,6 +9,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
+import org.firstinspires.ftc.teamcode.RobotHardware;
 import org.firstinspires.ftc.teamcode.field.Alliance;
 import org.firstinspires.ftc.teamcode.field.PathSafety;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -222,7 +223,7 @@ public abstract class RouteAuto extends OpMode {
         runTimer = new Timer();
 
         collector = hardwareMap.get(DcMotorEx.class, "collector");
-        collector.setDirection(DcMotorSimple.Direction.REVERSE); // same as RobotHardware
+        RobotHardware.applyCollectionDirections(collector, null);
 
         follower = Constants.createFollower(hardwareMap);
         follower.setMaxPower(MAX_POWER);

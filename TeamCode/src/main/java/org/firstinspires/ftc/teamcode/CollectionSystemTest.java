@@ -77,6 +77,7 @@ public class CollectionSystemTest extends LinearOpMode {
     public void runOpMode() {
         DcMotorEx collector = hardwareMap.get(DcMotorEx.class, "collector");
         DcMotorEx indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        RobotHardware.applyCollectionDirections(collector, indexer);
         NormalizedColorSensor colorSensor =
                 hardwareMap.tryGet(NormalizedColorSensor.class, "colorSensor");
 

@@ -129,6 +129,7 @@ public class IndexerLoadTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         DcMotorEx indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        RobotHardware.applyCollectionDirections(null, indexer);
         // Optional: the color sensor is not fitted yet, so tryGet keeps this op
         // mode runnable. If one does get fitted, its distance channel shows up on
         // telemetry for free and you can compare the two approaches side by side.

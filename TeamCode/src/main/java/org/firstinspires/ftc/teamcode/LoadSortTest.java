@@ -101,6 +101,7 @@ public class LoadSortTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         DcMotorEx indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        RobotHardware.applyCollectionDirections(null, indexer);
         VoltageSensor battery = hardwareMap.voltageSensor.iterator().next();
 
         BallLoadClassifier classifier = new BallLoadClassifier(indexer, battery);

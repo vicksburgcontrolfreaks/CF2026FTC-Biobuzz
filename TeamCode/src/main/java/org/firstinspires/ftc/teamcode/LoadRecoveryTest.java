@@ -92,6 +92,7 @@ public class LoadRecoveryTest extends LinearOpMode {
         DcMotorEx rr = hardwareMap.get(DcMotorEx.class, "rr");
         DcMotorEx collector = hardwareMap.get(DcMotorEx.class, "collector");
         DcMotorEx indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        RobotHardware.applyCollectionDirections(collector, indexer);
 
         // Built for two reasons: it is what sets the authoritative drive
         // directions (see the class comment), and it gives Pinpoint odometry so

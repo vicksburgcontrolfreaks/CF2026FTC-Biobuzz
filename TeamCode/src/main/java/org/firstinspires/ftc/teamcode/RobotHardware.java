@@ -64,6 +64,26 @@ public class RobotHardware {
     public VisionPortal visionPortal;
     public AprilTagProcessor aprilTagProcessor;
 
+    /**
+     * The ONE place the collector and indexer directions are set. Every op mode
+     * that gets these motors -- through RobotHardware or straight from the
+     * hardwareMap -- must call this. Pass null for a motor you don't use.
+     *
+     * HISTORY: the 2026-10-29 check ran in Collection System Test, which got the
+     * motors raw (default FORWARD) -- so FORWARD/FORWARD is what was actually
+     * confirmed. But it was recorded as "correct as set in RobotHardware", which
+     * said collector REVERSE. Result: the collector ran backwards in everything
+     * built on RobotHardware (Shooter Test, DriveTeleOp) and in the autos, until
+     * Shooter Test showed it on 6494, 2026-11-05.
+     *
+     * collector FORWARD = pulls pieces IN. indexer FORWARD = feeds UP to the shooter.
+     * Checked on 6494; not yet checked on 5618.
+     */
+    public static void applyCollectionDirections(DcMotorSimple collector, DcMotorSimple indexer) {
+        if (collector != null) collector.setDirection(DcMotorSimple.Direction.FORWARD);
+        if (indexer != null) indexer.setDirection(DcMotorSimple.Direction.FORWARD);
+    }
+
     public void init(HardwareMap hardwareMap) {
         // Drive motors (mecanum, match Constants naming).
         // Port map confirmed 2026-10-27: the left side lives on the Control Hub
@@ -79,9 +99,7 @@ public class RobotHardware {
         // Collection system
         collector = hardwareMap.get(DcMotorEx.class, "collector"); // CH3
         indexer = hardwareMap.get(DcMotorEx.class, "indexer");     // EH3
-        collector.setDirection(DcMotorSimple.Direction.REVERSE);
-        // Confirmed on the robot 2026-10-29: FORWARD feeds up toward the shooter.
-        indexer.setDirection(DcMotorSimple.Direction.FORWARD);
+        applyCollectionDirections(collector, indexer);
 
         // OPTIONAL: not fitted to the robots yet (2026-11-05), and nothing that uses
         // RobotHardware reads it. tryGet returns null instead of crashing INIT, so
