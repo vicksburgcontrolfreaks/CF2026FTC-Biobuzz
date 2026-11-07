@@ -138,15 +138,16 @@ public final class Waypoints {
     public static final Pose GARDEN_EDGE_START = new Pose(
             FieldConstants.RED_GARDEN.maxX + HALF_LENGTH, ON_GARDEN_WALL_Y, FACING_BLUE);
 
-    // 18 in. forward and 18 in. left (toward the hive) of the start, turned to face
+    // 24 in. forward and 18 in. left (toward the hive) of the start, turned to face
     // the hive center. The turret does the fine aim by camera from there.
-    // Was 12 / 12; moved 6 in. further each way after the first run (Shane, 2026-11-06).
-    public static final double SHOT_FORWARD = 18;
+    // Was 12 / 12, then 18 / 18 after run 1, then 6 in. more toward blue after
+    // run 2 -- shots were coming up short (Shane, 2026-11-06).
+    public static final double SHOT_FORWARD = 24;
     public static final double SHOT_LEFT = 18;
     private static final double SHOT_X = GARDEN_EDGE_START.getX() + SHOT_FORWARD;
     private static final double SHOT_Y = GARDEN_EDGE_START.getY() + SHOT_LEFT;
     public static final Pose GARDEN_SHOT = new Pose(SHOT_X, SHOT_Y,
-            Math.atan2(FieldConstants.CENTER - SHOT_Y, FieldConstants.CENTER - SHOT_X));   // ~65 deg
+            Math.atan2(FieldConstants.CENTER - SHOT_Y, FieldConstants.CENTER - SHOT_X));   // ~72 deg
 
     // Back toward the garden and turned to face blue again, BEFORE heading up
     // past the hive. The robot must finish turning down here: mid-turn, an 18 in.

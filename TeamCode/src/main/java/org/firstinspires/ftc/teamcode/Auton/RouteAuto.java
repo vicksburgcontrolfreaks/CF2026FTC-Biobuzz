@@ -67,7 +67,7 @@ public abstract class RouteAuto extends OpMode {
     public static int LAUNCH_SHOTS = 4;          // the 4 preloads (Routes.gardenWallLaunch)
     public static double AIM_WAIT_SEC = 2.0;
     /** Seconds of firing (collector + indexer + flywheels), counted from when firing starts. */
-    public static double LAUNCH_MAX_SEC = 12.0;   // 8 s was too short (Shane, 2026-11-06)
+    public static double LAUNCH_MAX_SEC = 15.0;   // 8 -> 12 -> 15: still short on shots (Shane, 2026-11-06)
     /**
      * true = always fire the full LAUNCH_MAX_SEC, ignoring the shot count and
      * "no ball" (Shane, 2026-11-06: certain to empty the robot; dip counting
@@ -75,15 +75,13 @@ public abstract class RouteAuto extends OpMode {
      */
     public static boolean LAUNCH_FULL_TIME = true;
     /** Deflector (shot arc) for auto, if it was zeroed pre-match. 67.5 (Shane, 2026-11-06); 75 looked great on 6494. */
-    public static double AUTO_ARC_DEG = 67.5;
+    public static double AUTO_ARC_DEG = 70;   // 67.5 came up short (Shane, 2026-11-06)
 
     // 1.0 = full speed (Shane, 2026-11-06). Was 0.5 while 6494's odometry drifts
     // ~1" per round trip (docs/TODO.md item 0) -- at full speed that drift and
     // braking overshoot both grow, so retest every route on both robots.
-    // 0.5 for the FIRST run of Garden Shoot + Park (Shane, 2026-11-06): slow
-    // enough to stop by hand if a leg heads for the hive or a flower. Back to
-    // 1.0 once the route is proven.
-    private static final double MAX_POWER = 0.5;
+    // Back to 1.0 after Garden Shoot + Park ran clean at 0.5 (Shane, 2026-11-06).
+    private static final double MAX_POWER = 1.0;
 
     private Alliance alliance;
     private Route route;

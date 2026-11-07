@@ -59,9 +59,9 @@ public class GardenShootParkTest {
         Route route = Routes.gardenShootPark(Routes.Park.GARDEN_SIDE);
         assertEquals(Route.Action.LAUNCH, route.steps.get(0).action);
         Pose shot = route.steps.get(0).target;
-        assertEquals(51.0, shot.getX(), EPS);
+        assertEquals(57.0, shot.getX(), EPS);
         assertEquals(27.0, shot.getY(), EPS);
-        assertEquals(Math.toDegrees(Math.atan2(72 - 27, 72 - 51)), Math.toDegrees(shot.getHeading()), EPS);
+        assertEquals(Math.toDegrees(Math.atan2(72 - 27, 72 - 57)), Math.toDegrees(shot.getHeading()), EPS);
         Pose park = route.steps.get(route.steps.size() - 1).target;
         assertEquals(0.0, park.getHeading(), EPS);
     }
