@@ -80,7 +80,10 @@ public abstract class RouteAuto extends OpMode {
     // 1.0 = full speed (Shane, 2026-11-06). Was 0.5 while 6494's odometry drifts
     // ~1" per round trip (docs/TODO.md item 0) -- at full speed that drift and
     // braking overshoot both grow, so retest every route on both robots.
-    private static final double MAX_POWER = 1.0;
+    // 0.5 for the FIRST run of Garden Shoot + Park (Shane, 2026-11-06): slow
+    // enough to stop by hand if a leg heads for the hive or a flower. Back to
+    // 1.0 once the route is proven.
+    private static final double MAX_POWER = 0.5;
 
     private Alliance alliance;
     private Route route;
