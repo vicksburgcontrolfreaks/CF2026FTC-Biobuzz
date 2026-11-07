@@ -31,7 +31,7 @@ character for character.
 | Port | Name | Type | Notes |
 |---|---|---|---|
 | 0 | `turret` | **Continuous Rotation** Servo | CR, not standard — see `docs/turret-bringup.md` |
-| 1 | `blinkin` | Servo | REV Blinkin LED driver |
+| 1 | `blinkin` | **REV Blinkin LED Driver** | not type "Servo" -- `RevBlinkinLedDriver` can only be fetched from a device configured as a Blinkin. Confirmed on the robot 2026-11-06 |
 
 ### Digital
 | Port | Name | Notes |

@@ -56,6 +56,11 @@ public class LedTest extends LinearOpMode {
             }
             telemetry.addLine();
             telemetry.addData("Patterns available", ALL.length);
+            // LIGHT UP NOW, IN INIT. An LED test whose strip stays dark until
+            // START cannot prove anything at the moment it says "found" --
+            // which is exactly when someone is stood there looking at the robot
+            // wondering why nothing happened.
+            leds.set(Leds.IDLE);
             telemetry.addLine("START, then dpad up/down to step through them.");
             telemetry.update();
         }
