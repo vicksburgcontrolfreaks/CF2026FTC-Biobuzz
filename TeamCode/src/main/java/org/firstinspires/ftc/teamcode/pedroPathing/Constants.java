@@ -25,10 +25,11 @@ public class Constants {
     public static FollowerConstants followerConstants() {
         switch (WhichRobot.get()) {
             case R5618:
-                // NOT TUNED on the 2026 robot -- 2025 port values.
+                // Zero Power Acceleration Tuners, 5618, 2026-11-06, fresh battery:
+                // forward -52.1, -57, -53.5; lateral -95.5, -93, -99.
                 return sharedFollower()
-                        .forwardZeroPowerAcceleration(-48.3)
-                        .lateralZeroPowerAcceleration(-85.5);
+                        .forwardZeroPowerAcceleration(-54.2)
+                        .lateralZeroPowerAcceleration(-95.83);
             case R6494:
             default:
                 // Zero Power Acceleration Tuners, 6494, 2026-11-05, fresh battery:
@@ -71,10 +72,11 @@ public class Constants {
             case R5618:
                 // Per-wheel test on 5618, 2026-11-05: every wheel spun backwards
                 // with the old settings, so all four were flipped to these.
-                // Velocities NOT TUNED on the 2026 robot -- 2025 port values.
+                // Velocity Tuners, 5618, 2026-11-06, fresh battery:
+                // forward 69.1, 68.3, 68.5; lateral 48, 48, 48.5.
                 return sharedDrive()
-                        .xVelocity(53.38354732)
-                        .yVelocity(40.318533829)
+                        .xVelocity(68.63)
+                        .yVelocity(48.17)
                         .leftFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
                         .leftRearMotorDirection(DcMotorSimple.Direction.FORWARD)
                         .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
@@ -131,8 +133,8 @@ public class Constants {
         switch (WhichRobot.get()) {
             case R5618:
                 // Localization Test on 5618, 2026-11-05: forward push read y down 24,
-                // same as 6494, so the forward pod is REVERSED. Strafe direction and
-                // the heading (+6.6 per turn?) still being confirmed.
+                // same as 6494, so the forward pod is REVERSED. 2026-11-06: strafe OK
+                // (right 24 -> y -24), one turn -> 6.3, x/y back near 0. PASSED.
                 return sharedLocalizer()
                         .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
                         .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
