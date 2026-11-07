@@ -125,7 +125,8 @@ public class TurretAim {
     // noise AND bigger than Turret.TOLERANCE_DEG. See the class comment.
     // 6494, 2026-11-06: raw bearing noise ~0.1 deg standing still; 3.0 settled
     // and held on target; Shane picked 3.5 for margin (driving/range add noise).
-    public static double DEADBAND_DEG = 3.5;
+    // Back to 5.0 on both robots (Shane, 2026-11-06): aim "finicky" on 5618 at 3.5.
+    public static double DEADBAND_DEG = 5.0;
 
     // How many NEW frames to average before acting on them. One frame is noise;
     // three is a measurement. Raise it if the first step of a correction tends
