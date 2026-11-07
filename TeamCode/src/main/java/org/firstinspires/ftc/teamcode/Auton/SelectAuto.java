@@ -23,6 +23,7 @@ public class SelectAuto extends RouteAuto {
     // unless you change it (picking the route sets Park to this), and whether
     // it always parks (if so, the menu won't offer "Don't park" for it).
     enum AutoRoute {
+        GARDEN_SHOOT_PARK("Garden Shoot + Park", Routes.Park.GARDEN_SIDE, false),   // 2026 robot
         GARDEN_WALL("Garden Wall", Routes.Park.GARDEN_SIDE, false),
         FAR_WALL("Far Wall", Routes.Park.GARDEN_SIDE, false),
         GARDEN_WALL_LAUNCH("Garden Wall + Launch", Routes.Park.GARDEN_SIDE, false),
@@ -42,6 +43,7 @@ public class SelectAuto extends RouteAuto {
 
         Route route(Routes.Park park) {
             switch (this) {
+                case GARDEN_SHOOT_PARK:  return Routes.gardenShootPark(park);
                 case GARDEN_WALL:        return Routes.startUpGardenWall(park);
                 case FAR_WALL:           return Routes.startUpFarWall(park);
                 case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
@@ -63,7 +65,7 @@ public class SelectAuto extends RouteAuto {
     private final AutoMenu.Choice<Alliance> alliance =
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
     private final AutoMenu.Choice<AutoRoute> autoRoute =
-            menu.add("Route", AutoRoute.GARDEN_WALL, AutoRoute.FAR_WALL,
+            menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_WALL, AutoRoute.FAR_WALL,
                     AutoRoute.GARDEN_WALL_LAUNCH, AutoRoute.FAR_WALL_YIELD,
                     AutoRoute.GARDEN_WALL_LEAVE_PARK, AutoRoute.FAR_WALL_LEAVE_PARK);
     private final AutoMenu.Choice<Integer> startWait =

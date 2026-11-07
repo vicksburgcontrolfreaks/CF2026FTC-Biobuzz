@@ -125,6 +125,40 @@ public final class Waypoints {
     // At the far wall start, next to the far-wall flower.
     public static final Pose LAUNCH_FAR_WALL = FAR_WALL_START;
 
+    // ---------------- 2026 robot: Garden Shoot + Park (Shane, 2026-11-06) --------
+    //
+    // These face BLUE (heading 0, away from our drivers), unlike the older
+    // points above, which face the red wall.
+
+    private static final double FACING_BLUE = 0;
+
+    // On the garden wall, BACK edge on the end of the garden tape (x = 24),
+    // facing blue. Center = 24 + 9 = 33, touching the wall.
+    public static final Pose GARDEN_EDGE_START = new Pose(
+            FieldConstants.RED_GARDEN.maxX + HALF_LENGTH, ON_GARDEN_WALL_Y, FACING_BLUE);
+
+    // 1 ft forward and 1 ft left (toward the hive) of the start, turned to face
+    // the hive center. The turret does the fine aim by camera from there.
+    public static final double SHOT_FORWARD = 12;
+    public static final double SHOT_LEFT = 12;
+    private static final double SHOT_X = GARDEN_EDGE_START.getX() + SHOT_FORWARD;
+    private static final double SHOT_Y = GARDEN_EDGE_START.getY() + SHOT_LEFT;
+    public static final Pose GARDEN_SHOT = new Pose(SHOT_X, SHOT_Y,
+            Math.atan2(FieldConstants.CENTER - SHOT_Y, FieldConstants.CENTER - SHOT_X));   // ~62 deg
+
+    // Back toward the garden and turned to face blue again, BEFORE heading up
+    // past the hive. The robot must finish turning down here: mid-turn, an 18 in.
+    // square's corners swing out ~12.7 in., and a waypoint at (24, 48) clipped
+    // the hive's corner (GardenShootParkTest, 2026-11-06). From here the leg to
+    // the park stays ~3 in. off the red-wall flower (corner of the robot vs
+    // the flower box, worst point) and ~15 in. off the hive.
+    public static final Pose GARDEN_TURN_BACK = new Pose(24, 30, FACING_BLUE);
+
+    /** The same spot, facing blue (the 2026 robot parks the way it started). */
+    public static Pose facingBlue(Pose p) {
+        return new Pose(p.getX(), p.getY(), FACING_BLUE);
+    }
+
     // ---------------- Leaving the far wall ----------------
 
     // At the far wall the robot is only ~1 in. from the flower, so ANY move

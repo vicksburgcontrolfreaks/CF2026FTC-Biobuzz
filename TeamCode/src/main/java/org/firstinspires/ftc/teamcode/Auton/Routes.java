@@ -107,6 +107,23 @@ public final class Routes {
         return route.driveTo(park.spot);     // straight down the red wall
     }
 
+    // THE 2026 ROBOT'S FIRST ROUTE (Shane, 2026-11-06). Start on the garden wall
+    // just outside the garden, facing blue. Deflector to AUTO_ARC_DEG at Start;
+    // drive 1 ft forward + 1 ft left turning to face the hive; launch (collector +
+    // indexer + flywheels, LAUNCH_MAX_SEC); everything off; past the red-wall
+    // flower (clear of the hive) to park, facing blue like the start.
+    // "Don't park" = stop at the launch spot.
+    public static Route gardenShootPark(Park park) {
+        Route route = Route.startAt(GARDEN_EDGE_START)
+                .launchFrom(GARDEN_SHOT);
+        if (park == Park.NONE) {
+            return route;
+        }
+        return route
+                .driveTo(GARDEN_TURN_BACK)          // turn back to face blue, clear of the hive
+                .driveTo(facingBlue(park.spot));
+    }
+
     // BACKUP autos: just LEAVE + PARK (about 8 points), no launching or
     // collecting. For when the launcher is broken, or a partner needs us to
     // stay out of the way. Use the Wait setting to start later.

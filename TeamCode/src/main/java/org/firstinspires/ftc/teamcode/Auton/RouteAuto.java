@@ -39,7 +39,8 @@ import java.util.List;
  *      - COLLECT steps: collector on once within COLLECT_RADIUS of the
  *        point, off when we get there
  *      - LAUNCH steps: on arrival, wait for the turret to aim (AIM_WAIT_SEC
- *        max), fire LAUNCH_SHOTS (or until no ball / LAUNCH_MAX_SEC), move on.
+ *        max), then collector + indexer + flywheels for LAUNCH_MAX_SEC (or, with
+ *        LAUNCH_FULL_TIME off, until LAUNCH_SHOTS / no ball), move on.
  *        The flywheel pre-spins from Start; the turret aims by camera the
  *        whole way at our cell on our side of the field.
  *      - YIELD steps: on arrival, hold still until yieldUntilSeconds
@@ -65,9 +66,16 @@ public abstract class RouteAuto extends OpMode {
     // "no ball", or LAUNCH_MAX_SEC runs out. Starting guesses -- time real runs.
     public static int LAUNCH_SHOTS = 4;          // the 4 preloads (Routes.gardenWallLaunch)
     public static double AIM_WAIT_SEC = 2.0;
+    /** Seconds of firing (collector + indexer + flywheels), counted from when firing starts. */
     public static double LAUNCH_MAX_SEC = 8.0;
-    /** Deflector (shot arc) for auto, if it was zeroed pre-match. 75 looked great on 6494. */
-    public static double AUTO_ARC_DEG = 75;
+    /**
+     * true = always fire the full LAUNCH_MAX_SEC, ignoring the shot count and
+     * "no ball" (Shane, 2026-11-06: certain to empty the robot; dip counting
+     * isn't trusted yet). false = stop early at LAUNCH_SHOTS or "no ball".
+     */
+    public static boolean LAUNCH_FULL_TIME = true;
+    /** Deflector (shot arc) for auto, if it was zeroed pre-match. 67.5 (Shane, 2026-11-06); 75 looked great on 6494. */
+    public static double AUTO_ARC_DEG = 67.5;
 
     // 1.0 = full speed (Shane, 2026-11-06). Was 0.5 while 6494's odometry drifts
     // ~1" per round trip (docs/TODO.md item 0) -- at full speed that drift and
@@ -94,6 +102,7 @@ public abstract class RouteAuto extends OpMode {
     private Timer launchTimer;
     private boolean launching = false;
     private boolean launchFiring = false;   // aim wait over, shots going
+    private double fireStartSec = 0;         // launchTimer time when firing started
     private int shotsAtLaunchStart = 0;
     private String launchNote = "";
 
@@ -240,6 +249,7 @@ public abstract class RouteAuto extends OpMode {
             boolean aimed = aim.isOnTarget() || !Turret.isMeasured();   // no turret = nothing to wait for
             if (aimed || t >= AIM_WAIT_SEC) {
                 launchFiring = true;
+                fireStartSec = t;
                 shotsAtLaunchStart = launcher.getShooter().getShotsFired();
                 launchNote = aimed ? "aimed - firing" : "aim timed out - firing anyway";
                 // Don't check wasNoBall() yet: it may still be set from the LAST
@@ -251,6 +261,18 @@ public abstract class RouteAuto extends OpMode {
             }
         }
 
+        double firing = t - fireStartSec;
+        if (LAUNCH_FULL_TIME) {
+            // Fixed time: the Launcher re-queues a shot whenever none is pending,
+            // so it keeps feeding through "no ball" until the time is up.
+            if (firing >= LAUNCH_MAX_SEC) {
+                launchNote = String.format("done: %.0f s, %d shots counted", LAUNCH_MAX_SEC, shots);
+                return true;
+            }
+            launchNote = String.format("firing %.1f / %.0f s, %d counted  (%s)", firing, LAUNCH_MAX_SEC,
+                    shots, launcher.getShooter().getNote());
+            return false;
+        }
         if (shots >= LAUNCH_SHOTS) {
             launchNote = String.format("done: %d shots in %.1f s", shots, t);
             return true;
@@ -259,7 +281,7 @@ public abstract class RouteAuto extends OpMode {
             launchNote = String.format("done: no ball after %d shots (%.1f s)", shots, t);
             return true;
         }
-        if (t >= LAUNCH_MAX_SEC) {
+        if (firing >= LAUNCH_MAX_SEC) {
             launchNote = String.format("done: TIMED OUT at %d shots", shots);
             return true;
         }
@@ -373,7 +395,10 @@ public abstract class RouteAuto extends OpMode {
         turret.update();
 
         controls.collectIn = collectorOn;
-        controls.fire = launching && launchFiring;
+        // Launch = collector + indexer + flywheels, like RT in TeleOp: the
+        // collector helps push balls up (Shane, 2026-11-06). Same at-speed gate
+        // and nectar guard as B.
+        controls.allForward = launching && launchFiring;
         launcher.update(controls);
         deflector.update(true);
         // Every loop, not just in stop(): if auto is cut off, TeleOp still gets
