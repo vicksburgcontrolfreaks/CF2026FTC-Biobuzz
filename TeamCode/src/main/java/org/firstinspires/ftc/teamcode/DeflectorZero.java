@@ -17,7 +17,9 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  * TeleOp until the next redeploy or power cycle.
  *
  * Controls (gamepad1), after START:
- *   Left stick Y   jog it slowly (up = up). Use this to get it LEVEL.
+ *   Left stick Y   jog it slowly (up = up). Use this to get it LEVEL. No soft
+ *                  limits here (an old zero could be wrong) -- watch it, and
+ *                  stop at the frame.
  *   A              "it's level right now" -> 0 deg. Rumbles.
  *   D-pad up/down  step through the positions (0/67.5/70/72.5/75/80/90) to check the zero
  *   B              forget the zero (it stops responding until A again)
@@ -39,6 +41,9 @@ public class DeflectorZero extends LinearOpMode {
     @Override
     public void runOpMode() {
         Deflector deflector = new Deflector(hardwareMap);
+        // The old zero may be wrong -- that's why we're here. Its soft limits
+        // must not stop the jog (2026-11-06: an off zero walled it off ~10 deg up).
+        deflector.setJogIgnoresLimits(true);
 
         while (opModeInInit()) {
             deflector.update(false);   // track only -- nothing moves during INIT

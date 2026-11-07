@@ -57,6 +57,7 @@ public class Deflector {
     private double appliedPower = 0;
     private boolean jogging = false;
     private double jogPower = 0;
+    private boolean jogIgnoresLimits = false;
     private double maxStepSeen = 0;   // biggest servo-degree change in one loop
 
     public Deflector(HardwareMap hardwareMap) {
@@ -103,7 +104,9 @@ public class Deflector {
             appliedPower = 0;
         } else if (jogging) {
             appliedPower = jogPower * DeflectorLogic.POWER_SIGN;
-            if (zeroed) {   // limits mean something only once zeroed
+            // Limits mean something only once zeroed -- and not while someone is
+            // re-finding level (Deflector Zero): an old, wrong zero would wall it off.
+            if (zeroed && !jogIgnoresLimits) {
                 double a = getAngle();
                 if (a >= DeflectorLogic.MAX_ANGLE && jogPower > 0) appliedPower = 0;
                 if (a <= DeflectorLogic.MIN_ANGLE && jogPower < 0) appliedPower = 0;
@@ -128,6 +131,13 @@ public class Deflector {
         jogging = nowJogging;
         jogPower = Math.max(-1, Math.min(1, power));
     }
+
+    /**
+     * true = jog() ignores the soft limits even when zeroed. ONLY for Deflector
+     * Zero, where a person is watching and the old zero may be the thing that's
+     * wrong. Hold-at-target (D-pad steps) still respects the limits.
+     */
+    public void setJogIgnoresLimits(boolean ignore) { jogIgnoresLimits = ignore; }
 
     /** "It's level right now": this is 0 degrees. Kept for later op modes. */
     public void zeroHere() {
