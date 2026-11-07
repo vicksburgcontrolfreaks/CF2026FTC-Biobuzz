@@ -84,7 +84,7 @@ public class Launcher {
         applyGap(guard.gap());
     }
 
-    /** Y. On/off (RB/RT also turn it on). After a FAULT, the first press clears it and spins back up. */
+    /** Y. On/off (B/RT also turn it on). After a FAULT, the first press clears it and spins back up. */
     public void toggleFlywheel() {
         if (guard.isFault()) {
             guard.reset();
@@ -115,7 +115,7 @@ public class Launcher {
         }
 
         // ---- Flywheels + firing --------------------------------------------
-        // RB or RT starts the flywheel (Shane, 2026-11-06); it stays on until Y.
+        // B or RT starts the flywheel (Shane, 2026-11-06; B was RB); it stays on until Y.
         // Backward controls never start it and never stop it. The Shooter still
         // holds the first ball until the wheels are at speed.
         if (c.fire || c.allForward) flywheelOn = true;
@@ -143,7 +143,7 @@ public class Launcher {
                 indexerCmd = null;   // Shooter just let go (and stopped it); re-assert ours
                 shooterHadIndexer = false;
             }
-            // Forward only ever goes through the Shooter now (RB/RT start the
+            // Forward only ever goes through the Shooter now (B/RT start the
             // flywheel), so the at-speed gate and the nectar guard see every ball.
             Motion want = (c.allBack || c.indexerBack) ? Motion.BACK : Motion.STOP;
             if (want != indexerCmd) {

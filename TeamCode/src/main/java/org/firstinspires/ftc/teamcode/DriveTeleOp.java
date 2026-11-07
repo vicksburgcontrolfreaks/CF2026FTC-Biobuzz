@@ -34,19 +34,20 @@ import java.util.List;
  *                (was BACK until 2026-11-06; BACK didn't register reliably on 6494)
  *
  * GAMEPAD 2 (operator)                             (all "hold" = only while held)
- *   RB (hold)    FIRE: starts the flywheel if it's off, then one ball at a time
+ *   B  (hold)    FIRE: starts the flywheel if it's off, then one ball at a time
  *                once it's at speed, pausing for it to recover after each shot
- *   LB (hold)    indexer backward
  *   A  (hold)    collector in            X (hold)   collector out
  *   RT (hold)    collector + indexer forward: starts the flywheel and FIRES like
- *                RB, with the collector helping push balls up
- *   LT (hold)    collector + indexer backward
- *   Y            flywheel on / off. RB/RT turn it on; it STAYS on until Y.
+ *                B, with the collector helping push balls up
+ *   LT (hold)    collector + indexer backward (the only indexer-backward control)
+ *   Y            flywheel on / off. B/RT turn it on; it STAYS on until Y.
  *                (After a JAM fault: clears it and spins up.)
- *                Backward controls (LB, LT, X) never start or stop it.
+ *                Backward controls (LT, X) never start or stop it.
+ *   Bumpers      unused (2026-11-06: they don't register well on our gamepads;
+ *                fire moved RB -> B, indexer-only backward (LB) dropped)
  *   Right stick X  turret by hand -- overrides aiming while held
  *   Left stick   FLICK up / down: deflector (shot arc) one position higher /
- *                lower -- 0 / 70 / 75 / 80 / 90 deg. Return to center between
+ *                lower -- 0 / 60 / 65 / 70 / 75 / 80 / 90 deg. Return to center between
  *                flicks. Needs the pre-match zero (see Deflector).
  *   D-pad Up     park the turret forward / resume aiming
  *   D-pad Down   "a NECTAR is next": nectar gap until the next shot
@@ -69,7 +70,7 @@ import java.util.List;
  * start roughly forward, same rule as Turret Test.
  *
  * NECTAR SAFETY: Launcher runs every ball through NectarGuard -- see that class.
- * Its threshold is NOT yet recalibrated for FEED_RPM 25 (see NectarGuard).
+ * TRIP_AMPS comes from the 25 RPM Indexer Load Test on 6494 (see NectarGuard).
  *
  * START POSE (INIT menu, gamepad 1, same controls as Select Auto):
  *   FROM AUTO    - auto saves its pose every loop (PoseHandoff); default if it
@@ -267,8 +268,7 @@ public class DriveTeleOp extends OpMode {
         if (gamepad2.yWasPressed()) launcher.toggleFlywheel();
         if (gamepad2.dpadDownWasPressed()) launcher.requestNectar();
 
-        controls.fire = gamepad2.right_bumper;
-        controls.indexerBack = gamepad2.left_bumper;
+        controls.fire = gamepad2.b;   // was RB -- bumpers don't register well on our gamepads
         controls.collectIn = gamepad2.a;
         controls.collectOut = gamepad2.x;
         controls.allForward = gamepad2.right_trigger > TRIGGER_HELD;

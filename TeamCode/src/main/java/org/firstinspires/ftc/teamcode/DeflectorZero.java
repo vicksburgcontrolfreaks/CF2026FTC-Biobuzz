@@ -19,7 +19,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  * Controls (gamepad1), after START:
  *   Left stick Y   jog it slowly (up = up). Use this to get it LEVEL.
  *   A              "it's level right now" -> 0 deg. Rumbles.
- *   D-pad up/down  step through the positions (0/70/75/80/90) to check the zero
+ *   D-pad up/down  step through the positions (0/60/65/70/75/80/90) to check the zero
  *   B              forget the zero (it stops responding until A again)
  *
  * HOW
