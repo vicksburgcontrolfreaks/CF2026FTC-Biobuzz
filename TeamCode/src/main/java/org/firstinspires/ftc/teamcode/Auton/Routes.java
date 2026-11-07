@@ -108,7 +108,8 @@ public final class Routes {
     }
 
     // THE 2026 ROBOT'S FIRST ROUTE (Shane, 2026-11-06). ROBOT-TESTED, RED: run 3
-    // (df596f3: arc 70, shot (57, 27), 15 s, full speed) -- shots went in.
+    // (df596f3: arc 70, shot (57, 27), 15 s, full speed) -- shots went in, on
+    // BOTH 5618 and 6494.
     // Blue is the same route mirrored; not run on a robot yet. Start on the garden wall
     // just outside the garden, facing blue. Deflector to AUTO_ARC_DEG at Start;
     // drive to GARDEN_SHOT (24 in. forward, 18 in. left) turning to face the hive; launch (collector +
