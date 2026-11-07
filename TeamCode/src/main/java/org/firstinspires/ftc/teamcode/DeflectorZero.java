@@ -19,7 +19,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  * Controls (gamepad1), after START:
  *   Left stick Y   jog it slowly (up = up). Use this to get it LEVEL.
  *   A              "it's level right now" -> 0 deg. Rumbles.
- *   D-pad up/down  step through the positions (0/60/65/70/75/80/90) to check the zero
+ *   D-pad up/down  step through the positions (0/67.5/70/72.5/75/80/90) to check the zero
  *   B              forget the zero (it stops responding until A again)
  *
  * HOW
@@ -84,7 +84,7 @@ public class DeflectorZero extends LinearOpMode {
     private void show(Deflector d) {
         telemetry.addData("Zeroed", d.isZeroed() ? "YES" : "no - won't hold a position");
         if (d.isZeroed()) {
-            telemetry.addData("Angle", "%.1f deg   target %.0f (position %d of %d)%s",
+            telemetry.addData("Angle", "%.1f deg   target %.1f (position %d of %d)%s",
                     d.getAngle(), d.getTarget(), d.getIndex() + 1, DeflectorLogic.POSITIONS.length,
                     d.isOnTarget() ? "  ON TARGET" : "");
         }

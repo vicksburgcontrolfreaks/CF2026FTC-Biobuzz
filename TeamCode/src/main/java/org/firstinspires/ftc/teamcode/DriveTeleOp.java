@@ -47,7 +47,7 @@ import java.util.List;
  *                fire moved RB -> B, indexer-only backward (LB) dropped)
  *   Right stick X  turret by hand -- overrides aiming while held
  *   Left stick   FLICK up / down: deflector (shot arc) one position higher /
- *                lower -- 0 / 60 / 65 / 70 / 75 / 80 / 90 deg. Return to center between
+ *                lower -- 0 / 67.5 / 70 / 72.5 / 75 / 80 / 90 deg. Return to center between
  *                flicks. Needs the pre-match zero (see Deflector).
  *   D-pad Up     park the turret forward / resume aiming
  *   D-pad Down   "a NECTAR is next": nectar gap until the next shot
@@ -393,7 +393,7 @@ public class DriveTeleOp extends OpMode {
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
         if (deflector.isPresent()) {
             telemetry.addData("Arc", deflector.isZeroed()
-                    ? String.format("%.1f deg (target %.0f%s)  power %+.2f  max step %.0f/180",
+                    ? String.format("%.1f deg (target %.1f%s)  power %+.2f  max step %.0f/180",
                             deflector.getAngle(), deflector.getTarget(),
                             deflector.isOnTarget() ? "" : ", moving",
                             deflector.getPower(), deflector.getMaxStepSeen())

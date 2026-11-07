@@ -37,7 +37,7 @@ public final class DeflectorLogic {
     public static double POWER_SIGN = 1.0;
 
     /** The arc positions, low to high (Shane, 2026-11-06). */
-    public static double[] POSITIONS = {0, 60, 65, 70, 75, 80, 90};
+    public static double[] POSITIONS = {0, 67.5, 70, 72.5, 75, 80, 90};
 
     // Soft limits: never push past these. Just outside the positions so 0 and
     // 90 are reachable but a bad zero can't drive it far into the frame.

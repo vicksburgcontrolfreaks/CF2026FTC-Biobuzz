@@ -8,7 +8,7 @@ import org.firstinspires.ftc.teamcode.shooting.DeflectorLogic;
 
 /**
  * Deflector: sets the shot arc. 0 deg = level, 90 = straight up, positions in
- * DeflectorLogic.POSITIONS (0 / 60 / 65 / 70 / 75 / 80 / 90). The math and the "why" are
+ * DeflectorLogic.POSITIONS (0 / 67.5 / 70 / 72.5 / 75 / 80 / 90). The math and the "why" are
  * in DeflectorLogic.
  *
  * Config (6494): CR servo "deflector", its feedback "deflectorPos" (Analog Input,
