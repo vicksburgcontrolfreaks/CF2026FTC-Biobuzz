@@ -107,7 +107,9 @@ public final class Routes {
         return route.driveTo(park.spot);     // straight down the red wall
     }
 
-    // THE 2026 ROBOT'S FIRST ROUTE (Shane, 2026-11-06). Start on the garden wall
+    // THE 2026 ROBOT'S FIRST ROUTE (Shane, 2026-11-06). ROBOT-TESTED, RED: run 3
+    // (df596f3: arc 70, shot (57, 27), 15 s, full speed) -- shots went in.
+    // Blue is the same route mirrored; not run on a robot yet. Start on the garden wall
     // just outside the garden, facing blue. Deflector to AUTO_ARC_DEG at Start;
     // drive 1 ft forward + 1 ft left turning to face the hive; launch (collector +
     // indexer + flywheels, LAUNCH_MAX_SEC); everything off; past the red-wall
