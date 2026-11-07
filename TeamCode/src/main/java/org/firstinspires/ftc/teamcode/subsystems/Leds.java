@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.subsystems;
 import com.qualcomm.hardware.rev.RevBlinkinLedDriver;
 import com.qualcomm.hardware.rev.RevBlinkinLedDriver.BlinkinPattern;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 /**
  * The REV Blinkin LED strip. One place to say what the robot should look like,
@@ -10,10 +11,15 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  *
  * Config: "blinkin" on a servo port (CH servo 1), device type "REV Blinkin LED
  * Driver" -- NOT "Servo". Those are two different config entries and only the
- * first one can be fetched as a RevBlinkinLedDriver. docs/hardware-config.md
- * currently records this device as "Servo", which is either a doc error or a
- * config that needs changing; it is the first thing to check if this comes back
- * absent.
+ * first one can be fetched as a RevBlinkinLedDriver. Confirmed on the robot
+ * 2026-11-06; docs/hardware-config.md used to say "Servo", which was wrong and
+ * is now fixed.
+ *
+ * WRITES ARE RE-ASSERTED, NOT JUST CACHED. set() skips a redundant write, but
+ * re-sends the current pattern every REASSERT_SECONDS regardless. Caching alone
+ * means a first write that does not take -- a hub still coming up, a servo port
+ * whose PWM is not live yet -- is never retried, and the strip stays dark while
+ * the code believes it already said what to do.
  *
  * OPTIONAL, like Deflector. If "blinkin" is missing, isPresent() is false and
  * every call here does nothing, so an op mode that uses LEDs still runs on a
@@ -28,6 +34,9 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 public class Leds {
 
     public static final String NAME = "blinkin";
+
+    /** Re-send the current pattern at least this often, so a lost write recovers. */
+    public static double REASSERT_SECONDS = 0.25;
 
     /** What the robot shows when nothing more interesting is happening. */
     public static BlinkinPattern IDLE = BlinkinPattern.RAINBOW_RAINBOW_PALETTE;
@@ -49,6 +58,9 @@ public class Leds {
     /** The last pattern actually written, so we only write on a change. */
     private BlinkinPattern current = null;
 
+    private final ElapsedTime sinceWrite = new ElapsedTime();
+    private int writes = 0;
+
     public Leds(HardwareMap hardwareMap) {
         blinkin = hardwareMap.tryGet(RevBlinkinLedDriver.class, NAME);
     }
@@ -63,9 +75,17 @@ public class Leds {
      * does not keep re-sending it.
      */
     public void set(BlinkinPattern pattern) {
-        if (blinkin == null || pattern == null || pattern == current) return;
+        if (blinkin == null || pattern == null) return;
+        if (pattern == current && sinceWrite.seconds() < REASSERT_SECONDS) return;
         blinkin.setPattern(pattern);
         current = pattern;
+        writes++;
+        sinceWrite.reset();
+    }
+
+    /** How many times a pattern has actually been written to the hardware. */
+    public int getWriteCount() {
+        return writes;
     }
 
     /** The pattern on display, or null if nothing has been set yet. */

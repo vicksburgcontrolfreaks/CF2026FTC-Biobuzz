@@ -56,6 +56,7 @@ public class LedTest extends LinearOpMode {
             }
             telemetry.addLine();
             telemetry.addData("Patterns available", ALL.length);
+            telemetry.addData("Writes to hardware", leds.getWriteCount());
             // LIGHT UP NOW, IN INIT. An LED test whose strip stays dark until
             // START cannot prove anything at the moment it says "found" --
             // which is exactly when someone is stood there looking at the robot
@@ -95,6 +96,8 @@ public class LedTest extends LinearOpMode {
 
             telemetry.addData("Pattern", "%d of %d", index + 1, ALL.length);
             telemetry.addData("Name", ALL[index].toString());
+            telemetry.addData("Writes to hardware", "%d   (re-sent every %.2f s)",
+                    leds.getWriteCount(), Leds.REASSERT_SECONDS);
             telemetry.addLine();
             telemetry.addLine("Write the NAME down -- that is what goes into Leds.");
             telemetry.addLine();
