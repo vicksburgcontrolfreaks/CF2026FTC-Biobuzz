@@ -115,10 +115,10 @@ public class ShooterTest extends LinearOpMode {
         CollectionSystem collection = new CollectionSystem(hw.collector, hw.indexer, hw.colorSensor);
         Shooter shooter = new Shooter(hw.shooterLeft, hw.shooterRight, collection);
 
-        // Pivot: only on the robot whose positions were measured (6494). Nothing
+        // Pivot: per-robot positions (5618 + 6494, 2026-11-06). Nothing
         // is written to the servo until a pivot button is pressed.
         ShooterPivot pivot = new ShooterPivot(hw.shooterPivot);
-        boolean pivotAllowed = WhichRobot.get() == WhichRobot.Robot.R6494;
+        boolean pivotAllowed = true;   // both robots measured (ShooterPivot.loadRobotNumbers)
         String pivotSetting = pivotAllowed ? "not set - press dpad L/R"
                 : "BLOCKED on " + WhichRobot.number() + " - measure with Pivot Jog Test first";
 

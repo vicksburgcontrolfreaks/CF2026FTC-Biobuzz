@@ -5,7 +5,6 @@ import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.RobotHardware;
-import org.firstinspires.ftc.teamcode.WhichRobot;
 import org.firstinspires.ftc.teamcode.shooting.NectarGuard;
 import org.firstinspires.ftc.teamcode.shooting.NectarGuard.Gap;
 import org.firstinspires.ftc.teamcode.shooting.ShooterLogic;
@@ -28,8 +27,8 @@ import org.firstinspires.ftc.teamcode.shooting.ShooterLogic;
  * The forward indexer always runs at CollectionSystem.FEED_RPM -- the one speed
  * the guard is calibrated for (current scales with speed).
  *
- * Pivot: only robot 6494 has measured pollen/nectar positions. On any other
- * robot the pivot is never written and isPivotBlocked() says so -- the guard
+ * Pivot: both robots have measured positions (ShooterPivot.loadRobotNumbers).
+ * isPivotBlocked() stays for a robot that ever lacks them -- the guard
  * still watches, but it can't move anything.
  */
 public class Launcher {
@@ -72,9 +71,7 @@ public class Launcher {
     public Launcher(RobotHardware hw, HardwareMap hardwareMap) {
         collection = new CollectionSystem(hw.collector, hw.indexer, hw.colorSensor);
         shooter = new Shooter(hw.shooterLeft, hw.shooterRight, collection);
-        // Same rule as Shooter Test: 5618's pivot positions aren't measured, and a
-        // guessed position can strain the servo or crush a ball.
-        pivot = WhichRobot.get() == WhichRobot.Robot.R6494 ? new ShooterPivot(hw.shooterPivot) : null;
+        pivot = new ShooterPivot(hw.shooterPivot);   // positions per robot (ShooterPivot.loadRobotNumbers)
         battery = hardwareMap.voltageSensor.iterator().next();
     }
 
