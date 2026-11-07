@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.AnalogInput;
@@ -29,6 +30,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *   A                   = run the direction test (short nudge each way)
  *   B                   = stop the direction test early
  */
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Servo Feedback Test", group = "Test")
 public class ServoFeedbackTest extends LinearOpMode {
 

@@ -16,7 +16,8 @@ import org.firstinspires.ftc.teamcode.field.Alliance;
  *
  * Adding a route: write it in Routes, then add it to AutoRoute below.
  */
-@Autonomous(name = "Select Auto", group = "Autonomous")
+// preselectTeleOp: when auto ends, the DS queues DriveTeleOp automatically.
+@Autonomous(name = "Select Auto", group = "Autonomous", preselectTeleOp = "DriveTeleOp")
 public class SelectAuto extends RouteAuto {
 
     // The routes you can pick. Each one knows where it starts, where it parks

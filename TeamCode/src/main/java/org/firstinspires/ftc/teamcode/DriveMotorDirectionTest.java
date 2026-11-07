@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.pedropathing.ftc.drivetrains.MecanumConstants;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -43,6 +44,8 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  *   4. When all four are right, take it off the blocks, give it room, and hold A.
  *      It should drive straight forward, not turn, strafe, or sit there buzzing.
  */
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Drive Motor Direction Test", group = "Test")
 public class DriveMotorDirectionTest extends LinearOpMode {
 
