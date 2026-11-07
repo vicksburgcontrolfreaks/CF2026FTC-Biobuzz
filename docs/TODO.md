@@ -5,6 +5,32 @@ would otherwise get lost in commit messages.
 
 ---
 
+## ⚠️ Before merging a branch into `main`
+
+### `mentor/shooting-sequence` conflicts with the Deflector on `main` (found 2026-11-07)
+**Don't merge `mentor/shooting-sequence` into `main` as-is.**
+
+- That branch (pushed 2026-11-06 from the shared account, owner unknown) adds
+  `ShootingSequence.java`, `PivotFinder.java`, and its **own**
+  `subsystems/Deflector.java`, at the same path as the Deflector that's on `main`.
+  Git can't combine them: a trial merge gives **CONFLICT (add/add)** on
+  `subsystems/Deflector.java`.
+- **The Deflector on `main` is the one to keep** (Shane, 2026-11-07). It's the
+  robot-tested one that DriveTeleOp, Select Auto and Deflector Zero depend on:
+  it counts turns, zeroes once per power-up (Deflector Zero), and steps through
+  `DeflectorLogic.POSITIONS`. It also won the 2026-11-08 competition build.
+- The other one works out its own direction sign and was written for Prematch
+  and ShootingSequence.
+- **To finish it:** rebase `mentor/shooting-sequence` onto `main`, delete its
+  `subsystems/Deflector.java`, and make `ShootingSequence` (and anything else on
+  that branch) use `main`'s Deflector. If it needs something `main`'s doesn't
+  do, add that to `main`'s class. Don't keep two classes for one mechanism;
+  that's how the direction sign ends up different in each copy.
+- **Done when:** that branch merges into `main` with one `Deflector` class, and
+  ShootingSequence is robot-checked with it.
+
+---
+
 ## Needs the robot
 
 > **The robot was taken apart and rebuilt as of 2026-10-31.** Work through
@@ -33,7 +59,12 @@ robot *thinks* it is.
 - **Done when:** push test keeps y within ~0.5" over 6 round trips, and Line
   stops drifting.
 
-**5618: two open issues.**
+**5618: RESOLVED 2026-11-06.** Localization Test passed (forward 24 -> x 24,
+right 24 -> y -24, one turn -> total heading 6.3, x/y back near 0), and Stage 2
+(velocities + zero-power accel) is done on a fresh battery; values are in
+`Constants` (28c5f53). The notes below are kept for history.
+
+**5618: two open issues (as of 2026-11-05).**
 - "x didn't move more than an inch" in Localization Test. If that was the
   SIDEWAYS push, the strafe pod isn't counting (pod not touching, cable, or
   dead pod). Re-check: push sideways 24", x should change by ~24.
@@ -45,7 +76,7 @@ robot *thinks* it is.
 **Already done:** both robots' forward pods are REVERSED (fixed in code);
 6494 velocities + zero-power acceleration measured on a fresh battery; Tuning
 start pose fixed to (0, 0, 0). Still to do: weigh both robots (`mass`), PID
-tuning if routes need more precision, all of Stage 2 on 5618, and maybe
+tuning if routes need more precision (not done on either robot), and maybe
 voltage compensation (off for now, so run auto on a fresh battery).
 
 ### 1. Pull the robot config XML into the repo
