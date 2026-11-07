@@ -66,6 +66,37 @@ public class CollectionSystem {
         this.collector = collector;
         this.indexer = indexer;
         this.colorSensor = colorSensor;
+        loadRobotFeedNumbers();
+    }
+
+    /**
+     * Per-robot feed speed, plus the two numbers that are tied to it. Change all
+     * three together or the nectar guard and "no ball" timing go wrong.
+     *
+     * 5618 at 50 RPM (Shane, 2026-11-08, "to see how that goes"):
+     *   - NectarGuard.TRIP_AMPS 1.51 = the 50 RPM calibration (BallLoadClassifier,
+     *     6494 data, 10/30: baseline 0.79 + nectar rise 0.72). NOT measured on
+     *     5618 -- run Indexer Load Test there to confirm.
+     *   - ShooterLogic.NO_BALL_SEC 3.0 = same indexer travel as 6 s at 25.
+     * 6494 stays at its 11-06 calibration: 25 RPM, 2.72 A, 6 s.
+     */
+    private static void loadRobotFeedNumbers() {
+        try {
+            switch (org.firstinspires.ftc.teamcode.WhichRobot.get()) {
+                case R5618:
+                    FEED_RPM = 50.0;
+                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = 1.51;
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 3.0;
+                    break;
+                case R6494:
+                    FEED_RPM = 25.0;
+                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = 2.72;
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 6.0;
+                    break;
+            }
+        } catch (IllegalStateException e) {
+            // Unknown robot: keep the defaults (the 6494 numbers).
+        }
     }
 
     // ---- Collector ----------------------------------------------------------
