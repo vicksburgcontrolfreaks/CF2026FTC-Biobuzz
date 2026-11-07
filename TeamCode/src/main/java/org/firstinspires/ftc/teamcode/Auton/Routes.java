@@ -167,6 +167,26 @@ public final class Routes {
         return route.driveTo(facingBlue(park.spot));
     }
 
+    // 2026 ROBOT (Shane, 2026-11-08): Far Wall Tip Shoot + Park WITHOUT the tip
+    // check -- for when we trust our partner to tip the hive and want to shoot
+    // early and get out of their way. Same start, strafe and shot spot; on
+    // arrival aim (up to AIM_WAIT_SEC), fire FAR_QUICK_FIRE_SEC, then park.
+    // Still cut short at PARK_LEAVE_BY_SEC so a long Wait can't cost the park.
+    // Laptop path-checked; NOT robot-run. "Don't park" = stay at the shot spot.
+    public static final double FAR_QUICK_FIRE_SEC = 13;
+    public static Route farQuickShootPark(Park park) {
+        Route route = Route.startAt(FAR_EDGE_START)
+                .driveTo(FAR_STRAFE_OFF_WALL)
+                .launchFrom(FAR_SHOT, FAR_QUICK_FIRE_SEC);
+        if (park == Park.NONE) {
+            return route;
+        }
+        if (park == Park.GARDEN_SIDE) {
+            route = route.driveTo(FAR_TURN_BACK);   // straight there clips the hive
+        }
+        return route.driveTo(facingBlue(park.spot));
+    }
+
     // BACKUP autos: just LEAVE + PARK (about 8 points), no launching or
     // collecting. For when the launcher is broken, or a partner needs us to
     // stay out of the way. Use the Wait setting to start later.

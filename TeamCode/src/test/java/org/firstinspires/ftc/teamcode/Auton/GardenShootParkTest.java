@@ -123,6 +123,25 @@ public class GardenShootParkTest {
         assertEquals(2, Routes.farTipShootPark(Routes.Park.NONE).steps.size());
     }
 
+    @Test public void farQuickShootParkIsClearAndFiresThirteenSeconds() {
+        for (Alliance a : Alliance.values()) {
+            for (Routes.Park p : Routes.Park.values()) {
+                Route r = Routes.farQuickShootPark(p);
+                List<String> w = warnings(r, a, p);
+                assertTrue("far quick shoot " + a + " / " + p + ": " + w, w.isEmpty());
+                Route.Step shot = r.steps.get(1);
+                assertEquals(Route.Action.LAUNCH, shot.action);   // no tip check
+                assertEquals(13.0, shot.fireSec, EPS);
+                assertTrue(shot.cutForPark);
+                assertEquals(Waypoints.FAR_SHOT, shot.target);
+            }
+        }
+        // The garden auto keeps the default fire time and no cutoff.
+        Route.Step garden = Routes.gardenShootPark(Routes.Park.GARDEN_SIDE).steps.get(0);
+        assertTrue(Double.isNaN(garden.fireSec));
+        assertTrue(!garden.cutForPark);
+    }
+
     @Test public void dontParkStopsAtTheLaunchSpot() {
         assertEquals(1, Routes.gardenShootPark(Routes.Park.NONE).steps.size());
     }

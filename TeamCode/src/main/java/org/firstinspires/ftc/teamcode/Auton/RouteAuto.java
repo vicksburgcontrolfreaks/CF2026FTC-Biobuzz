@@ -234,9 +234,9 @@ public abstract class RouteAuto extends OpMode {
                     tipFrames = 0;
                     lastTipFrame = 0;
                 }
-                // TIP_LAUNCH with a park after it: at PARK_LEAVE_BY_SEC, stop
-                // whatever we're doing (waiting or firing) and go park.
-                boolean mustLeave = action == Route.Action.TIP_LAUNCH && step + 1 < paths.size()
+                // cutForPark steps with a park after them: at PARK_LEAVE_BY_SEC,
+                // stop whatever we're doing (waiting or firing) and go park.
+                boolean mustLeave = route.steps.get(step).cutForPark && step + 1 < paths.size()
                         && runTimer.getElapsedTimeSeconds() >= PARK_LEAVE_BY_SEC;
                 if (!tipSeen) {
                     if (mustLeave) {
@@ -304,14 +304,16 @@ public abstract class RouteAuto extends OpMode {
         }
 
         double firing = t - fireStartSec;
+        double stepFireSec = route.steps.get(step).fireSec;
+        double maxSec = Double.isNaN(stepFireSec) ? LAUNCH_MAX_SEC : stepFireSec;   // per-route override
         if (LAUNCH_FULL_TIME) {
             // Fixed time: the Launcher re-queues a shot whenever none is pending,
             // so it keeps feeding through "no ball" until the time is up.
-            if (firing >= LAUNCH_MAX_SEC) {
-                launchNote = String.format("done: %.0f s, %d shots counted", LAUNCH_MAX_SEC, shots);
+            if (firing >= maxSec) {
+                launchNote = String.format("done: %.0f s, %d shots counted", maxSec, shots);
                 return true;
             }
-            launchNote = String.format("firing %.1f / %.0f s, %d counted  (%s)", firing, LAUNCH_MAX_SEC,
+            launchNote = String.format("firing %.1f / %.0f s, %d counted  (%s)", firing, maxSec,
                     shots, launcher.getShooter().getNote());
             return false;
         }
@@ -323,7 +325,7 @@ public abstract class RouteAuto extends OpMode {
             launchNote = String.format("done: no ball after %d shots (%.1f s)", shots, t);
             return true;
         }
-        if (firing >= LAUNCH_MAX_SEC) {
+        if (firing >= maxSec) {
             launchNote = String.format("done: TIMED OUT at %d shots", shots);
             return true;
         }

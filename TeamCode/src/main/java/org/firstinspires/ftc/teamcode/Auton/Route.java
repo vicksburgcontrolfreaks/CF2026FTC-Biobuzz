@@ -40,10 +40,16 @@ public final class Route {
     public static final class Step {
         public final Pose target;
         public final Action action;
+        /** Launch steps: seconds of firing. NaN = RouteAuto.LAUNCH_MAX_SEC. */
+        public final double fireSec;
+        /** Launch steps: stop at RouteAuto.PARK_LEAVE_BY_SEC so we still make the park. */
+        public final boolean cutForPark;
 
-        Step(Pose target, Action action) {
+        Step(Pose target, Action action, double fireSec, boolean cutForPark) {
             this.target = target;
             this.action = action;
+            this.fireSec = fireSec;
+            this.cutForPark = cutForPark;
         }
     }
 
@@ -71,8 +77,16 @@ public final class Route {
         return then(target, Action.LAUNCH);
     }
 
+    /**
+     * Launch for a set time instead of LAUNCH_MAX_SEC, and stop at
+     * PARK_LEAVE_BY_SEC if a long Wait would make us miss the park.
+     */
+    public Route launchFrom(Pose target, double fireSec) {
+        return then(new Step(target, Action.LAUNCH, fireSec, true));
+    }
+
     public Route tipLaunchFrom(Pose target) {
-        return then(target, Action.TIP_LAUNCH);
+        return then(new Step(target, Action.TIP_LAUNCH, Double.NaN, true));
     }
 
     // ("yield" by itself is a Java keyword, so this is yieldAt.)
@@ -90,8 +104,12 @@ public final class Route {
     }
 
     private Route then(Pose target, Action action) {
+        return then(new Step(target, action, Double.NaN, false));
+    }
+
+    private Route then(Step step) {
         List<Step> longer = new ArrayList<>(steps);
-        longer.add(new Step(target, action));
+        longer.add(step);
         return new Route(start, longer);
     }
 }

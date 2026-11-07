@@ -28,6 +28,7 @@ public class SelectAuto extends RouteAuto {
         GARDEN_LEAVE_PARK_2026("Garden Leave + Park (backup)", Routes.Park.GARDEN_SIDE, true),   // 2026 robot
         FAR_LEAVE_PARK_2026("Far Wall Leave + Park", Routes.Park.FAR_SIDE, true),   // 2026 robot
         FAR_TIP_SHOOT_PARK("Far Wall Tip Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
+        FAR_QUICK_SHOOT_PARK("Far Wall Quick Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
         GARDEN_WALL("Garden Wall", Routes.Park.GARDEN_SIDE, false),
         FAR_WALL("Far Wall", Routes.Park.GARDEN_SIDE, false),
         GARDEN_WALL_LAUNCH("Garden Wall + Launch", Routes.Park.GARDEN_SIDE, false),
@@ -51,6 +52,7 @@ public class SelectAuto extends RouteAuto {
                 case GARDEN_LEAVE_PARK_2026: return Routes.gardenLeavePark2026(park);
                 case FAR_LEAVE_PARK_2026:    return Routes.farLeavePark2026(park);
                 case FAR_TIP_SHOOT_PARK:     return Routes.farTipShootPark(park);
+                case FAR_QUICK_SHOOT_PARK:   return Routes.farQuickShootPark(park);
                 case GARDEN_WALL:        return Routes.startUpGardenWall(park);
                 case FAR_WALL:           return Routes.startUpFarWall(park);
                 case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
@@ -77,7 +79,8 @@ public class SelectAuto extends RouteAuto {
             // Garden Wall + Launch cannot finish in 30 s with 15 s launches -- add
             // one back here only after it is rebuilt and robot-tested.
             menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_LEAVE_PARK_2026,
-                    AutoRoute.FAR_LEAVE_PARK_2026, AutoRoute.FAR_TIP_SHOOT_PARK);
+                    AutoRoute.FAR_LEAVE_PARK_2026, AutoRoute.FAR_TIP_SHOOT_PARK,
+                    AutoRoute.FAR_QUICK_SHOOT_PARK);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8)
                     .summary("Wait %ds");
