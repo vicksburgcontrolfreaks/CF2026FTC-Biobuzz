@@ -346,12 +346,21 @@ public class Turret {
     private static void loadRobotNumbers() {
         switch (WhichRobot.get()) {
             case R5618:
-                // SAME AS 6494 FOR NOW (Shane, 2026-11-06: same build). NOT measured
-                // on 5618. If its forward is off: Turret Test, home, point it truly
-                // forward, read Angle A, and give 5618 its own block with
-                // HOME_SWITCH_ANGLE = -85.5 - A. If homing FAILS, the magnet is
-                // somewhere else -- run Turret Range Test.
-                // Falls through to 6494's numbers.
+                // Turret Range Test, Shane, 2026-11-06: cable stops +-93.3 (travel
+                // 186.6), magnet band -91.0..-83.1 (8 deg), truly forward read 0.0
+                // in the same frame, so no forward correction. Same layout as 6494:
+                // angle falls clockwise, cable slack clockwise, tight counter-clockwise.
+                HOME_SWITCH_ANGLE = -83.1;
+                MAGNET_BAND_DEG = 7.9;
+                // -90: inside the magnet band (same rule as 6494), 3.3 off the stop.
+                MIN_ANGLE = -90.0;
+                // +85, not +90: +93.3 is the TIGHT cable end, so +90 would leave only
+                // 3.3 deg for overshoot. 8.3 deg of margin instead.
+                MAX_ANGLE = 85.0;
+                HOMING_DIRECTION = -1.0;   // toward the slack (clockwise)
+                // Finds the magnet from any start between it and +66.9 (-83.1 + 150).
+                HOMING_SEARCH_MAX_DEG = 150.0;
+                break;
             case R6494:
             default:
                 // Shane, 2026-11-06. No hard stops; cable has slack clockwise (-),
