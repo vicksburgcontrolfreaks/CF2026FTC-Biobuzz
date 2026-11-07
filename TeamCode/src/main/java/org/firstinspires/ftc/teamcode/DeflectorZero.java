@@ -92,6 +92,9 @@ public class DeflectorZero extends LinearOpMode {
             telemetry.addData("Angle", "%.1f deg   target %.1f (position %d of %d)%s",
                     d.getAngle(), d.getTarget(), d.getIndex() + 1, DeflectorLogic.POSITIONS.length,
                     d.isOnTarget() ? "  ON TARGET" : "");
+            // Auto-home measurement (2026-11-08): zero at level, jog DOWN onto the
+            // hard stop, and this is the number for Deflector.loadRobotNumbers().
+            telemetry.addData("On the hard stop? LEVEL_ABOVE_STOP_DEG", "%.1f", -d.getAngle());
         }
         telemetry.addData("Servo total", "%.0f deg  (2687 = 90 deg of deflector)", d.getServoTotal());
         telemetry.addData("Power", "%.2f   max step %.0f/180 servo deg per loop", d.getPower(), d.getMaxStepSeen());

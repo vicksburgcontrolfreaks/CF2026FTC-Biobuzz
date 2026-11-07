@@ -4,6 +4,9 @@ import com.qualcomm.robotcore.hardware.AnalogInput;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
+import com.qualcomm.robotcore.util.ElapsedTime;
+
+import org.firstinspires.ftc.teamcode.WhichRobot;
 import org.firstinspires.ftc.teamcode.shooting.DeflectorLogic;
 
 /**
@@ -39,6 +42,42 @@ public class Deflector {
     public static final String SERVO_NAME = "deflector";
     public static final String FEEDBACK_NAME = "deflectorPos";
 
+    // ---- Auto-homing (Shane, 2026-11-08) --------------------------------------
+    // Both drive teams forgot Deflector Zero, so nothing shot. Now every auto
+    // homes in INIT (and TeleOp at Start, if it isn't zeroed): jog DOWN slowly
+    // until it stalls on the hard stop, call that -LEVEL_ABOVE_STOP_DEG, drive up
+    // to level (0), then CUT POWER -- G304.H: motionless once INIT is done.
+    //
+    // LEVEL_ABOVE_STOP_DEG is PER ROBOT (loadRobotNumbers). Measure it: Deflector
+    // Zero, jog LEVEL, A, then jog DOWN onto the stop and read "Angle" -- e.g.
+    // -4.3 means 4.3. NaN = not measured: homing refuses and you zero by hand.
+    public static double LEVEL_ABOVE_STOP_DEG = Double.NaN;
+    public static double HOME_POWER = 0.25;          // down toward the stop; slow on purpose
+    public static double HOME_SETTLE_SEC = 0.4;      // ignore stall checks while it starts moving
+    public static double STALL_WINDOW_SEC = 0.25;    // check movement over this long...
+    public static double STALL_SERVO_DEG = 3.0;      // ...less than this = sitting on the stop (~0.1 deflector deg)
+    public static double HOME_DOWN_MAX_SEC = 12.0;   // no stop found by then = give up
+    public static double HOME_UP_MAX_SEC = 5.0;      // stop -> level
+
+    public enum HomeState { NOT_STARTED, DOWN, UP, DONE, FAILED }
+
+    private static void loadRobotNumbers() {
+        try {
+            switch (WhichRobot.get()) {
+                case R5618: LEVEL_ABOVE_STOP_DEG = Double.NaN; break;   // TODO measure (Deflector Zero)
+                case R6494: LEVEL_ABOVE_STOP_DEG = Double.NaN; break;   // TODO measure (Deflector Zero)
+            }
+        } catch (IllegalStateException e) {
+            LEVEL_ABOVE_STOP_DEG = Double.NaN;   // unknown robot: don't guess
+        }
+    }
+
+    private HomeState homeState = HomeState.NOT_STARTED;
+    private String homeNote = "not homed";
+    private final ElapsedTime homeTimer = new ElapsedTime();
+    private final ElapsedTime stallTimer = new ElapsedTime();
+    private double stallRefTotal = 0;
+
     // Kept across op modes (statics survive until a redeploy or power cycle).
     private static boolean keptZeroed = false;
     private static double keptZeroTotal = 0;
@@ -64,6 +103,7 @@ public class Deflector {
         servo = hardwareMap.tryGet(CRServo.class, SERVO_NAME);
         feedback = hardwareMap.tryGet(AnalogInput.class, FEEDBACK_NAME);
         if (!isPresent()) return;
+        loadRobotNumbers();
 
         servo.setPower(0);
         double raw = readRaw();
@@ -99,6 +139,13 @@ public class Deflector {
         total += step;
         lastRaw = raw;
         remember();
+
+        // Homing was asked for explicitly, so it moves even in INIT.
+        if (isHoming()) {
+            appliedPower = homingPower();
+            servo.setPower(appliedPower);
+            return;
+        }
 
         if (!allowMotion) {
             appliedPower = 0;
@@ -139,9 +186,75 @@ public class Deflector {
      */
     public void setJogIgnoresLimits(boolean ignore) { jogIgnoresLimits = ignore; }
 
+    /**
+     * Start auto-homing (see LEVEL_ABOVE_STOP_DEG). Runs inside update(), even
+     * with allowMotion false. Ends at level with the power off. If this robot's
+     * number isn't measured it refuses (FAILED) and any old zero is kept.
+     */
+    public void startHoming() {
+        if (!isPresent()) return;
+        if (Double.isNaN(LEVEL_ABOVE_STOP_DEG)) {
+            homeState = HomeState.FAILED;
+            homeNote = "auto-home OFF: stop angle not measured for this robot -- run Deflector Zero";
+            return;
+        }
+        homeState = HomeState.DOWN;
+        jogging = false;
+        target = 0;   // end at level unless someone asks for another angle meanwhile
+        index = 0;
+        homeTimer.reset();
+        stallTimer.reset();
+        stallRefTotal = total;
+        homeNote = "homing: down to the stop";
+    }
+
+    private double homingPower() {
+        if (homeState == HomeState.DOWN) {
+            if (homeTimer.seconds() > HOME_DOWN_MAX_SEC) {
+                homeState = HomeState.FAILED;
+                homeNote = String.format("HOMING FAILED: no stop found in %.0f s -- run Deflector Zero",
+                        HOME_DOWN_MAX_SEC);
+                return 0;
+            }
+            if (stallTimer.seconds() >= STALL_WINDOW_SEC) {
+                boolean stalled = homeTimer.seconds() >= HOME_SETTLE_SEC
+                        && Math.abs(total - stallRefTotal) < STALL_SERVO_DEG;
+                stallRefTotal = total;
+                stallTimer.reset();
+                if (stalled) {
+                    // On the stop, which is LEVEL_ABOVE_STOP_DEG below level.
+                    zeroTotal = total + LEVEL_ABOVE_STOP_DEG * DeflectorLogic.SERVO_DEG_PER_DEFLECTOR_DEG;
+                    zeroed = true;
+                    keptZeroed = true;
+                    keptZeroTotal = zeroTotal;
+                    homeState = HomeState.UP;
+                    homeTimer.reset();
+                    homeNote = "homing: on the stop, up to level";
+                    return 0;
+                }
+            }
+            return -HOME_POWER * DeflectorLogic.POWER_SIGN;
+        }
+        // UP: to level, then power off.
+        double a = getAngle();
+        boolean level = Math.abs(a) <= DeflectorLogic.TOLERANCE_DEG;
+        if (level || homeTimer.seconds() > HOME_UP_MAX_SEC) {
+            homeState = HomeState.DONE;
+            homeNote = level ? "HOMED, level" : String.format("homed, stopped at %.1f deg (not quite level)", a);
+            return 0;
+        }
+        return DeflectorLogic.power(a, 0);
+    }
+
+    public boolean isHoming() { return homeState == HomeState.DOWN || homeState == HomeState.UP; }
+    public HomeState getHomeState() { return homeState; }
+    public String getHomeNote() { return homeNote; }
+
     /** "It's level right now": this is 0 degrees. Kept for later op modes. */
     public void zeroHere() {
         if (!isPresent()) return;
+        homeState = HomeState.NOT_STARTED;   // a hand zero replaces any homing in progress
+        homeNote = "zeroed by hand";
         zeroTotal = total;
         zeroed = true;
         keptZeroed = true;
@@ -152,6 +265,8 @@ public class Deflector {
 
     /** Forget the zero (it will refuse to move until zeroed again). */
     public void clearZero() {
+        homeState = HomeState.NOT_STARTED;
+        homeNote = "zero cleared";
         zeroed = false;
         keptZeroed = false;
     }

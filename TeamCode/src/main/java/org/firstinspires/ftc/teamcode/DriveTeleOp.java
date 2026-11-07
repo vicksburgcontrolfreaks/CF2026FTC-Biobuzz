@@ -189,7 +189,9 @@ public class DriveTeleOp extends OpMode {
         }
         telemetry.addData("Camera", camera.getNote());
         if (deflector.isPresent() && !deflector.isZeroed()) {
-            telemetry.addLine(">>> Deflector NOT ZEROED - it won't move. Run the pre-match zero first.");
+            // Homes at START, not here: INIT during the auto->TeleOp transition
+            // must not move anything (G403).
+            telemetry.addLine(">>> Deflector not zeroed - it will AUTO-HOME at Start (down to the stop, up to level).");
         }
         telemetry.update();
     }
@@ -218,6 +220,8 @@ public class DriveTeleOp extends OpMode {
         }
         aim = new TurretAim(targetCell.tagIds);   // default: search for THAT cell only
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
+        // Normally auto's zero carries over and nothing happens here.
+        if (!deflector.isZeroed()) deflector.startHoming();
         launcher.start();
         loopTimer.reset();
     }
@@ -392,12 +396,12 @@ public class DriveTeleOp extends OpMode {
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
         if (deflector.isPresent()) {
-            telemetry.addData("Arc", deflector.isZeroed()
-                    ? String.format("%.1f deg (target %.1f%s)  power %+.2f  max step %.0f/180",
+            telemetry.addData("Arc", deflector.isHoming() || !deflector.isZeroed()
+                    ? deflector.getHomeNote()
+                    : String.format("%.1f deg (target %.1f%s)  power %+.2f  max step %.0f/180",
                             deflector.getAngle(), deflector.getTarget(),
                             deflector.isOnTarget() ? "" : ", moving",
-                            deflector.getPower(), deflector.getMaxStepSeen())
-                    : "NOT ZEROED - won't move");
+                            deflector.getPower(), deflector.getMaxStepSeen()));
         }
         telemetry.addData("Aim at", "%s%s", targetCell.displayName,
                 cameraPicks ? "  (camera picks)"

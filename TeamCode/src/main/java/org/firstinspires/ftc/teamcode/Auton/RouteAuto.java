@@ -410,6 +410,9 @@ public abstract class RouteAuto extends OpMode {
         turret = hw.turret;
         camera = new TurretCamera(hardwareMap);
         deflector = new Deflector(hardwareMap);
+        // Every auto, in INIT: down to the hard stop, up to level, power off
+        // (Shane, 2026-11-08). Wait for "HOMED, level" before signaling ready.
+        deflector.startHoming();
 
         follower = Constants.createFollower(hardwareMap);
         follower.setMaxPower(MAX_POWER);
@@ -444,8 +447,12 @@ public abstract class RouteAuto extends OpMode {
             if (!turret.isHomed() && Turret.isMeasured()) {
                 telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
             }
-            if (deflector.isPresent() && !deflector.isZeroed()) {
-                telemetry.addLine("!! Deflector NOT zeroed -- run Deflector Zero, or the arc stays where it is.");
+            if (deflector.isPresent()) {
+                if (!deflector.isZeroed() && !deflector.isHoming()) {
+                    telemetry.addLine("!! Deflector NOT zeroed -- " + deflector.getHomeNote());
+                } else {
+                    telemetry.addData("Deflector", deflector.getHomeNote());
+                }
             }
             if (launcher.isPivotBlocked()) {
                 telemetry.addLine("!! Pivot not measured on this robot -- nectar guard can't move it.");
@@ -468,7 +475,8 @@ public abstract class RouteAuto extends OpMode {
         aimCell = HiveGeometry.sideCell(alliance, startPose.getY(), null);
         aim = new TurretAim(aimCell.tagIds);
         launcher.start();
-        if (deflector.isZeroed()) deflector.goTo(AUTO_ARC_DEG);
+        // Still homing at Start? goTo just sets the target; it goes there once homed.
+        if (deflector.isZeroed() || deflector.isHoming()) deflector.goTo(AUTO_ARC_DEG);
         // Pre-spin, so the first launch spot doesn't wait 1-2 s for spin-up.
         if (routeLaunches()) launcher.setFlywheel(true);
     }
