@@ -345,7 +345,15 @@ public class Turret {
      */
     private static void loadRobotNumbers() {
         switch (WhichRobot.get()) {
+            case R5618:
+                // SAME AS 6494 FOR NOW (Shane, 2026-11-06: same build). NOT measured
+                // on 5618. If its forward is off: Turret Test, home, point it truly
+                // forward, read Angle A, and give 5618 its own block with
+                // HOME_SWITCH_ANGLE = -85.5 - A. If homing FAILS, the magnet is
+                // somewhere else -- run Turret Range Test.
+                // Falls through to 6494's numbers.
             case R6494:
+            default:
                 // Shane, 2026-11-06. No hard stops; cable has slack clockwise (-),
                 // tight counter-clockwise (+). Magnet band -90.6..-80.5 on the
                 // Range Test sweep; -85.5 after two by-eye forward corrections, so the
@@ -362,23 +370,6 @@ public class Turret {
                 HOMING_DIRECTION = -1.0;   // toward the slack
                 // Finds the magnet from any start between it and +64.5 (-85.5 + 150),
                 // i.e. anywhere roughly forward. Beyond that: FAILED, turn it by hand.
-                HOMING_SEARCH_MAX_DEG = 150.0;
-                break;
-            case R5618:
-            default:
-                // NOT MEASURED YET (parts still arriving, 2026-11-06). To fill in:
-                //   1. Turret Range Test: sweep by hand to where the cable says stop,
-                //      both ways, passing the magnet. Copy HOME_SWITCH_ANGLE and the
-                //      suggested MIN/MAX.
-                //   2. Ask which way the cable has slack; HOMING_DIRECTION points
-                //      that way (-1 clockwise, +1 counter-clockwise).
-                //   3. Turret Test: home, point it truly forward with the bumpers,
-                //      read Angle A; HOME_SWITCH_ANGLE -= A.
-                HOME_SWITCH_ANGLE = Double.NaN;
-                MAGNET_BAND_DEG = Double.NaN;
-                MIN_ANGLE = -90.0;   // placeholders; only used once homed, which
-                MAX_ANGLE = 90.0;    // can't happen until the magnet is measured
-                HOMING_DIRECTION = -1.0;
                 HOMING_SEARCH_MAX_DEG = 150.0;
                 break;
         }
