@@ -26,6 +26,7 @@ public class SelectAuto extends RouteAuto {
     enum AutoRoute {
         GARDEN_SHOOT_PARK("Garden Shoot + Park", Routes.Park.GARDEN_SIDE, false),   // 2026 robot
         GARDEN_LEAVE_PARK_2026("Garden Leave + Park (backup)", Routes.Park.GARDEN_SIDE, true),   // 2026 robot
+        FAR_LEAVE_PARK_2026("Far Wall Leave + Park", Routes.Park.FAR_SIDE, true),   // 2026 robot
         GARDEN_WALL("Garden Wall", Routes.Park.GARDEN_SIDE, false),
         FAR_WALL("Far Wall", Routes.Park.GARDEN_SIDE, false),
         GARDEN_WALL_LAUNCH("Garden Wall + Launch", Routes.Park.GARDEN_SIDE, false),
@@ -47,6 +48,7 @@ public class SelectAuto extends RouteAuto {
             switch (this) {
                 case GARDEN_SHOOT_PARK:  return Routes.gardenShootPark(park);
                 case GARDEN_LEAVE_PARK_2026: return Routes.gardenLeavePark2026(park);
+                case FAR_LEAVE_PARK_2026:    return Routes.farLeavePark2026(park);
                 case GARDEN_WALL:        return Routes.startUpGardenWall(park);
                 case FAR_WALL:           return Routes.startUpFarWall(park);
                 case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
@@ -72,7 +74,8 @@ public class SelectAuto extends RouteAuto {
             // below still exist but face the red wall, predate this robot, and
             // Garden Wall + Launch cannot finish in 30 s with 15 s launches -- add
             // one back here only after it is rebuilt and robot-tested.
-            menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_LEAVE_PARK_2026);
+            menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_LEAVE_PARK_2026,
+                    AutoRoute.FAR_LEAVE_PARK_2026);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8)
                     .summary("Wait %ds");

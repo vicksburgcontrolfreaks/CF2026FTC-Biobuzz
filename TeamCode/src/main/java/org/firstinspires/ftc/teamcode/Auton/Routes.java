@@ -136,6 +136,17 @@ public final class Routes {
                 .driveTo(facingBlue(parkSpot(park)));
     }
 
+    // 2026 ROBOT (Shane, 2026-11-08): LEAVE + PARK from the far wall. Starts
+    // like Garden Shoot + Park but on the far wall (FAR_EDGE_START), then drives
+    // straight to the park facing blue -- the far-side park is a short diagonal
+    // that moves away from the flower, so no extra waypoints are needed. No
+    // launch. Always parks. Laptop path-checked (GardenShootParkTest); NOT run
+    // on a robot yet.
+    public static Route farLeavePark2026(Park park) {
+        return Route.startAt(FAR_EDGE_START)
+                .driveTo(facingBlue(parkSpot(park)));
+    }
+
     // BACKUP autos: just LEAVE + PARK (about 8 points), no launching or
     // collecting. For when the launcher is broken, or a partner needs us to
     // stay out of the way. Use the Wait setting to start later.

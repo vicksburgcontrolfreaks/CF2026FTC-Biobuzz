@@ -138,6 +138,13 @@ public final class Waypoints {
     public static final Pose GARDEN_EDGE_START = new Pose(
             FieldConstants.RED_GARDEN.maxX + HALF_LENGTH, ON_GARDEN_WALL_Y, FACING_BLUE);
 
+    // Same as GARDEN_EDGE_START but on the FAR wall (Shane, 2026-11-08): back
+    // edge on the first tile seam (x = 24), touching the far wall, facing blue.
+    // Center (33, 135). The robot's front is at x = 42, ~2.7 in. short of the
+    // far-wall flower (x = 44.7) -- don't start it any farther toward blue.
+    public static final Pose FAR_EDGE_START = new Pose(
+            FieldConstants.TILE_SIZE + HALF_LENGTH, ON_FAR_WALL_Y, FACING_BLUE);
+
     // 24 in. forward and 18 in. left (toward the hive) of the start, turned to face
     // the hive center. The turret does the fine aim by camera from there.
     // Was 12 / 12, then 18 / 18 after run 1, then 6 in. more toward blue after

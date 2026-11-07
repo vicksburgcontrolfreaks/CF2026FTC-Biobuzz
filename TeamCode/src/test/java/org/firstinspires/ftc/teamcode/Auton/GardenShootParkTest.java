@@ -81,6 +81,22 @@ public class GardenShootParkTest {
         }
     }
 
+    @Test public void farLeaveParkIsClearAndFacesBlue() {
+        for (Alliance a : Alliance.values()) {
+            for (Routes.Park p : Routes.Park.values()) {
+                Route r = Routes.farLeavePark2026(p);
+                List<String> w = warnings(r, a, p);
+                assertTrue("far leave+park " + a + " / " + p + ": " + w, w.isEmpty());
+                assertEquals(1, r.steps.size());
+                assertEquals(0.0, r.steps.get(0).target.getHeading(), EPS);
+            }
+        }
+        Pose start = Routes.farLeavePark2026(Routes.Park.FAR_SIDE).start;
+        assertEquals(33.0, start.getX(), EPS);    // back edge on x = 24
+        assertEquals(135.0, start.getY(), EPS);   // touching the far wall
+        assertEquals(0.0, start.getHeading(), EPS);
+    }
+
     @Test public void dontParkStopsAtTheLaunchSpot() {
         assertEquals(1, Routes.gardenShootPark(Routes.Park.NONE).steps.size());
     }
