@@ -98,7 +98,10 @@ public final class Waypoints {
     // LEAVE = not touching the wall at the end of auto, so we park
     // PARK_WALL_GAP inches off the wall to get both.
 
-    public static final double PARK_OVERLAP  = 8; // inches of robot inside the zone
+    // 5, was 8: leave our partner 3 more inches (Shane, 2026-11-08). The rule
+    // only needs part of the robot in the zone (tape counts), so 5 in. still
+    // leaves margin for a few inches of stopping error.
+    public static final double PARK_OVERLAP  = 5; // inches of robot inside the zone
     // 6, was 2: too close to the wall for comfort on the first run (Shane, 2026-11-06).
     public static final double PARK_WALL_GAP = 6; // inches between robot and wall
 
