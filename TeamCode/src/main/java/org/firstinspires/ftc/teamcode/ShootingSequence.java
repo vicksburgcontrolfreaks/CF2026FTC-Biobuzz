@@ -15,13 +15,14 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 
 /**
- * Shooting Sequence bring-up: the four things that decide a shot, in one op mode
- * so they can be tuned against each other instead of one at a time.
+ * Shooting Sequence bring-up: everything that decides a shot, in one op mode so
+ * it can be tuned against itself instead of one piece at a time.
  *
  *   pivot      the gap between the flywheels (pollen vs. nectar)
  *   flywheels  how hard the ball leaves
  *   deflector  what angle it leaves at
  *   indexer    when the ball gets fed in
+ *   collector  getting a ball to the indexer in the first place
  *
  * Each of these already had its own test op mode (Pivot Jog Test, Shooter
  * Flywheel Test, Indexer Load Test). Those stay -- they do things this does not,
@@ -91,6 +92,8 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *   A                    indexer on / off  (gated -- see below)
  *   bumpers              indexer target RPM +/- INDEXER_RPM_STEP
  *   X (held)             override the flywheel gate and feed anyway
+ *   dpad left            collector on / off
+ *   dpad right (held)    collector EJECT, for clearing a jam
  *
  * THE INDEXER GATE
  * Feeding a ball into flywheels that are not up to speed either jams it or
@@ -157,6 +160,13 @@ public class ShootingSequence extends LinearOpMode {
     public static double INDEXER_RPM_STEP = 10.0;
     public static double INDEXER_MAX_RPM = 300.0;
 
+    // ---- Collector ---------------------------------------------------------
+    /** Intake power when the collector is enabled. */
+    public static double COLLECTOR_POWER = 0.8;
+
+    /** Eject power, for clearing a jam. Held, not toggled. */
+    public static double COLLECTOR_EJECT_POWER = 0.6;
+
     private static final double TICKS_PER_MOTOR_REV = RobotHardware.TICKS_PER_MOTOR_REV;
     private static final double SHOOTER_RATIO = RobotHardware.SHOOTER_GEAR_RATIO;
     private static final double INDEXER_RATIO = RobotHardware.INDEXER_GEAR_RATIO;
@@ -165,6 +175,7 @@ public class ShootingSequence extends LinearOpMode {
     private AnalogInput pivotPos;          // optional
     private DcMotorEx shooterLeft, shooterRight;
     private DcMotorEx indexer;
+    private DcMotorEx collector;
     private final Deflector deflector = new Deflector();
 
     private boolean armed = false;
@@ -178,6 +189,8 @@ public class ShootingSequence extends LinearOpMode {
     private boolean indexerOn = false;
     private double indexerTargetRpm = INDEXER_START_RPM;
 
+    private boolean collectorOn = false;
+
     private double pivotReferenceVolts = Double.NaN;
 
     // Captured goldilocks positions: the commanded value AND the shaft angle the
@@ -190,6 +203,7 @@ public class ShootingSequence extends LinearOpMode {
     private boolean lastY1, lastX1, lastA1, lastRb1, lastLb1, lastDl1, lastDr1, lastDu1, lastDd1;
     private boolean lastLs1, lastRs1, lastB1;
     private boolean lastY2, lastB2, lastA2, lastRb2, lastLb2, lastDu2, lastDd2;
+    private boolean lastDpl2;
 
     @Override
     public void runOpMode() {
@@ -197,22 +211,27 @@ public class ShootingSequence extends LinearOpMode {
         shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
         shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
         indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        collector = hardwareMap.get(DcMotorEx.class, "collector");
         deflector.init(hardwareMap);
 
         // Optional: nothing else has ever read this wire, so do not make the op
         // mode refuse to load on a robot that has not got it configured.
         pivotPos = hardwareMap.tryGet(AnalogInput.class, "pivotPos");
 
-        // FORWARD feeds UP toward the shooter (confirmed on the robot
-        // 2026-10-29). Set here because this op mode takes the motor straight
-        // from the hardwareMap rather than through RobotHardware, and direction
-        // lives in code, never in the Driver Station config.
+        // BOTH FORWARD. indexer FORWARD feeds UP toward the shooter; collector
+        // FORWARD pulls pieces IN. Set here because this op mode takes the
+        // motors straight from the hardwareMap, and direction lives in code,
+        // never in the Driver Station config.
         //
-        // NOTE: shane/consolidate replaces this with a shared
-        // RobotHardware.applyCollectionDirections() helper, so that there is one
-        // place the collection directions are set. Switch to it when that
-        // branch reaches main, and delete this line.
+        // THE COLLECTOR ONE MATTERS. RobotHardware on main still says REVERSE,
+        // which is wrong: the 2026-10-29 check that "confirmed" REVERSE had
+        // actually read the motors raw at their FORWARD default. That ran the
+        // collector backwards in everything built on RobotHardware until it
+        // turned up on 6494 on 2026-11-05. shane/consolidate fixes it and adds a
+        // shared RobotHardware.applyCollectionDirections(); switch to that and
+        // delete these two lines when it reaches main.
         indexer.setDirection(DcMotorSimple.Direction.FORWARD);
+        collector.setDirection(DcMotorSimple.Direction.FORWARD);
 
         shooterRight.setDirection(DcMotor.Direction.REVERSE);
         shooterLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -265,11 +284,13 @@ public class ShootingSequence extends LinearOpMode {
             handleGamepad2();
             driveFlywheels();
             driveIndexer();
+            driveCollector();
             showTelemetry();
             telemetry.update();
         }
 
         indexer.setPower(0);
+        collector.setPower(0);
         shooterLeft.setPower(0);
         shooterRight.setPower(0);
         deflector.stop();
@@ -371,6 +392,11 @@ public class ShootingSequence extends LinearOpMode {
         }
 
         if (a && !lastA2) indexerOn = !indexerOn;
+
+        // Collector: toggle to intake, HOLD dpad right to eject. Eject is held
+        // rather than toggled because it exists to clear a jam, and a stuck-on
+        // eject throws away everything you just collected.
+        if (gamepad2.dpad_left && !lastDpl2) collectorOn = !collectorOn;
         if (rb && !lastRb2) {
             indexerTargetRpm = Math.min(INDEXER_MAX_RPM, indexerTargetRpm + INDEXER_RPM_STEP);
         }
@@ -380,6 +406,7 @@ public class ShootingSequence extends LinearOpMode {
 
         lastY2 = y; lastB2 = b; lastA2 = a; lastRb2 = rb; lastLb2 = lb;
         lastDu2 = du; lastDd2 = dd;
+        lastDpl2 = gamepad2.dpad_left;
     }
 
     // ---- outputs ------------------------------------------------------------
@@ -392,6 +419,20 @@ public class ShootingSequence extends LinearOpMode {
         } else {
             shooterLeft.setPower(0);
             shooterRight.setPower(0);
+        }
+    }
+
+    /**
+     * Collector. Ungated: it only brings pieces in, so there is nothing for it
+     * to be unsafe with. Eject wins over intake if both are asked for.
+     */
+    private void driveCollector() {
+        if (gamepad2.dpad_right) {
+            collector.setPower(-COLLECTOR_EJECT_POWER);
+        } else if (collectorOn) {
+            collector.setPower(COLLECTOR_POWER);
+        } else {
+            collector.setPower(0);
         }
     }
 
@@ -468,6 +509,13 @@ public class ShootingSequence extends LinearOpMode {
                         : (gamepad2.x ? "FEEDING (gate overridden)" : "on, HELD -- flywheels not up to speed"))
                 : "off");
         telemetry.addData("Target", "%.0f RPM", indexerTargetRpm);
+
+        telemetry.addLine();
+        telemetry.addLine("--- COLLECTOR ---");
+        telemetry.addData("State", gamepad2.dpad_right ? "EJECTING"
+                : collectorOn ? "ON (pulling in)" : "off");
+        telemetry.addData("Direction", "FORWARD = in. RobotHardware on main still "
+                + "says REVERSE, which is the known-wrong value");
 
         telemetry.addLine();
         telemetry.addLine("--- DEFLECTOR ---");
