@@ -53,8 +53,7 @@ import org.firstinspires.ftc.teamcode.subsystems.CollectionSystem;
  *    auto-unjam logic needs, and guessing it is how you get a robot that
  *    unjams constantly during a match.
  */
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
-@Disabled
+// Shown again 2026-11-08 to check 5618 indexer. Re-add @Disabled after.
 @TeleOp(name = "Collection System Test", group = "Test")
 public class CollectionSystemTest extends LinearOpMode {
 
