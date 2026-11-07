@@ -77,6 +77,17 @@ public abstract class RouteAuto extends OpMode {
     /** Deflector (shot arc) for auto, if it was zeroed pre-match. 67.5 (Shane, 2026-11-06); 75 looked great on 6494. */
     public static double AUTO_ARC_DEG = 70;   // 67.5 came up short (Shane, 2026-11-06)
 
+    // ---- TIP_LAUNCH (Far Wall Tip Shoot + Park, 2026-11-08) -------------------
+    /**
+     * Seconds after Start when a TIP_LAUNCH step gives up -- stops waiting for the
+     * tip, or stops firing -- and drives to the park. The park leg from FAR_SHOT
+     * is ~43 in. plus a ~72 deg turn; 25 leaves ~5 s for it. TIME THE PARK LEG on
+     * the robot and raise this if it gets there with time to spare.
+     */
+    public static double PARK_LEAVE_BY_SEC = 25.0;
+    /** Camera frames with one of our cell's tags in them before we believe the hive tipped. */
+    public static int TIP_CONFIRM_FRAMES = 3;
+
     // 1.0 = full speed (Shane, 2026-11-06). Was 0.5 while 6494's odometry drifts
     // ~1" per round trip (docs/TODO.md item 0) -- at full speed that drift and
     // braking overshoot both grow, so retest every route on both robots.
@@ -104,6 +115,9 @@ public abstract class RouteAuto extends OpMode {
     private boolean launching = false;
     private boolean launchFiring = false;   // aim wait over, shots going
     private double fireStartSec = 0;         // launchTimer time when firing started
+    private boolean tipSeen = false;         // TIP_LAUNCH: our cell's tags confirmed
+    private int tipFrames = 0;               // camera frames with our cell's tags in them
+    private long lastTipFrame = 0;           // so one frame seen over several loops counts once
 
     // End of route: turret to the magnet, then off until TeleOp (see stowTurret).
     public static double STOW_MAX_SEC = 3.0;
@@ -208,15 +222,37 @@ public abstract class RouteAuto extends OpMode {
         if (!follower.isBusy()) {
             collectorOn = false;
 
-            // LAUNCH step: we've arrived, so launch, and stay put until it's done.
-            if (route.steps.get(step).action == Route.Action.LAUNCH) {
+            // LAUNCH / TIP_LAUNCH step: we've arrived, so launch, and stay put until it's done.
+            Route.Action action = route.steps.get(step).action;
+            if (isLaunch(action)) {
                 if (!launching) {
                     launching = true;
                     launchFiring = false;
                     launchTimer.resetTimer();
                     launcher.setFlywheel(true);   // normally already spinning (pre-spun at Start)
+                    tipSeen = action != Route.Action.TIP_LAUNCH;   // plain LAUNCH doesn't wait
+                    tipFrames = 0;
+                    lastTipFrame = 0;
                 }
-                if (!launchDone()) {
+                // TIP_LAUNCH with a park after it: at PARK_LEAVE_BY_SEC, stop
+                // whatever we're doing (waiting or firing) and go park.
+                boolean mustLeave = action == Route.Action.TIP_LAUNCH && step + 1 < paths.size()
+                        && runTimer.getElapsedTimeSeconds() >= PARK_LEAVE_BY_SEC;
+                if (!tipSeen) {
+                    if (mustLeave) {
+                        launchNote = "no tip seen -- parking";
+                    } else if (tipTagsSeen()) {
+                        tipSeen = true;
+                        launchTimer.resetTimer();   // aim wait counts from the tip, not arrival
+                        return;
+                    } else {
+                        launchNote = String.format("waiting for tip: %s tags %d / %d frames (leave at %.0f s)",
+                                aimCell.displayName, tipFrames, TIP_CONFIRM_FRAMES, PARK_LEAVE_BY_SEC);
+                        return;
+                    }
+                } else if (mustLeave) {
+                    launchNote = "out of time -- stopped firing, parking";
+                } else if (!launchDone()) {
                     return; // still launching -- check again next loop
                 }
                 launching = false;
@@ -322,9 +358,36 @@ public abstract class RouteAuto extends OpMode {
 
     private boolean hasLaunchAfter(int s) {
         for (int i = s + 1; i < route.steps.size(); i++) {
-            if (route.steps.get(i).action == Route.Action.LAUNCH) return true;
+            if (isLaunch(route.steps.get(i).action)) return true;
         }
         return false;
+    }
+
+    private static boolean isLaunch(Route.Action a) {
+        return a == Route.Action.LAUNCH || a == Route.Action.TIP_LAUNCH;
+    }
+
+    private boolean routeLaunches() {
+        return route.has(Route.Action.LAUNCH) || route.has(Route.Action.TIP_LAUNCH);
+    }
+
+    /**
+     * TIP_LAUNCH: has the camera now seen one of OUR side cell's tags (aimCell)
+     * in TIP_CONFIRM_FRAMES different frames? Counting frames, not loops: the
+     * loop runs faster than the camera and sees each frame several times.
+     */
+    private boolean tipTagsSeen() {
+        long newest = 0;
+        for (org.firstinspires.ftc.vision.apriltag.AprilTagDetection d : camera.getDetections()) {
+            if (d.metadata != null && aimCell.hasTag(d.id) && d.frameAcquisitionNanoTime > newest) {
+                newest = d.frameAcquisitionNanoTime;
+            }
+        }
+        if (newest != 0 && newest != lastTipFrame) {
+            lastTipFrame = newest;
+            tipFrames++;
+        }
+        return tipFrames >= TIP_CONFIRM_FRAMES;
     }
 
     private void startStep(int newStep) {
@@ -375,7 +438,7 @@ public abstract class RouteAuto extends OpMode {
             }
         }
         // Launch readiness -- only matters for routes that launch.
-        if (route != null && route.has(Route.Action.LAUNCH)) {
+        if (route != null && routeLaunches()) {
             if (!turret.isHomed() && Turret.isMeasured()) {
                 telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
             }
@@ -405,7 +468,7 @@ public abstract class RouteAuto extends OpMode {
         launcher.start();
         if (deflector.isZeroed()) deflector.goTo(AUTO_ARC_DEG);
         // Pre-spin, so the first launch spot doesn't wait 1-2 s for spin-up.
-        if (route.has(Route.Action.LAUNCH)) launcher.setFlywheel(true);
+        if (routeLaunches()) launcher.setFlywheel(true);
     }
 
     @Override

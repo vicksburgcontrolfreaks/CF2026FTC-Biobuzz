@@ -97,6 +97,32 @@ public class GardenShootParkTest {
         assertEquals(0.0, start.getHeading(), EPS);
     }
 
+    @Test public void farTipShootParkIsClear() {
+        for (Alliance a : Alliance.values()) {
+            for (Routes.Park p : Routes.Park.values()) {
+                Route r = Routes.farTipShootPark(p);
+                List<String> w = warnings(r, a, p);
+                assertTrue("far tip shoot " + a + " / " + p + ": " + w, w.isEmpty());
+            }
+        }
+    }
+
+    @Test public void farTipShootStrafesRightThenWaitsToShootFromTheMirroredSpot() {
+        Route r = Routes.farTipShootPark(Routes.Park.FAR_SIDE);
+        Pose strafe = r.steps.get(0).target;
+        assertEquals(Route.Action.DRIVE, r.steps.get(0).action);
+        assertEquals(r.start.getX(), strafe.getX(), EPS);        // straight right, no forward
+        assertTrue(strafe.getY() < r.start.getY());
+        assertEquals(0.0, strafe.getHeading(), EPS);              // no turn yet
+        assertEquals(Route.Action.TIP_LAUNCH, r.steps.get(1).action);
+        Pose shot = r.steps.get(1).target;
+        assertEquals(57.0, shot.getX(), EPS);                     // GARDEN_SHOT mirrored in y
+        assertEquals(117.0, shot.getY(), EPS);
+        assertEquals(Math.toDegrees(Math.atan2(72 - 117, 72 - 57)), Math.toDegrees(shot.getHeading()), EPS);
+        assertEquals(0.0, r.steps.get(2).target.getHeading(), EPS);   // parks facing blue
+        assertEquals(2, Routes.farTipShootPark(Routes.Park.NONE).steps.size());
+    }
+
     @Test public void dontParkStopsAtTheLaunchSpot() {
         assertEquals(1, Routes.gardenShootPark(Routes.Park.NONE).steps.size());
     }

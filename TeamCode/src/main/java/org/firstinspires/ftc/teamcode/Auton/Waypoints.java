@@ -159,6 +159,24 @@ public final class Waypoints {
     public static final Pose GARDEN_SHOT = new Pose(SHOT_X, SHOT_Y,
             Math.atan2(FieldConstants.CENTER - SHOT_Y, FieldConstants.CENTER - SHOT_X));   // ~72 deg
 
+    // ---- Far Wall Tip Shoot + Park (Shane, 2026-11-08) ----
+    // GARDEN_SHOT mirrored onto the far wall: SHOT_FORWARD toward blue and
+    // SHOT_LEFT to the RIGHT (toward the hive) of FAR_EDGE_START, turned to face
+    // the hive center. (57, 117), ~-72 deg.
+    private static final double FAR_SHOT_X = FAR_EDGE_START.getX() + SHOT_FORWARD;
+    private static final double FAR_SHOT_Y = FAR_EDGE_START.getY() - SHOT_LEFT;
+    public static final Pose FAR_SHOT = new Pose(FAR_SHOT_X, FAR_SHOT_Y,
+            Math.atan2(FieldConstants.CENTER - FAR_SHOT_Y, FieldConstants.CENTER - FAR_SHOT_X));
+
+    // First move off the far wall: strafe straight right (toward the audience),
+    // still facing blue, so the robot's front corner is well below the far-wall
+    // flower (y = 138) before it heads toward blue and starts turning. Mid-turn
+    // the corners swing out ~3.7 in. past the square, so it needs more than the
+    // 6 in. the flower sticks out.
+    public static final double FAR_STRAFE = 12;
+    public static final Pose FAR_STRAFE_OFF_WALL = new Pose(FAR_EDGE_START.getX(),
+            FAR_EDGE_START.getY() - FAR_STRAFE, FACING_BLUE);
+
     // Back toward the garden and turned to face blue again, BEFORE heading up
     // past the hive. The robot must finish turning down here: mid-turn, an 18 in.
     // square's corners swing out ~12.7 in., and a waypoint at (24, 48) clipped
@@ -166,6 +184,12 @@ public final class Waypoints {
     // the park stays ~3 in. off the red-wall flower (corner of the robot vs
     // the flower box, worst point) and ~15 in. off the hive.
     public static final Pose GARDEN_TURN_BACK = new Pose(24, 30, FACING_BLUE);
+
+    // GARDEN_TURN_BACK mirrored to the far side, for Far Wall Tip Shoot + Park
+    // going to the GARDEN-side park: straight from FAR_SHOT clips the hive
+    // corner near (46, 110) (GardenShootParkTest, 2026-11-08). The far-side park
+    // doesn't need it.
+    public static final Pose FAR_TURN_BACK = new Pose(24, FieldConstants.FIELD_SIZE - 30, FACING_BLUE);
 
     /** The same spot, facing blue (the 2026 robot parks the way it started). */
     public static Pose facingBlue(Pose p) {

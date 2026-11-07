@@ -30,6 +30,9 @@ public final class Route {
         DRIVE,    // just drive there
         COLLECT,  // run the collector when close to the point, stop on arrival
         LAUNCH,   // on arrival, aim and fire into the hive -- see RouteAuto.launchDone()
+        TIP_LAUNCH, // on arrival, wait until the camera sees our cell's tags (partner
+                    // tipped the hive), then LAUNCH. Gives up / cuts firing short at
+                    // RouteAuto.PARK_LEAVE_BY_SEC so we still make it to the park.
         YIELD,    // on arrival, hold still until the "yield until" time, to
                   // stay out of our alliance partner's way
     }
@@ -66,6 +69,10 @@ public final class Route {
 
     public Route launchFrom(Pose target) {
         return then(target, Action.LAUNCH);
+    }
+
+    public Route tipLaunchFrom(Pose target) {
+        return then(target, Action.TIP_LAUNCH);
     }
 
     // ("yield" by itself is a Java keyword, so this is yieldAt.)

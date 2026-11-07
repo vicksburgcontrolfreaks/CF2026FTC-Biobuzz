@@ -147,6 +147,26 @@ public final class Routes {
                 .driveTo(facingBlue(parkSpot(park)));
     }
 
+    // 2026 ROBOT (Shane, 2026-11-08): Garden Shoot + Park mirrored onto the far
+    // wall, but the shot waits for our partner to TIP the hive. Start like Far
+    // Wall Leave + Park; strafe right off the wall first (clear the flower);
+    // to FAR_SHOT facing the hive; wait until the camera sees our cell's tags,
+    // then launch like Garden Shoot + Park. No tip seen by PARK_LEAVE_BY_SEC, or
+    // still firing then = stop and go park. Laptop path-checked; NOT robot-run.
+    // "Don't park" = stay at the shot spot (and fire the full time).
+    public static Route farTipShootPark(Park park) {
+        Route route = Route.startAt(FAR_EDGE_START)
+                .driveTo(FAR_STRAFE_OFF_WALL)
+                .tipLaunchFrom(FAR_SHOT);
+        if (park == Park.NONE) {
+            return route;
+        }
+        if (park == Park.GARDEN_SIDE) {
+            route = route.driveTo(FAR_TURN_BACK);   // straight there clips the hive
+        }
+        return route.driveTo(facingBlue(park.spot));
+    }
+
     // BACKUP autos: just LEAVE + PARK (about 8 points), no launching or
     // collecting. For when the launcher is broken, or a partner needs us to
     // stay out of the way. Use the Wait setting to start later.
