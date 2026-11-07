@@ -1,0 +1,949 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>BIOBUZZ Hardware Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #eef0f4;
+    --ink: #15181d;
+    --ink-2: #3d434d;
+    --muted: #666e7a;
+    --line: #dde1e7;
+    --line-strong: #c3cad3;
+    --accent: #1d4ed8;
+    --ch: #1d4ed8;
+    --eh: #8b2fc9;
+    --usb: #0f766e;
+    --warn: #9a5500;
+    --warn-bg: #fdf4e6;
+    --crit: #b11242;
+    --crit-bg: #fdf0f3;
+    --ok: #04685b;
+    --ok-bg: #ebf7f4;
+    --chip: #eef0f4;
+    --code-bg: #f0f2f6;
+    --focus: #1d4ed8;
+    --shadow: 0 1px 2px rgba(18, 24, 36, .06), 0 8px 24px -12px rgba(18, 24, 36, .14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101317;
+      --surface: #171b21;
+      --surface-2: #1e232b;
+      --ink: #eef1f5;
+      --ink-2: #c2c9d4;
+      --muted: #8d97a5;
+      --line: #272d36;
+      --line-strong: #3a424e;
+      --accent: #7aa2ff;
+      --ch: #7aa2ff;
+      --eh: #c58cf0;
+      --usb: #4fc0b2;
+      --warn: #f0b355;
+      --warn-bg: #2a2114;
+      --crit: #f58aa8;
+      --crit-bg: #2c161e;
+      --ok: #5ec9b6;
+      --ok-bg: #12241f;
+      --chip: #222832;
+      --code-bg: #1b2028;
+      --focus: #7aa2ff;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101317;
+    --surface: #171b21;
+    --surface-2: #1e232b;
+    --ink: #eef1f5;
+    --ink-2: #c2c9d4;
+    --muted: #8d97a5;
+    --line: #272d36;
+    --line-strong: #3a424e;
+    --accent: #7aa2ff;
+    --ch: #7aa2ff;
+    --eh: #c58cf0;
+    --usb: #4fc0b2;
+    --warn: #f0b355;
+    --warn-bg: #2a2114;
+    --crit: #f58aa8;
+    --crit-bg: #2c161e;
+    --ok: #5ec9b6;
+    --ok-bg: #12241f;
+    --chip: #222832;
+    --code-bg: #1b2028;
+    --focus: #7aa2ff;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    padding-block: 0 72px;
+  }
+
+  h1, h2, h3 {
+    font-family: Archivo, "IBM Plex Sans", sans-serif;
+    font-weight: 700;
+    text-wrap: balance;
+    margin: 0;
+    letter-spacing: -.012em;
+  }
+
+  code, .mono, .port, .name {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- header ---------- */
+
+  .masthead {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 20;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .masthead-in {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    padding-block: 14px 13px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+  }
+  .masthead h1 { font-size: 1.12rem; }
+  .stamp {
+    font-size: .72rem;
+    color: var(--muted);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .stamp b { color: var(--ink-2); font-weight: 600; }
+
+  .search {
+    margin-left: auto;
+    position: relative;
+    flex: 1 1 190px;
+    max-width: 290px;
+  }
+  .search input {
+    width: 100%;
+    font: inherit;
+    font-size: .88rem;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    padding: 7px 30px 7px 11px;
+  }
+  .search input::placeholder { color: var(--muted); }
+  .search input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: transparent; }
+  .search-clear {
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 1.05rem;
+    line-height: 1;
+    padding: 4px 7px;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  .search-clear:hover { color: var(--ink); }
+  .search-clear:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  /* ---------- status banner ---------- */
+
+  .alert {
+    margin-top: 22px;
+    display: grid;
+    grid-template-columns: 4px minmax(0, 1fr);
+    gap: 0;
+    border-radius: 9px;
+    overflow: hidden;
+    background: var(--crit-bg);
+    border: 1px solid var(--line);
+  }
+  .alert-stripe { background: var(--crit); }
+  .alert-body { padding: 13px 16px; }
+  .alert-label {
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--crit);
+    display: block;
+    margin-bottom: 3px;
+  }
+  .alert-body p { margin: 0; font-size: .91rem; color: var(--ink-2); }
+  .alert-body strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- section headings ---------- */
+
+  .sec { margin-top: 42px; }
+  .sec > h2 {
+    font-size: 1.32rem;
+    margin-bottom: 4px;
+  }
+  .sec > .sub {
+    color: var(--muted);
+    font-size: .89rem;
+    margin: 0 0 18px;
+    max-width: 66ch;
+  }
+  .sec > .sub strong { color: var(--ink-2); }
+
+  /* ---------- hub panels ---------- */
+
+  .hubs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+  .hub {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--hue);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .hub.ch { --hue: var(--ch); }
+  .hub.eh { --hue: var(--eh); }
+  .hub.usbp { --hue: var(--usb); }
+
+  .hub-head {
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hub-head h3 { font-size: 1.02rem; }
+  .hub-head .meta {
+    font-size: .73rem;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: .03em;
+  }
+
+  .grp { padding: 0 16px; }
+  .grp + .grp { border-top: 1px solid var(--line); }
+  .grp-label {
+    font-size: .67rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--hue);
+    padding-block: 11px 3px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 3.1rem minmax(0, 1fr);
+    gap: 10px;
+    padding-block: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .grp-label + .row { border-top: 0; }
+  .grp .row:last-child { padding-bottom: 13px; }
+
+  .port {
+    font-size: .76rem;
+    color: var(--muted);
+    padding-top: 3px;
+    letter-spacing: .01em;
+  }
+  .row-main { min-width: 0; }
+  .name {
+    font-size: .89rem;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1px 6px;
+    cursor: copy;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-align: left;
+    transition: background .12s, color .12s;
+  }
+  .name:hover { border-color: var(--accent); color: var(--accent); }
+  .name:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .name.copied { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+  .desc {
+    display: block;
+    font-size: .83rem;
+    color: var(--ink-2);
+    margin-top: 3px;
+  }
+  .desc code { font-size: .92em; overflow-wrap: anywhere; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .chip {
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .045em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--chip);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .chip.rev { background: var(--warn-bg); color: var(--warn); }
+  .chip.watch { background: var(--crit-bg); color: var(--crit); }
+
+  .noresults {
+    margin-top: 18px;
+    padding: 20px 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: .9rem;
+    border: 1px dashed var(--line-strong);
+    border-radius: 9px;
+  }
+
+  /* ---------- gotchas ---------- */
+
+  .bites { display: grid; gap: 14px; }
+  .bite {
+    display: grid;
+    grid-template-columns: 4px minmax(0, 1fr);
+    border-radius: 9px;
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .bite .stripe { background: var(--line-strong); }
+  .bite.w .stripe { background: var(--warn); }
+  .bite.c .stripe { background: var(--crit); }
+  .bite-in { padding: 14px 17px 16px; }
+  .bite h3 { font-size: .99rem; margin-bottom: 6px; }
+  .bite h3 code { font-size: .92em; }
+  .bite p { margin: 0 0 9px; font-size: .9rem; color: var(--ink-2); }
+  .bite p:last-child { margin-bottom: 0; }
+  .bite strong { color: var(--ink); }
+  .bite code {
+    font-size: .85em;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+  }
+  .rules { margin: 0; padding-left: 1.2rem; font-size: .89rem; color: var(--ink-2); }
+  .rules li { margin-bottom: 5px; }
+  .rules li:last-child { margin-bottom: 0; }
+
+  .chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    padding: 12px;
+    margin: 11px 0;
+    background: var(--surface-2);
+    border-radius: 8px;
+    font-size: .79rem;
+  }
+  .chain span {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 4px 8px;
+    overflow-wrap: anywhere;
+  }
+  .chain i { color: var(--muted); font-style: normal; }
+
+  /* ---------- tables ---------- */
+
+  .scroller { overflow-x: auto; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; min-width: 430px; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .085em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.n { white-space: nowrap; }
+  td code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: .85em; }
+  td .why { color: var(--ink-2); }
+
+  /* ---------- procedure ---------- */
+
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 15px; counter-reset: s; }
+  .steps > li {
+    counter-increment: s;
+    display: grid;
+    grid-template-columns: 1.65rem minmax(0, 1fr);
+    gap: 12px;
+  }
+  .steps > li::before {
+    content: counter(s);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    width: 1.65rem;
+    height: 1.65rem;
+    display: grid;
+    place-items: center;
+  }
+  .steps .st { font-weight: 600; font-size: .93rem; }
+  .steps p { margin: 3px 0 0; font-size: .88rem; color: var(--ink-2); }
+  .steps strong { color: var(--ink); }
+  pre {
+    margin: 8px 0 0;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-size: .81rem;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+  pre code { background: none; padding: 0; }
+
+  .note {
+    margin-top: 16px;
+    font-size: .85rem;
+    color: var(--muted);
+  }
+  .note code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: .8rem;
+    color: var(--muted);
+  }
+  footer code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  footer p { margin: 0 0 6px; max-width: 78ch; }
+  footer p:last-child { margin-bottom: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+  @media (max-width: 420px) {
+    .row { grid-template-columns: 2.7rem minmax(0, 1fr); gap: 8px; }
+    .masthead h1 { font-size: 1.02rem; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-in">
+    <h1>BIOBUZZ Hardware Map</h1>
+    <span class="stamp">Device names confirmed <b>2026&#8209;10&#8209;29</b> &middot; directions <b>2026&#8209;11&#8209;05</b> on <b>6494</b></span>
+    <div class="search">
+      <label for="q" hidden>Filter devices</label>
+      <input id="q" type="search" autocomplete="off" placeholder="Filter: shooter, i2c, lf&hellip;">
+      <button class="search-clear" id="qclear" type="button" aria-label="Clear filter" hidden>&times;</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="alert">
+    <div class="alert-stripe"></div>
+    <div class="alert-body">
+      <span class="alert-label">There are two robots</span>
+      <p><strong>5618 and 6494 are not the same robot.</strong> Device <em>names</em> on this page are shared, but motor
+      directions and tuned values are per&#8209;robot &mdash; 6494&rsquo;s rear wheels spin the opposite way from
+      5618&rsquo;s. Code reads which robot it is from the active config name, so <strong>the Driver Station config must start
+      with <code>6494</code> or <code>5618</code></strong> (<code>6494-practice</code> counts). If it does not,
+      <code>WhichRobot</code> throws and the robot refuses to INIT rather than guessing and driving the wrong way.</p>
+    </div>
+  </div>
+
+  <section class="sec">
+    <h2>Device map</h2>
+    <p class="sub">Config names are <strong>exact string matches</strong> &mdash; <code>colorSensor</code> and
+    <code>Color Sensor</code> are different devices to the SDK, and the wrong one is a crash on <code>init()</code>, not a
+    warning. Tap any name to copy it character for character.</p>
+
+    <div class="hubs" id="hubs">
+
+      <div class="hub ch" data-panel>
+        <div class="hub-head">
+          <h3>Control Hub</h3>
+          <div class="meta">4 motors &middot; 3 servos &middot; 1 digital &middot; 1 analog &middot; 1 I2C</div>
+        </div>
+
+        <div class="grp" data-grp>
+          <div class="grp-label">Motors</div>
+          <div class="row" data-dev="lr left rear drive motor">
+            <div class="port">M0</div>
+            <div class="row-main"><button class="name" data-copy="lr">lr</button><span class="desc">Left rear drive</span></div>
+          </div>
+          <div class="row" data-dev="lf left front drive motor turret encoder through bore shared">
+            <div class="port">M1</div>
+            <div class="row-main"><button class="name" data-copy="lf">lf</button><span class="desc">Left front drive &mdash; also carries the turret encoder</span>
+              <div class="chips"><span class="chip rev">reversed in code</span><span class="chip watch">shared port</span></div>
+            </div>
+          </div>
+          <div class="row" data-dev="shooterRight flywheel shooter right">
+            <div class="port">M2</div>
+            <div class="row-main"><button class="name" data-copy="shooterRight">shooterRight</button><span class="desc">Flywheel</span>
+              <div class="chips"><span class="chip rev">reversed in code</span></div>
+            </div>
+          </div>
+          <div class="row" data-dev="collector intake collection 20:1">
+            <div class="port">M3</div>
+            <div class="row-main"><button class="name" data-copy="collector">collector</button><span class="desc">Collection intake, 20:1</span>
+              <div class="chips"><span class="chip rev">reversed in code</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grp" data-grp>
+          <div class="grp-label">Servos</div>
+          <div class="row" data-dev="turret CR continuous rotation servo">
+            <div class="port">S0</div>
+            <div class="row-main"><button class="name" data-copy="turret">turret</button><span class="desc">Continuous&#8209;rotation servo &mdash; <strong>not</strong> standard</span>
+              <div class="chips"><span class="chip">CR mode</span></div>
+            </div>
+          </div>
+          <div class="row" data-dev="blinkin REV LED driver lights unused">
+            <div class="port">S1</div>
+            <div class="row-main"><button class="name" data-copy="blinkin">blinkin</button><span class="desc">REV Blinkin LED driver</span>
+              <div class="chips"><span class="chip">nothing reads it</span></div>
+            </div>
+          </div>
+          <div class="row" data-dev="deflector axon max mk2 servo deflector pivot CH servo 2">
+            <div class="port">S2</div>
+            <div class="row-main"><button class="name" data-copy="deflector">deflector</button><span class="desc">Axon MAX MK2, continuous rotation &mdash; you command speed, not an angle, so <code>deflectorPos</code> is the only way to know where it is. Driven by the <strong>Prematch</strong> op mode</span>
+              <div class="chips"><span class="chip watch">type unconfirmed</span><span class="chip">no code reads it yet</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grp" data-grp>
+          <div class="grp-label">Digital</div>
+          <div class="row" data-dev="turretHome magnetic limit switch REV home">
+            <div class="port">D0&#8239;/&#8239;D1</div>
+            <div class="row-main"><button class="name" data-copy="turretHome">turretHome</button><span class="desc">REV magnetic limit switch &mdash; reports on either pin</span></div>
+          </div>
+        </div>
+
+        <div class="grp" data-grp>
+          <div class="grp-label">Analog</div>
+          <div class="row" data-dev="deflectorPos analog input deflector axon feedback position">
+            <div class="port">A1</div>
+            <div class="row-main"><button class="name" data-copy="deflectorPos">deflectorPos</button><span class="desc">Analog Input &mdash; the <code>deflector</code> Axon&rsquo;s feedback wire. A CR servo has no idea where it is, so this wire is the only position the code can read. <strong>Control Hub analog 1 on both robots</strong>, confirmed at the robot 2026&#8209;11&#8209;06. Read by the <strong>Prematch</strong> op mode</span>
+              <div class="chips"><span class="chip">type: Analog Input</span><span class="chip">same on 5618 and 6494</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grp" data-grp>
+          <div class="grp-label">I2C</div>
+          <div class="row" data-dev="pinpoint goBILDA odometry localizer">
+            <div class="port">Bus&#8239;0</div>
+            <div class="row-main"><button class="name" data-copy="pinpoint">pinpoint</button><span class="desc">goBILDA Pinpoint odometry. <strong>Not</strong> <code>odometry</code> &mdash; <code>Constants.java</code> expects <code>pinpoint</code></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hub eh" data-panel>
+        <div class="hub-head">
+          <h3>Expansion Hub</h3>
+          <div class="meta">4 motors &middot; 1 servo &middot; 1 analog &middot; 2 I2C</div>
+        </div>
+
+        <div class="grp" data-grp>
+          <div class="grp-label">Motors</div>
+          <div class="row" data-dev="rr right rear drive motor">
+            <div class="port">M0</div>
+            <div class="row-main"><button class="name" data-copy="rr">rr</button><span class="desc">Right rear drive</span>
+              <div class="chips"><span class="chip rev">reversed in code</span></div>
+            </div>
+          </div>
+          <div class="row" data-dev="rf right front drive motor">
+            <div class="port">M1</div>
+            <div class="row-main"><button class="name" data-copy="rf">rf</button><span class="desc">Right front drive</span></div>
+          </div>
+          <div class="row" data-dev="shooterLeft flywheel shooter left">
+            <div class="port">M2</div>
+            <div class="row-main"><button class="name" data-copy="shooterLeft">shooterLeft</button><span class="desc">Flywheel</span></div>
+          </div>
+          <div class="row" data-dev="indexer feeds shooter motor 20:1">
+            <div class="port">M3</div>
+            <div class="row-main"><button class="name" data-copy="indexer">indexer</button><span class="desc">Feeds pieces to the shooter, 20:1</span>
+              <div class="chips"><span class="chip">motor, not servo</span></div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="grp" data-grp>
+          <div class="grp-label">Servos</div>
+          <div class="row" data-dev="shooterPivot flywheel gap pivot band">
+            <div class="port">S0</div>
+            <div class="row-main"><button class="name" data-copy="shooterPivot">shooterPivot</button><span class="desc">Sets the gap between the two flywheels. Axon MAX MK2, positional &mdash; <code>setPosition()</code> holds an angle on its own</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grp" data-grp>
+          <div class="grp-label">Analog</div>
+          <div class="row" data-dev="pivotPos analog input axon feedback shooter pivot zero hardstop position">
+            <div class="port">A3</div>
+            <div class="row-main"><button class="name" data-copy="pivotPos">pivotPos</button><span class="desc">Analog Input &mdash; the <code>shooterPivot</code> Axon&rsquo;s feedback wire. Reads the real output shaft angle, which is what the pivot zeroes against at a hardstop</span>
+              <div class="chips"><span class="chip">type: Analog Input</span><span class="chip">no code reads it yet</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grp" data-grp>
+          <div class="grp-label">I2C</div>
+          <div class="row" data-dev="imu inertial measurement unit hub unused">
+            <div class="port">Bus&#8239;0</div>
+            <div class="row-main"><button class="name" data-copy="imu">imu</button><span class="desc">The hub&rsquo;s own IMU</span>
+              <div class="chips"><span class="chip">nothing reads it</span></div>
+            </div>
+          </div>
+          <div class="row" data-dev="colorSensor color sensor indexer wheel piece">
+            <div class="port">Bus&#8239;1</div>
+            <div class="row-main"><button class="name" data-copy="colorSensor">colorSensor</button><span class="desc">Reads the piece at the indexer wheel</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hub usbp" data-panel>
+        <div class="hub-head">
+          <h3>USB</h3>
+          <div class="meta">1 camera</div>
+        </div>
+        <div class="grp" data-grp>
+          <div class="grp-label">Webcam</div>
+          <div class="row" data-dev="Webcam 1 apriltag camera turret mounted vision">
+            <div class="port">&mdash;</div>
+            <div class="row-main"><button class="name" data-copy="Webcam 1">Webcam 1</button><span class="desc">AprilTag camera, <strong>turret&#8209;mounted</strong> &mdash; it swings with the turret, so aiming is <code>setTargetAngle(getAngle() + bearing)</code>, not bearing alone</span>
+              <div class="chips"><span class="chip">space in the name</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="noresults" id="noresults" hidden>No device matches that filter.</div>
+  </section>
+
+  <section class="sec">
+    <h2>Things that bite</h2>
+    <p class="sub">Each of these has cost the team time at least once.</p>
+
+    <div class="bites">
+
+      <div class="bite c">
+        <div class="stripe"></div>
+        <div class="bite-in">
+          <h3>There is no <code>turretEncoder</code> device, and there cannot be</h3>
+          <p>The turret&rsquo;s REV Through Bore encoder plugs into <code>lf</code>&rsquo;s spare encoder connector, so the SDK
+          reads it through the <code>lf</code> <em>motor</em>. There is nothing to add to the config.</p>
+          <div class="chain">
+            <span>REV Through Bore</span><i>&rarr;</i>
+            <span>lf spare encoder port (CH&#8239;M1)</span><i>&rarr;</i>
+            <span>hardwareMap.get(DcMotorEx, "lf")</span><i>&rarr;</i>
+            <span>Turret.java</span>
+          </div>
+          <p>Two rules keep sharing that port safe:</p>
+          <ol class="rules">
+            <li><code>lf</code> stays in <code>RUN_WITHOUT_ENCODER</code> (the default). In <code>RUN_USING_ENCODER</code> or
+            <code>RUN_TO_POSITION</code>, the hub would regulate a drive wheel from the <em>turret&rsquo;s</em> position.</li>
+            <li>Nobody calls <code>STOP_AND_RESET_ENCODER</code> on <code>lf</code>, which would zero the turret mid&#8209;match.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="bite w">
+        <div class="stripe"></div>
+        <div class="bite-in">
+          <h3>The two shooter motors are on different hubs</h3>
+          <p><code>shooterRight</code> on CH&#8239;M2, <code>shooterLeft</code> on EH&#8239;M2. Each hub runs its own velocity
+          PIDF locally, so each wheel regulates itself fine, and the split spreads current draw. But if the two ever report
+          speeds that disagree, <strong>cross&#8209;hub command skew is the first suspect</strong> &mdash; see
+          <code>docs/flywheel-rpm-gap.md</code>.</p>
+        </div>
+      </div>
+
+      <div class="bite w">
+        <div class="stripe"></div>
+        <div class="bite-in">
+          <h3>Direction lives in code, not in the config</h3>
+          <p>Never reverse a motor in the Driver Station config. Code already sets every direction, and the two cancel out
+          &mdash; the motor spins the original way and nothing looks wrong.</p>
+          <p>Direction is set in <strong>three</strong> different places, which is the part that catches people:</p>
+          <div class="scroller" style="margin-bottom:10px">
+            <table>
+              <thead><tr><th>Motor</th><th>Direction</th><th>Set where</th></tr></thead>
+              <tbody>
+                <tr><td class="n"><code>shooterRight</code></td><td class="n">REVERSE</td><td><code>RobotHardware.init()</code></td></tr>
+                <tr><td class="n"><code>collector</code></td><td class="n">FORWARD</td><td><code>RobotHardware.applyCollectionDirections()</code></td></tr>
+                <tr><td class="n"><code>indexer</code></td><td class="n">FORWARD</td><td><code>RobotHardware.applyCollectionDirections()</code></td></tr>
+                <tr><td class="n"><code>lf</code> <code>lr</code> <code>rf</code> <code>rr</code></td><td class="n">per robot</td><td><code>Constants.driveConstants()</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><code>collector</code> is <strong>FORWARD</strong>, and that correction cost the team real time. It was recorded
+          as REVERSE on 2026&#8209;10&#8209;29, but the check that "confirmed" it had actually read the motors raw at their
+          FORWARD default. So the collector ran backwards in everything built on <code>RobotHardware</code> &mdash; Shooter
+          Test, DriveTeleOp and the autos &mdash; until it turned up on 6494 on 2026&#8209;11&#8209;05. FORWARD pulls pieces
+          <strong>in</strong>; <code>indexer</code> FORWARD feeds <strong>up</strong> to the shooter. Confirmed on 6494, still
+          unchecked on 5618.</p>
+        </div>
+      </div>
+
+      <div class="bite w">
+        <div class="stripe"></div>
+        <div class="bite-in">
+          <h3>REV digital sensors can land on the odd pin</h3>
+          <p>A switch wired into digital pair 0&#8209;1 sometimes configures as port&nbsp;1 rather than port&nbsp;0.
+          <code>turretHome</code> reports on either, so it does not matter there &mdash; but check it first if a digital device
+          reads nothing.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Retired names</h2>
+    <p class="sub">Do not add these back to the config &mdash; an op mode still asking for one
+    is stale code, not a missing device.</p>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Old name</th><th>Why it is gone</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="n"><code>sensor1</code> <code>sensor2</code> <code>sensor3</code></td>
+            <td class="why">The three magazine beam breaks, off the robot. <code>isMagazineFull()</code> went with them and nothing replaced it.</td>
+          </tr>
+          <tr>
+            <td class="n"><code>flipper</code></td>
+            <td class="why">Launch servo, replaced by the <code>indexer</code> motor.</td>
+          </tr>
+          <tr>
+            <td class="n"><code>shooter</code></td>
+            <td class="why">Single shooter motor, now <code>shooterLeft</code> + <code>shooterRight</code>.</td>
+          </tr>
+          <tr>
+            <td class="n"><code>limitSwitch</code></td>
+            <td class="why">Never tied to a mechanism.</td>
+          </tr>
+          <tr>
+            <td class="n"><code>deflectorPivot</code></td>
+            <td class="why">The deflector servo is just <code>deflector</code> (CH&#8239;S2) and its feedback wire is <code>deflectorPos</code> (CH&#8239;A1). The <strong>Prematch</strong> op mode on <code>main</code> uses the right names; the older copy on <code>connor/servo-test</code> still asks for this one.</td>
+          </tr>
+          <tr>
+            <td class="n"><code>pivotHome</code></td>
+            <td class="why">IR beam break on EH&#8239;D0, removed 2026&#8209;11&#8209;04. It never did the job &mdash; the <code>shooterPivot</code> Axon MAX MK2 already carries an analog feedback wire, which reads the real output shaft angle instead.</td>
+          </tr>
+          <tr>
+            <td class="n"><code>indexer</code> as a <strong>Servo</strong></td>
+            <td class="why">That servo is now <code>shooterPivot</code>. <code>indexer</code> is a <strong>motor</strong>. Op modes asking for a Servo named <code>indexer</code> are stale.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Stop thumb&#8209;typing the config</h2>
+    <p class="sub">The Driver Station stores each robot configuration as an XML file on the Robot Controller, under
+    <code>/sdcard/FIRST/settings/</code>. Build it by hand <strong>once</strong>, and from then on it is a file you can push to
+    any robot. These steps run in order &mdash; step&nbsp;4 is the one that pays for the other four.</p>
+
+    <ol class="steps">
+      <li>
+        <div>
+          <div class="st">Build the config once on the Driver Station</div>
+          <p>From the device map above. This is the only hand&#8209;typing anyone should ever have to do.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="st">Connect to the Robot Controller</div>
+          <p>USB&#8209;C to the Control Hub, or over the robot&rsquo;s wifi:</p>
+          <pre><code>adb connect 192.168.43.1:5555</code></pre>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="st">Find the file name</div>
+          <p>It is named whatever you called the config.</p>
+          <pre><code>adb shell ls /sdcard/FIRST/settings/</code></pre>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="st">Pull it into the repo so it is version controlled</div>
+          <pre><code>adb pull /sdcard/FIRST/settings/&lt;YourConfigName&gt;.xml docs/robot-config/</code></pre>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="st">Push it to any robot from then on</div>
+          <pre><code>adb push docs/robot-config/&lt;YourConfigName&gt;.xml /sdcard/FIRST/settings/</code></pre>
+          <p>Then on the Driver Station: Configure Robot &rarr; the config appears in the list &rarr; Activate. A rebuilt Control
+          Hub becomes one command away from a working config, and a wiring change shows up as a reviewable diff instead of a
+          rumour.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="bites" style="margin-top: 20px">
+      <div class="bite c">
+        <div class="stripe"></div>
+        <div class="bite-in">
+          <h3>Do not use <code>hardware2025.xml</code> as a template</h3>
+          <p><code>TeamCode/src/main/res/xml/hardware2025.xml</code> is <strong>not</strong> a usable config. Its format
+          (<code>&lt;RobotConfiguration&gt;</code>, <code>MotorType.REV_HD_20_1</code>) is not what the FTC SDK reads, and its
+          device names (<code>exampleServo</code>, <code>leftOdo</code>) match nothing in the code. It was never loadable
+          &mdash; which is probably why last season still got typed in by hand.</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="note"><code>adb</code> lives at
+    <code>C:\Users\&lt;you&gt;\AppData\Local\Android\Sdk\platform-tools\adb.exe</code>.</p>
+  </section>
+
+  <footer>
+    <p>Source of truth: <code>docs/hardware-config.md</code>, last confirmed against the robot 2026&#8209;10&#8209;29.</p>
+    <p>Every name on this page was cross&#8209;checked against all 48 <code>hardwareMap</code> lookups in
+    <code>TeamCode/</code> on 2026&#8209;11&#8209;04, and they all match. Port numbers live here purely so a human can find the
+    cable &mdash; <code>hardwareMap.get()</code> looks devices up by name, so a device can move ports or hubs without any Java
+    changing.</p>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var q = document.getElementById('q');
+    var clear = document.getElementById('qclear');
+    var none = document.getElementById('noresults');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.row[data-dev]'));
+    var groups = Array.prototype.slice.call(document.querySelectorAll('[data-grp]'));
+    var panels = Array.prototype.slice.call(document.querySelectorAll('[data-panel]'));
+
+    rows.forEach(function (r) {
+      r.hay = (r.getAttribute('data-dev') + ' ' + r.textContent).toLowerCase();
+    });
+
+    function apply() {
+      var term = q.value.trim().toLowerCase();
+      clear.hidden = term === '';
+      var shown = 0;
+
+      rows.forEach(function (r) {
+        var hit = term === '' || r.hay.indexOf(term) !== -1;
+        r.hidden = !hit;
+        if (hit) { shown++; }
+      });
+
+      groups.forEach(function (g) {
+        g.hidden = !g.querySelector('.row[data-dev]:not([hidden])');
+      });
+      panels.forEach(function (p) {
+        p.hidden = !p.querySelector('.row[data-dev]:not([hidden])');
+      });
+
+      none.hidden = shown !== 0;
+    }
+
+    q.addEventListener('input', apply);
+    clear.addEventListener('click', function () { q.value = ''; apply(); q.focus(); });
+    q.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { q.value = ''; apply(); }
+    });
+
+    function flash(btn) {
+      if (btn.dataset.busy === '1') { return; }
+      btn.dataset.busy = '1';
+      var was = btn.textContent;
+      btn.classList.add('copied');
+      btn.textContent = 'copied';
+      setTimeout(function () {
+        btn.classList.remove('copied');
+        btn.textContent = was;
+        btn.dataset.busy = '0';
+      }, 900);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.name') : null;
+      if (!btn) { return; }
+      var text = btn.getAttribute('data-copy') || btn.textContent;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { flash(btn); }, function () {});
+          return;
+        }
+      } catch (err) { /* fall through to the textarea path */ }
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        flash(btn);
+      } catch (err2) { /* clipboard unavailable; the name is still readable */ }
+    });
+
+    apply();
+  })();
+</script>
+</body>
+</html>
