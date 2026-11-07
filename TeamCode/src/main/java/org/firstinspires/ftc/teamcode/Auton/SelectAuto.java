@@ -24,6 +24,7 @@ public class SelectAuto extends RouteAuto {
     // it always parks (if so, the menu won't offer "Don't park" for it).
     enum AutoRoute {
         GARDEN_SHOOT_PARK("Garden Shoot + Park", Routes.Park.GARDEN_SIDE, false),   // 2026 robot
+        GARDEN_LEAVE_PARK_2026("Garden Leave + Park (backup)", Routes.Park.GARDEN_SIDE, true),   // 2026 robot
         GARDEN_WALL("Garden Wall", Routes.Park.GARDEN_SIDE, false),
         FAR_WALL("Far Wall", Routes.Park.GARDEN_SIDE, false),
         GARDEN_WALL_LAUNCH("Garden Wall + Launch", Routes.Park.GARDEN_SIDE, false),
@@ -44,6 +45,7 @@ public class SelectAuto extends RouteAuto {
         Route route(Routes.Park park) {
             switch (this) {
                 case GARDEN_SHOOT_PARK:  return Routes.gardenShootPark(park);
+                case GARDEN_LEAVE_PARK_2026: return Routes.gardenLeavePark2026(park);
                 case GARDEN_WALL:        return Routes.startUpGardenWall(park);
                 case FAR_WALL:           return Routes.startUpFarWall(park);
                 case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
@@ -65,9 +67,11 @@ public class SelectAuto extends RouteAuto {
     private final AutoMenu.Choice<Alliance> alliance =
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
     private final AutoMenu.Choice<AutoRoute> autoRoute =
-            menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_WALL, AutoRoute.FAR_WALL,
-                    AutoRoute.GARDEN_WALL_LAUNCH, AutoRoute.FAR_WALL_YIELD,
-                    AutoRoute.GARDEN_WALL_LEAVE_PARK, AutoRoute.FAR_WALL_LEAVE_PARK);
+            // Only the 2026-robot routes (2026-11-07, competition). The older routes
+            // below still exist but face the red wall, predate this robot, and
+            // Garden Wall + Launch cannot finish in 30 s with 15 s launches -- add
+            // one back here only after it is rebuilt and robot-tested.
+            menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_LEAVE_PARK_2026);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8)
                     .summary("Wait %ds");

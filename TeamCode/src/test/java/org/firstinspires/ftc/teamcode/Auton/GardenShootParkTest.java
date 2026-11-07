@@ -25,7 +25,10 @@ public class GardenShootParkTest {
 
     /** Every path-safety warning for this route, built the way RouteAuto builds it. */
     private static List<String> warnings(Alliance alliance, Routes.Park park) {
-        Route route = Routes.gardenShootPark(park);
+        return warnings(Routes.gardenShootPark(park), alliance, park);
+    }
+
+    private static List<String> warnings(Route route, Alliance alliance, Routes.Park park) {
         List<String> w = new ArrayList<>(PathSafety.checkStart("Start", route.start));
         Pose from = alliance.map(route.start);
         int i = 1;
@@ -64,6 +67,18 @@ public class GardenShootParkTest {
         assertEquals(Math.toDegrees(Math.atan2(72 - 27, 72 - 57)), Math.toDegrees(shot.getHeading()), EPS);
         Pose park = route.steps.get(route.steps.size() - 1).target;
         assertEquals(0.0, park.getHeading(), EPS);
+    }
+
+    @Test public void backupLeaveParkIsClearAndFacesBlue() {
+        for (Alliance a : Alliance.values()) {
+            for (Routes.Park p : Routes.Park.values()) {
+                Route r = Routes.gardenLeavePark2026(p);
+                List<String> w = warnings(r, a, p);
+                assertTrue("backup " + a + " / " + p + ": " + w, w.isEmpty());
+                assertEquals(1, r.steps.size());   // straight to the park, NONE parks garden side
+                assertEquals(0.0, r.steps.get(0).target.getHeading(), EPS);
+            }
+        }
     }
 
     @Test public void dontParkStopsAtTheLaunchSpot() {

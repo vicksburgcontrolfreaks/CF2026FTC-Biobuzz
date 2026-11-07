@@ -127,6 +127,15 @@ public final class Routes {
                 .driveTo(facingBlue(park.spot));
     }
 
+    // 2026 ROBOT BACKUP (2026-11-07): Garden Shoot + Park's start, no launch,
+    // straight to the park facing blue. For a broken launcher or a partner who
+    // needs the shot. Always parks. Laptop path-checked (GardenShootParkTest);
+    // NOT run on a robot yet.
+    public static Route gardenLeavePark2026(Park park) {
+        return Route.startAt(GARDEN_EDGE_START)
+                .driveTo(facingBlue(parkSpot(park)));
+    }
+
     // BACKUP autos: just LEAVE + PARK (about 8 points), no launching or
     // collecting. For when the launcher is broken, or a partner needs us to
     // stay out of the way. Use the Wait setting to start later.
