@@ -6,6 +6,8 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
+import org.firstinspires.ftc.teamcode.WhichRobot;
+
 /**
  * Shooter pivot: the servo that sets the gap between the two flywheels, so the
  * shooter can hold a pollen ball or a (larger) nectar ball.
@@ -122,8 +124,14 @@ public class ShooterPivot {
     public static double POLLEN_OFFSET = Double.NaN;
     public static double NECTAR_OFFSET = Double.NaN;
 
+    // ---- PER ROBOT: the five positions below ---------------------------------
+    // MIN/MAX_SAFE, OPEN, POLLEN and NECTAR are overwritten by the constructor
+    // from loadRobotNumbers(), which picks by WhichRobot (the config name). The
+    // values and history written here are 6494's; 5618's are in that method.
+    // Edit THAT method, not these lines -- an edit here is overwritten.
+
     // ---- Safe travel band --------------------------------------------------
-    // MEASURED ON THE ROBOT 2026-10-30 with Pivot Jog Test: jogged until the
+    // (6494) MEASURED ON THE ROBOT 2026-10-30 with Pivot Jog Test: jogged until the
     // servo audibly strained at each end, then backed off. Everything that
     // commands the pivot is clipped to this band, which is what makes it
     // impossible to drive into a hard stop -- the failure that hunted this servo
@@ -215,10 +223,43 @@ public class ShooterPivot {
      * hardwareMap.tryGet() handed back without checking it first.
      */
     public ShooterPivot(Servo pivot, DigitalChannel beam) {
+        loadRobotNumbers();
         this.pivot = pivot;
         this.beam = beam;
         if (beam != null) {
             beam.setMode(DigitalChannel.Mode.INPUT);
+        }
+    }
+
+    /**
+     * This robot's measured pivot positions. Same mechanism on both robots, but
+     * the servo/linkage mapping differs (6494's 0.42 hit a hard stop on 5618), so
+     * every number is measured per robot with Pivot Jog Test, against real balls.
+     * Keyed on the config name, so deploying to the other robot can't run this
+     * one's numbers.
+     */
+    private static void loadRobotNumbers() {
+        switch (WhichRobot.get()) {
+            case R5618:
+                // Pivot Jog Test on 5618, Shane, 2026-11-06: hard stops 0.1268 (open)
+                // and 0.65 (tight); pollen 0.568, nectar 0.17.
+                MIN_SAFE_POSITION = 0.1268;   // widest
+                MAX_SAFE_POSITION = 0.65;     // tightest
+                // CHOSEN, not measured (same idea as 6494's): off the open stop so
+                // the servo isn't held against it, 0.035 wider than the nectar grip.
+                OPEN_POSITION = 0.135;
+                POLLEN_POSITION = 0.568;
+                NECTAR_POSITION = 0.17;
+                break;
+            case R6494:
+            default:
+                // See the field comments above (re-measured 2026-11-02).
+                MIN_SAFE_POSITION = 0.27;
+                MAX_SAFE_POSITION = 0.744;
+                OPEN_POSITION = 0.272;
+                POLLEN_POSITION = 0.67;
+                NECTAR_POSITION = 0.287;
+                break;
         }
     }
 

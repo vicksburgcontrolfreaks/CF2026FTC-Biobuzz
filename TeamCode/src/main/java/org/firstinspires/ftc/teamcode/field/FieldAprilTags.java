@@ -1,6 +1,9 @@
 package org.firstinspires.ftc.teamcode.field;
 
+import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Quaternion;
+import org.firstinspires.ftc.teamcode.geometry.Rigid3;
 import org.firstinspires.ftc.vision.apriltag.AprilTagLibrary;
 
 /*
@@ -34,10 +37,10 @@ public final class FieldAprilTags {
      * audience hive" instead of making someone memorise which IDs are which.
      */
     public enum Cell {
-        RED_FAR("Red far", 30, 31, 32, 33),
+        RED_SCORING("Red scoring", 30, 31, 32, 33),
         RED_AUDIENCE("Red audience", 34, 35, 36, 37),
         BLUE_AUDIENCE("Blue audience", 38, 39, 40, 41),
-        BLUE_FAR("Blue far", 42, 43, 44, 45);
+        BLUE_SCORING("Blue scoring", 42, 43, 44, 45);
 
         /** For telemetry -- "Blue audience", not "BLUE_AUDIENCE". */
         public final String displayName;
@@ -72,10 +75,10 @@ public final class FieldAprilTags {
 
     // Kept so existing code reads the same. These are the SAME arrays the enum
     // holds, not copies -- edit the enum, not these.
-    public static final int[] RED_FAR_CELL       = Cell.RED_FAR.tagIds;
+    public static final int[] RED_SCORING_CELL   = Cell.RED_SCORING.tagIds;
     public static final int[] RED_AUDIENCE_CELL  = Cell.RED_AUDIENCE.tagIds;
     public static final int[] BLUE_AUDIENCE_CELL = Cell.BLUE_AUDIENCE.tagIds;
-    public static final int[] BLUE_FAR_CELL      = Cell.BLUE_FAR.tagIds;
+    public static final int[] BLUE_SCORING_CELL  = Cell.BLUE_SCORING.tagIds;
 
     // Hand this to AprilTagProcessor.Builder.setTagLibrary(...)
     public static AprilTagLibrary getLibrary() {
@@ -83,6 +86,26 @@ public final class FieldAprilTags {
         for (Cell cell : Cell.values()) {
             for (int id : cell.tagIds) {
                 builder.addTag(id, cell.displayName + " cell #" + id, TAG_SIZE, DistanceUnit.INCH);
+            }
+        }
+        return builder.build();
+    }
+
+    /**
+     * Like getLibrary(), but each tag also knows where it is on the field, so
+     * the SDK can fill in detection.robotPose. Positions are for the hives tipped
+     * HiveTags.REFERENCE -- TagLocalizer corrects for the real tilt. Uses the
+     * MADE-UP numbers in HiveTags until those are measured.
+     */
+    public static AprilTagLibrary getLocalizationLibrary() {
+        AprilTagLibrary.Builder builder = new AprilTagLibrary.Builder();
+        for (Cell cell : Cell.values()) {
+            for (int id : cell.tagIds) {
+                Rigid3 pose = HiveTags.tagPose(id, HiveTags.REFERENCE);
+                double[] q = pose.toQuaternion();
+                builder.addTag(id, cell.displayName + " cell #" + id, TAG_SIZE,
+                        new VectorF((float) pose.x(), (float) pose.y(), (float) pose.z()), DistanceUnit.INCH,
+                        new Quaternion((float) q[0], (float) q[1], (float) q[2], (float) q[3], 0));
             }
         }
         return builder.build();

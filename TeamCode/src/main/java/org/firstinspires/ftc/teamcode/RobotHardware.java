@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
@@ -63,7 +64,37 @@ public class RobotHardware {
     public VisionPortal visionPortal;
     public AprilTagProcessor aprilTagProcessor;
 
+    /**
+     * The ONE place the collector and indexer directions are set. Every op mode
+     * that gets these motors -- through RobotHardware or straight from the
+     * hardwareMap -- must call this. Pass null for a motor you don't use.
+     *
+     * HISTORY: the 2026-10-29 check ran in Collection System Test, which got the
+     * motors raw (default FORWARD) -- so FORWARD/FORWARD is what was actually
+     * confirmed. But it was recorded as "correct as set in RobotHardware", which
+     * said collector REVERSE. Result: the collector ran backwards in everything
+     * built on RobotHardware (Shooter Test, DriveTeleOp) and in the autos, until
+     * Shooter Test showed it on 6494, 2026-11-05.
+     *
+     * collector FORWARD = pulls pieces IN. indexer FORWARD = feeds UP to the shooter.
+     * Checked on 6494; not yet checked on 5618.
+     */
+    public static void applyCollectionDirections(DcMotorSimple collector, DcMotorSimple indexer) {
+        if (collector != null) collector.setDirection(DcMotorSimple.Direction.FORWARD);
+        if (indexer != null) indexer.setDirection(DcMotorSimple.Direction.FORWARD);
+    }
+
     public void init(HardwareMap hardwareMap) {
+        init(hardwareMap, true);
+    }
+
+    /**
+     * @param withVision false = don't open "Webcam 1" here. The default portal
+     *                   below has no BIOBUZZ tag library (so no tag poses), and a
+     *                   webcam can only be opened once -- an op mode that sets up
+     *                   its own camera (DriveTeleOp, via TurretCamera) passes false.
+     */
+    public void init(HardwareMap hardwareMap, boolean withVision) {
         // Drive motors (mecanum, match Constants naming).
         // Port map confirmed 2026-10-27: the left side lives on the Control Hub
         // now, which is why these comments no longer all say EH.
@@ -71,18 +102,14 @@ public class RobotHardware {
         rf = hardwareMap.get(DcMotorEx.class, "rf"); // EH1
         lr = hardwareMap.get(DcMotorEx.class, "lr"); // CH0
         lf = hardwareMap.get(DcMotorEx.class, "lf"); // CH1, carries the turret encoder
-        // Directions from Constants
-        lf.setDirection(DcMotorSimple.Direction.REVERSE);
-        lr.setDirection(DcMotorSimple.Direction.FORWARD);
-        rf.setDirection(DcMotorSimple.Direction.FORWARD);
-        rr.setDirection(DcMotorSimple.Direction.REVERSE);
+        // Directions come from Constants, per robot (5618 and 6494 differ).
+        // Pedro sets the same values again when createFollower() runs.
+        Constants.applyDriveDirections(lf, lr, rf, rr);
 
         // Collection system
         collector = hardwareMap.get(DcMotorEx.class, "collector"); // CH3
         indexer = hardwareMap.get(DcMotorEx.class, "indexer");     // EH3
-        collector.setDirection(DcMotorSimple.Direction.REVERSE);
-        // Confirmed on the robot 2026-10-29: FORWARD feeds up toward the shooter.
-        indexer.setDirection(DcMotorSimple.Direction.FORWARD);
+        applyCollectionDirections(collector, indexer);
 
         // OPTIONAL: not fitted to the robots yet (2026-11-05), and nothing that uses
         // RobotHardware reads it. tryGet returns null instead of crashing INIT, so
@@ -135,7 +162,8 @@ public class RobotHardware {
         // and homing both need re-verifying on the robot.
         turret.init(hardwareMap, lf); // "turret" = CH servo 0
 
-        // AprilTag vision
+        // AprilTag vision (DECODE-era defaults -- see init(hardwareMap, withVision)).
+        if (!withVision) return;
         aprilTagProcessor = AprilTagProcessor.easyCreateWithDefaults();
         visionPortal = VisionPortal.easyCreateWithDefaults(
                 hardwareMap.get(WebcamName.class, "Webcam 1"), aprilTagProcessor);

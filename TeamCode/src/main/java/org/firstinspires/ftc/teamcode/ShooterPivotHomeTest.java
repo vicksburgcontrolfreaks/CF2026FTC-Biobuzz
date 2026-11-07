@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
@@ -50,6 +51,9 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  * sensor cannot silently send both grips to the same gap. "Positions from" says
  * which set is live.
  */
+// Hidden from the Driver Station 2026-11-05 (op mode cleanup): neither robot has the pivot beam break this tests.
+// The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Shooter Pivot Home Test", group = "Test")
 public class ShooterPivotHomeTest extends LinearOpMode {
 

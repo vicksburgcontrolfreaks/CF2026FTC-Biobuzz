@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.pedropathing.ftc.drivetrains.MecanumConstants;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -43,6 +44,8 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  *   4. When all four are right, take it off the blocks, give it room, and hold A.
  *      It should drive straight forward, not turn, strafe, or sit there buzzing.
  */
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Drive Motor Direction Test", group = "Test")
 public class DriveMotorDirectionTest extends LinearOpMode {
 
@@ -52,14 +55,13 @@ public class DriveMotorDirectionTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         MecanumConstants drive = Constants.driveConstants();
-        String robot = WhichRobot.number();
 
         DcMotorEx lf = setUp(drive.leftFrontMotorName, drive.leftFrontMotorDirection);
         DcMotorEx lr = setUp(drive.leftRearMotorName, drive.leftRearMotorDirection);
         DcMotorEx rf = setUp(drive.rightFrontMotorName, drive.rightFrontMotorDirection);
         DcMotorEx rr = setUp(drive.rightRearMotorName, drive.rightRearMotorDirection);
 
-        telemetry.addData("Robot", robot + "  (config \"" + WhichRobot.configName() + "\")");
+        BuildInfo.show(telemetry);
         telemetry.addLine("ROBOT ON BLOCKS. Directions from Constants.java:");
         showDirections(drive);
         telemetry.update();
@@ -79,7 +81,7 @@ public class DriveMotorDirectionTest extends LinearOpMode {
             rf.setPower(runRf ? TEST_POWER : 0);
             rr.setPower(runRr ? TEST_POWER : 0);
 
-            telemetry.addData("Robot", robot);
+            BuildInfo.show(telemetry);
             telemetry.addLine("Every wheel should spin FORWARD (top rolls toward the front).");
             telemetry.addLine();
             telemetry.addData("Running", running(runLf, runLr, runRf, runRr, all));

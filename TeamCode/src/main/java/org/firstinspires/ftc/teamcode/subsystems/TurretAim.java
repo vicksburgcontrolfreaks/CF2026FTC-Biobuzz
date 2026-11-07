@@ -73,9 +73,10 @@ import java.util.List;
  *   SEARCHING - still nothing, so sweep the travel in SEARCH_STEP_DEG steps,
  *               pausing at each to look. Two legs: out to the nearer end, then
  *               back across to the far end, which covers the whole range from
- *               wherever it happened to be. ANY hive tag ends the search --
- *               finding something is the win, and sorting out which cell it
- *               belongs to is the caller's job.
+ *               wherever it happened to be. Only the TARGET cell's tags end
+ *               the search; another hive in view counts as lost, so it keeps
+ *               sweeping. (setAcceptAnyHive(true) lets any hive end it, for
+ *               a caller that retargets to whatever it finds.)
  *   PARKED    - swept everything, found nothing, so sit at Turret.PARK_ANGLE
  *               (0 deg, straight ahead -- where homing leaves it) and keep
  *               watching. A tag appearing drops straight back to TRACKING.
@@ -122,6 +123,9 @@ public class TurretAim {
 
     // Close enough -- do not bother correcting. MUST be bigger than the camera's
     // noise AND bigger than Turret.TOLERANCE_DEG. See the class comment.
+    // 6494, 2026-11-06: raw bearing noise ~0.1 deg standing still; 3.0 settled
+    // and held on target; Shane picked 3.5 for margin (driving/range add noise).
+    // Back to 5.0 on both robots (Shane, 2026-11-06): aim "finicky" on 5618 at 3.5.
     public static double DEADBAND_DEG = 5.0;
 
     // How many NEW frames to average before acting on them. One frame is noise;
@@ -200,6 +204,21 @@ public class TurretAim {
         this.targetTagIds = targetTagIds;
     }
 
+    /**
+     * false (the default, and what MATCH code wants): only the target cell's
+     * tags count. Staring at some other hive is treated as "lost", so the
+     * turret searches for the right one instead of holding on the wrong one.
+     *
+     * true: any hive tag ends a search. Only for a caller that retargets to
+     * whatever it sees (Turret Aim Test with AUTO_CELL on) -- otherwise the
+     * search stops on the wrong hive and sits there.
+     */
+    private boolean acceptAnyHive = false;
+
+    public void setAcceptAnyHive(boolean accept) {
+        this.acceptAnyHive = accept;
+    }
+
     /** Switch which hive cell to aim at. See FieldAprilTags for the ID groups. */
     public void setTargetTagIds(int[] ids) {
         this.targetTagIds = ids;
@@ -252,10 +271,10 @@ public class TurretAim {
 
         tagsUsed = count;
 
-        // Any BIOBUZZ hive tag at all, ours or not. This is what ends a search:
-        // finding SOMETHING is the win, and which cell it belongs to is then the
-        // caller's problem (Turret Aim Test's AUTO_CELL retargets to it).
-        boolean anyHiveTag = (count + otherCount) > 0;
+        // What ends a search. Normally only OUR cell's tags: stopping on another
+        // hive just parks the turret pointed at the wrong target. With
+        // acceptAnyHive, any hive counts, because the caller retargets to it.
+        boolean anyHiveTag = acceptAnyHive ? (count + otherCount) > 0 : count > 0;
 
         // --- 2. Searching and giving up --------------------------------------
         // A sweep commands the turret, so it must stop the instant the caller
@@ -286,29 +305,25 @@ public class TurretAim {
 
         if (count == 0) {
             forgetMeasurement();
-            if (otherCount > 0) {
-                // Deliberately does NOT auto-switch. Which cell to aim at is a
-                // game decision; picking whatever wandered into frame would be a
-                // great way to score on the wrong alliance's hive.
-                status = String.format("WRONG CELL? seeing [%s] but aiming at %s"
-                                + " -- D-pad to switch",
-                        otherIds, Arrays.toString(targetTagIds));
-                return;
-            }
 
-            // Nothing visible at all. Hold still first -- most "losses" are one
-            // blurry frame, and sweeping the turret every time a frame drops
-            // would be far worse than waiting a moment. Only once it is properly
-            // gone do we go looking.
+            // None of OUR tags. Seeing a different hive counts as lost, same as
+            // seeing nothing: it does NOT switch to it (which cell to aim at is
+            // a game decision -- picking whatever wandered into frame is a great
+            // way to score on the wrong alliance's hive), and it does not just
+            // sit there either. Hold briefly, then search for the right one.
             if (SEARCH_ENABLED && enabled && sinceLastSeen.seconds() > LOST_HOLD_SEC) {
                 beginSearch(turret);
                 return;
             }
+            String wrongCell = otherCount > 0
+                    ? String.format("WRONG CELL: seeing [%s], want %s -- ",
+                            otherIds, Arrays.toString(targetTagIds))
+                    : "";
             status = sinceLastSeen.seconds() > LOST_HOLD_SEC
-                    ? String.format("tag LOST %.1fs -- holding %.1f deg%s",
+                    ? String.format("%stag LOST %.1fs -- holding %.1f deg%s", wrongCell,
                             sinceLastSeen.seconds(), turret.getTargetAngle(),
                             SEARCH_ENABLED ? "" : " (search off)")
-                    : "no tag this frame";
+                    : wrongCell + "no target tag this frame";
             return;
         }
 

@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.AnalogInput;
@@ -29,6 +30,10 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *   X                   = clear the min/max voltage capture
  *   D-pad up            = drive to TARGET_DEGREES and stop (B cancels)
  */
+// HIDDEN for the 2026-11-08 competition (Shane): despite the name this is a
+// deflector feedback test, and its zero (Y) is NOT the one TeleOp/auto use --
+// the drive team must run Deflector Zero. Delete this line to bring it back.
+@Disabled
 @TeleOp(name = "Prematch", group = "Utility")
 public class Prematch extends LinearOpMode {
 

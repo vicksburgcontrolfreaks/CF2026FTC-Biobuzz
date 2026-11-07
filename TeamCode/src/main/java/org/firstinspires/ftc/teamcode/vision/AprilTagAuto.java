@@ -1,6 +1,7 @@
 // Updated AprilTagAuto.java
 package org.firstinspires.ftc.teamcode.vision;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
@@ -13,6 +14,9 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 //import org.firstinspires.ftc.teamcode.pedroPathing.Drawing; // Import existing Drawing class
 import java.util.List;
 
+// Hidden from the Driver Station 2026-11-05 (op mode cleanup): DECODE-era: looks for tags 20/24, which are not on the BIOBUZZ field.
+// The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @Autonomous(name = "AprilTag Auto")
 public class AprilTagAuto extends OpMode {
     private AprilTagPipeline pipeline;

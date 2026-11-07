@@ -1,5 +1,6 @@
-package org.firstinspires.ftc.teamcode.Auton;
+package org.firstinspires.ftc.teamcode.test;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -7,8 +8,11 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "MotorCurrentTest")
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
+@Autonomous(name = "MotorCurrentTest", group = "Test")
 public class MotorCurrentTest extends LinearOpMode {
 
     private DcMotorEx lf, rf, lr, rr;
@@ -21,11 +25,8 @@ public class MotorCurrentTest extends LinearOpMode {
         lr = hardwareMap.get(DcMotorEx.class, "lr");
         rr = hardwareMap.get(DcMotorEx.class, "rr");
 
-        // Set directions for mechanum (adjust if needed)
-        lf.setDirection(DcMotor.Direction.FORWARD);
-        lr.setDirection(DcMotor.Direction.FORWARD);
-        rf.setDirection(DcMotor.Direction.REVERSE);
-        rr.setDirection(DcMotor.Direction.REVERSE);
+        // Directions come from Constants, per robot (5618 and 6494 differ).
+        Constants.applyDriveDirections(lf, lr, rf, rr);
 
         telemetry.addData("Status", "Ready to test");
         telemetry.update();

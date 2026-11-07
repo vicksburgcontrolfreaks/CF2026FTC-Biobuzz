@@ -4,6 +4,7 @@ import com.bylazar.configurables.PanelsConfigurables;
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -35,36 +36,42 @@ import java.util.concurrent.TimeUnit;
  * the "Aiming at" line names it -- "Blue audience [38, 39, 40, 41] (AUTO)". No
  * need to remember which IDs belong to which cell, and no D-pad hunting. The
  * D-pad is still there to force a specific cell, and using it switches to manual
- * so auto-detect cannot pull you back; set AUTO_CELL in Panels to hand control
- * back to the camera.
+ * so auto-detect cannot pull you back; press Y to hand control back to the camera.
  *
  * Controls (gamepad1):
  *   X             - start homing. Nothing else works until this finishes.
  *   A             - toggle aiming ON / OFF (starts OFF)
  *   B             - aiming OFF and send the turret back to 0 (straight ahead)
  *   D-pad L/R     - force a specific hive cell (turns AUTO_CELL off)
+ *   Y             - AUTO_CELL back on (camera picks the cell again)
+ *   BACK          - flip BEARING_SIGN (live, NOT saved -- copy it into TurretAim)
+ *   D-pad Up/Down - DEADBAND_DEG +/- 0.5 (live, NOT saved)
  *
  * BRING-UP ORDER
  *
  * 1. Robot on blocks, turret free, finger on stop.
  *
- * 2. Press X and let it home. The turret parks at 0. If homing fails, read the
- *    Note line and go back to docs/turret-bringup.md Step 6 -- aiming cannot work
- *    before this does, because "getAngle() + bearing" needs a real angle.
+ * 2. If "Turret" already says READY (homing is kept from an earlier op mode
+ *    since the last power-up), skip this. Otherwise start roughly forward,
+ *    press X and let it home -- aiming cannot work before this does, because
+ *    "getAngle() + bearing" needs a real angle.
  *
  * 3. Point the camera somewhere it can see a cell. "Aiming at" should name the
  *    hive you are looking at, "Camera sees" should agree with it, and "Tags used"
  *    should go above 0. Check "Frame age" is a sane number of milliseconds.
  *
  *    If "Aiming at" says (manual) and disagrees with "Camera sees", someone has
- *    pressed the D-pad -- turn AUTO_CELL back on in Panels.
+ *    pressed the D-pad -- press Y to turn AUTO_CELL back on.
  *
- * 4. WITH AIMING STILL OFF, hold the turret so the tag is off to one side and
- *    read the "would aim" line.
- *      - "would aim" moves TOWARD the tag  -> BEARING_SIGN is right.
- *      - "would aim" moves AWAY from it    -> set BEARING_SIGN = -1 in Panels.
+ * 4. WITH AIMING STILL OFF, put the hive well off to one side (more than the
+ *    deadband) and read the "Sign check" line. It says which side the camera
+ *    thinks the tag is on and which way the turret WOULD turn (angle rises CCW).
+ *      - Tag really is on that side, and the turn is toward it -> sign is right.
+ *      - Turn is away from the tag -> press BACK to flip BEARING_SIGN, recheck,
+ *        and copy the new value into TurretAim.BEARING_SIGN afterward.
  *    This is the whole reason aiming starts disabled. Do not skip it: a wrong
- *    sign drives the turret into a hard stop at full closed-loop power.
+ *    sign steps the turret away from the tag until it hits a soft limit --
+ *    and on 6494 there are no hard stops, only the cable, past those limits.
  *
  * 5. Watch "Bearing raw" with everything held still. It will jump around by a
  *    few degrees -- that is the camera noise DEADBAND_DEG has to exceed. If raw
@@ -80,7 +87,8 @@ import java.util.concurrent.TimeUnit;
  *   - Moving the robot makes it re-aim in steps and settle again.
  *   - Briefly blocking the camera makes it HOLD its last angle, not wander.
  *   - Blocking it for longer puts Phase into SEARCHING: the turret steps across
- *     its travel pausing to look, stops the moment it sees any hive, and hands
+ *     its travel pausing to look, stops the moment it sees the hive it wants
+ *     (any hive with AUTO_CELL on; only the picked one in manual), and hands
  *     back to TRACKING. Cover the camera completely and it finishes the sweep,
  *     goes PARKED at 0 deg, and waits there.
  *
@@ -104,13 +112,17 @@ import java.util.concurrent.TimeUnit;
  *   - First step goes the wrong way, then it recovers
  *       -> FRAMES_BEFORE_COMMIT is too low. Raise it to 5.
  *   - Says OUT OF REACH
- *       -> the tag is genuinely outside +/-140 deg of turret travel. Not a bug.
+ *       -> the tag is genuinely outside the soft limits (Turret.MIN/MAX_ANGLE,
+ *          +/-90 on 6494). Not a bug.
  *          The robot has to turn; the turret cannot get there.
  *
- * Every constant on Turret and TurretAim is live-tunable at panels.bylazar.com
- * while this runs. Panels edits are NOT saved -- write down what works.
+ * We tune by gamepad + redeploy, not Panels. BACK and D-pad Up/Down change
+ * BEARING_SIGN and DEADBAND_DEG live; those changes are NOT saved -- write down
+ * what works and put it in TurretAim.
  */
 @Configurable
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Turret Aim Test", group = "Test")
 public class TurretAimTest extends LinearOpMode {
 
@@ -146,12 +158,13 @@ public class TurretAimTest extends LinearOpMode {
 
     // Which cell to aim at. Hive tags come in clusters of four; TurretAim
     // averages whichever of them it can see, which roughly halves the noise.
-    private FieldAprilTags.Cell cell = FieldAprilTags.Cell.RED_FAR;
+    private FieldAprilTags.Cell cell = FieldAprilTags.Cell.RED_SCORING;
     /** The cell the camera can actually see right now, or null if it sees none. */
     private FieldAprilTags.Cell seenCell = null;
 
     private boolean aiming = false;
-    private boolean aPrev, bPrev, xPrev, dpadLeftPrev, dpadRightPrev;
+    private boolean aPrev, bPrev, xPrev, yPrev, backPrev;
+    private boolean dpadLeftPrev, dpadRightPrev, dpadUpPrev, dpadDownPrev;
 
     @Override
     public void runOpMode() {
@@ -167,13 +180,16 @@ public class TurretAimTest extends LinearOpMode {
 
         telemetry.addLine("TURRET AIM TEST");
         telemetry.addLine("X = home  |  A = aiming on/off  |  B = park at 0");
-        telemetry.addLine("D-pad L/R = force a hive cell (otherwise automatic)");
+        telemetry.addLine("D-pad L/R = force a hive cell, Y = back to automatic");
+        telemetry.addLine("BACK = flip BEARING_SIGN, D-pad Up/Down = deadband");
         telemetry.addLine("");
         telemetry.addLine("The hive is identified from the tags in frame --");
         telemetry.addLine("just point the camera at it and read 'Aiming at'.");
         telemetry.addLine("Aiming starts OFF. Home first (X), then watch the");
         telemetry.addLine("'would aim' line to check BEARING_SIGN before pressing A.");
         telemetry.addLine("Camera view: 3 dots menu > Camera Stream");
+        telemetry.addData("Turret", "%s  (%s)", turret.getState(), turret.getStatusNote());
+        BuildInfo.show(telemetry);
         telemetry.update();
 
         waitForStart();
@@ -195,6 +211,10 @@ public class TurretAimTest extends LinearOpMode {
             // Order matters: decide the target first, then let the turret act on
             // it in the same loop. TurretAim only ever calls setTargetAngle();
             // turret.update() is still the only thing that writes to the servo.
+            // AUTO_CELL retargets to whatever hive is in view, so any hive may
+            // end a search. A D-pad-picked cell searches for THAT cell only --
+            // which is how match code will behave.
+            aim.setAcceptAnyHive(AUTO_CELL);
             aim.update(detections, turret, aiming);
             turret.update();
 
@@ -233,12 +253,34 @@ public class TurretAimTest extends LinearOpMode {
 
         if (gamepad1.dpad_left && !dpadLeftPrev) selectCell(-1);
         dpadLeftPrev = gamepad1.dpad_left;
+
+        if (gamepad1.y && !yPrev) AUTO_CELL = true;
+        yPrev = gamepad1.y;
+
+        // Stand-ins for Panels. Flipping the sign mid-aim is asking for a lurch,
+        // so it also switches aiming off.
+        if (gamepad1.back && !backPrev) {
+            TurretAim.BEARING_SIGN = -TurretAim.BEARING_SIGN;
+            aiming = false;
+            aim.resetPhase();
+        }
+        backPrev = gamepad1.back;
+
+        // Floor: the deadband must stay above Turret.TOLERANCE_DEG, or commits
+        // land "already arrived" and nothing moves (see TurretAim class comment).
+        if (gamepad1.dpad_up && !dpadUpPrev) TurretAim.DEADBAND_DEG += 0.5;
+        dpadUpPrev = gamepad1.dpad_up;
+        if (gamepad1.dpad_down && !dpadDownPrev) {
+            TurretAim.DEADBAND_DEG = Math.max(Turret.TOLERANCE_DEG + 0.5,
+                    TurretAim.DEADBAND_DEG - 0.5);
+        }
+        dpadDownPrev = gamepad1.dpad_down;
     }
 
     /**
      * Manual cell choice. Turns AUTO_CELL off: if you have asked for a specific
      * hive, auto-detect must not quietly pull you back to whatever is in frame.
-     * Flip AUTO_CELL back on in Panels to hand control back to the camera.
+     * Press Y to hand control back to the camera.
      */
     private void selectCell(int step) {
         FieldAprilTags.Cell[] all = FieldAprilTags.Cell.values();
@@ -298,6 +340,7 @@ public class TurretAimTest extends LinearOpMode {
         telemetry.addData("Bearing smooth", "%+6.2f deg  (deadband %.1f)",
                 aim.getSmoothBearing(), TurretAim.DEADBAND_DEG);
         telemetry.addData("Bearing raw", "%+6.2f deg", aim.getRawBearing());
+        telemetry.addData("Sign check", signCheck());
         telemetry.addData("Tags used", "%d of %d visible", aim.getTagsUsed(), totalDetections);
         telemetry.addData("Frame age", "%.0f ms  (how stale the bearing is)", aim.getAgeMs());
         telemetry.addData("Last seen", "%.1f s ago", aim.getSecondsSinceSeen());
@@ -318,6 +361,23 @@ public class TurretAimTest extends LinearOpMode {
         telemetryM.update(telemetry);
 
         telemetry.update();
+    }
+
+    /**
+     * Plain-English version of the BEARING_SIGN test. Positive bearing = tag to
+     * the camera's LEFT; turret angle rises CCW (seen from above), so with the
+     * camera facing forward a tag on the left should mean "turn CCW".
+     */
+    private String signCheck() {
+        String sign = String.format("SIGN %+.0f", TurretAim.BEARING_SIGN);
+        if (aim.getTagsUsed() == 0) return sign + " | no target tags in view";
+        double b = aim.getSmoothBearing();
+        if (Math.abs(b) <= TurretAim.DEADBAND_DEG) {
+            return sign + " | tag centered -- move it off to one side";
+        }
+        String side = b > 0 ? "LEFT" : "RIGHT";
+        String turn = (b * TurretAim.BEARING_SIGN) > 0 ? "CCW (angle up)" : "CW (angle down)";
+        return sign + " | tag on camera's " + side + " -> would turn " + turn;
     }
 
     private void initCamera() {

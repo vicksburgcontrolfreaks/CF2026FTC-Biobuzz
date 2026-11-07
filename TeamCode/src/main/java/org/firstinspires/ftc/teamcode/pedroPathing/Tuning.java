@@ -21,6 +21,7 @@ import com.pedropathing.math.*;
 import com.pedropathing.paths.*;
 import com.pedropathing.telemetry.SelectableOpMode;
 import com.pedropathing.util.*;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -34,6 +35,8 @@ import java.util.List;
  * @version 1.0, 6/26/2025
  */
 @Configurable
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Tuning", group = "Pedro Pathing")
 public class Tuning extends SelectableOpMode {
     public static Follower follower;
@@ -84,7 +87,12 @@ public class Tuning extends SelectableOpMode {
             follower = Constants.createFollower(hardwareMap);
         }
 
-        follower.setStartingPose(new Pose(72,72,Math.toRadians(90)));
+        // MUST be (0, 0, facing 0 deg). The velocity tuners stop at |x| or |y| > 48
+        // and the PID tuners and path tests build their paths from (0, 0). This was
+        // (72, 72, 90 deg) in the 9/11 port: the velocity tuners "finished" before
+        // moving, and Line would have driven ~100" toward (0, 0). 2025's final
+        // Tuning used (0, 0, 0) too. Facing 0 deg: forward = +x, left = +y.
+        follower.setStartingPose(new Pose(0, 0, Math.toRadians(0)));
 
         poseHistory = follower.getPoseHistory();
 

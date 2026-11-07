@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.bylazar.configurables.PanelsConfigurables;
 import com.bylazar.configurables.annotations.Configurable;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Servo;
@@ -87,6 +88,8 @@ import com.qualcomm.robotcore.util.Range;
  * what look like untested placeholders. You jog, you look, you label it.
  */
 @Configurable
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Pivot Jog Test", group = "Test")
 public class PivotJogTest extends LinearOpMode {
 
@@ -158,7 +161,7 @@ public class PivotJogTest extends LinearOpMode {
         commanded = start;
 
         telemetry.addLine("PIVOT JOG TEST");
-        telemetry.addData("Robot", WhichRobot.number());
+        BuildInfo.show(telemetry);
         telemetry.addLine();
         telemetry.addLine("NOTHING WILL MOVE until you press Y.");
         telemetry.addData("Y will command", start);
@@ -186,7 +189,7 @@ public class PivotJogTest extends LinearOpMode {
                 pivot.setPosition(commanded);
             }
 
-            telemetry.addData("Robot", WhichRobot.number());
+            BuildInfo.show(telemetry);
             telemetry.addLine(inControl
                     ? "LB/RB fine | triggers coarse | X open end | B closed end"
                     : "PRESS Y TO TAKE CONTROL - nothing has moved yet");

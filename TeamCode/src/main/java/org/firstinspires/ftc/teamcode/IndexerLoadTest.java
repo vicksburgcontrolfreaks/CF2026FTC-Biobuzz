@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -9,6 +10,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
+import org.firstinspires.ftc.teamcode.shooting.NectarGuard;
+import org.firstinspires.ftc.teamcode.subsystems.CollectionSystem;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,7 +55,7 @@ import java.util.List;
  *   B             file the last pass as NECTAR
  *   Y             file the last pass as BASELINE (run it empty first)
  *   LB (hold)     reverse the indexer, to clear a jam. Not recorded.
- *   D-pad up/down feed RPM +/- 10
+ *   D-pad up/down feed RPM +/- 5 (starts at CollectionSystem.FEED_RPM)
  *   D-pad left    discard the last pass
  *   D-pad right   clear ALL samples and start over
  *
@@ -81,11 +84,17 @@ import java.util.List;
  * The RPM math is done locally rather than through CollectionSystem, because
  * that class requires a color sensor this robot does not have fitted yet.
  */
+// Back on the Driver Station 2026-11-06: recalibrating NectarGuard at FEED_RPM 25
+// (hidden 11-05 when the 50 RPM calibration was thought final).
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Indexer Load Test", group = "Test")
 public class IndexerLoadTest extends LinearOpMode {
 
-    private static final double START_RPM = 50.0;
-    private static final double STEP_RPM = 10.0;
+    // Starts at the speed the match feed actually runs, because the calibration
+    // only holds at the speed it was taken at.
+    private static final double START_RPM = CollectionSystem.FEED_RPM;
+    private static final double STEP_RPM = 5.0;
     private static final double MAX_RPM = 300.0;
 
     /** Samples are scaled to this voltage so a tired pack reads like a fresh one. */
@@ -109,6 +118,11 @@ public class IndexerLoadTest extends LinearOpMode {
     // The pass currently being recorded.
     private boolean passActive = false;
     private double passPeakAmps = 0.0;
+    // How long this pass sat at/above NectarGuard.TRIP_AMPS (normalized). The
+    // guard needs TRIP_HOLD_SEC of it to trip, so this checks that hold time.
+    private double passAboveSec = 0.0;
+    private double lastAboveSec = 0.0;
+    private final ElapsedTime loopTimer = new ElapsedTime();
     private final ElapsedTime passTimer = new ElapsedTime();
 
     // The finished pass, waiting to be labeled.
@@ -125,6 +139,7 @@ public class IndexerLoadTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         DcMotorEx indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        RobotHardware.applyCollectionDirections(null, indexer);
         // Optional: the color sensor is not fitted yet, so tryGet keeps this op
         // mode runnable. If one does get fitted, its distance channel shows up on
         // telemetry for free and you can compare the two approaches side by side.
@@ -146,17 +161,23 @@ public class IndexerLoadTest extends LinearOpMode {
 
         while (opModeIsActive()) {
             double volts = battery.getVoltage();
+            double dt = loopTimer.seconds();
+            loopTimer.reset();
 
             // ---- Run the indexer, tracking the peak across the hold ----------
             if (gamepad1.a) {
                 if (!passActive) {
                     passActive = true;
                     passPeakAmps = 0.0;
+                    passAboveSec = 0.0;
                     passTimer.reset();
                 }
                 indexer.setVelocity(rpmToTicksPerSec(targetRpm));
                 double amps = indexer.getCurrent(CurrentUnit.AMPS);
                 passPeakAmps = Math.max(passPeakAmps, amps);
+                if (amps * (NOMINAL_VOLTS / Math.max(volts, 1.0)) >= NectarGuard.TRIP_AMPS) {
+                    passAboveSec += dt;
+                }
             } else if (gamepad1.left_bumper) {
                 endPassIfActive(volts);
                 indexer.setVelocity(rpmToTicksPerSec(-targetRpm));
@@ -170,7 +191,7 @@ public class IndexerLoadTest extends LinearOpMode {
 
             // ---- Telemetry ---------------------------------------------------
             telemetry.addLine("A: feed   X: pollen   B: nectar   Y: baseline");
-            telemetry.addLine("Dpad U/D: RPM +/-10   L: discard last   R: clear all");
+            telemetry.addLine("Dpad U/D: RPM +/-5   L: discard last   R: clear all");
             if (!note.isEmpty()) {
                 telemetry.addLine();
                 telemetry.addData(">>", note);
@@ -188,6 +209,8 @@ public class IndexerLoadTest extends LinearOpMode {
                 telemetry.addData("  Peak raw amps", lastRawPeak);
                 telemetry.addData("  Peak at 12V", lastNormPeak);
                 telemetry.addData("  Held for (s)", lastDuration);
+                telemetry.addData("  Above trip (s)", "%.2f  (trip %.2f A, needs %.2f s)",
+                        lastAboveSec, NectarGuard.TRIP_AMPS, NectarGuard.TRIP_HOLD_SEC);
             } else {
                 telemetry.addLine("-- no unlabeled pass --");
             }
@@ -227,6 +250,7 @@ public class IndexerLoadTest extends LinearOpMode {
         lastVolts = volts;
         lastNormPeak = passPeakAmps * (NOMINAL_VOLTS / Math.max(volts, 1.0));
         lastDuration = passTimer.seconds();
+        lastAboveSec = passAboveSec;
         havePass = true;
         note = "pass recorded - now press X, B or Y to label it";
     }

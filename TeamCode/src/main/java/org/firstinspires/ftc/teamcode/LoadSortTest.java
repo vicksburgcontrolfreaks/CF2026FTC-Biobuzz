@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.bylazar.configurables.annotations.Configurable;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -74,6 +75,8 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  * pollen spacing. Harmless here, but do not build ball counting on this.
  */
 @Configurable
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Load Sort Test", group = "Test")
 public class LoadSortTest extends LinearOpMode {
 
@@ -101,6 +104,7 @@ public class LoadSortTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         DcMotorEx indexer = hardwareMap.get(DcMotorEx.class, "indexer");
+        RobotHardware.applyCollectionDirections(null, indexer);
         VoltageSensor battery = hardwareMap.voltageSensor.iterator().next();
 
         BallLoadClassifier classifier = new BallLoadClassifier(indexer, battery);

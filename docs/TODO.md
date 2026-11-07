@@ -5,6 +5,32 @@ would otherwise get lost in commit messages.
 
 ---
 
+## ⚠️ Before merging a branch into `main`
+
+### `mentor/shooting-sequence` conflicts with the Deflector on `main` (found 2026-11-07)
+**Don't merge `mentor/shooting-sequence` into `main` as-is.**
+
+- That branch (pushed 2026-11-06 from the shared account, owner unknown) adds
+  `ShootingSequence.java`, `PivotFinder.java`, and its **own**
+  `subsystems/Deflector.java`, at the same path as the Deflector that's on `main`.
+  Git can't combine them: a trial merge gives **CONFLICT (add/add)** on
+  `subsystems/Deflector.java`.
+- **The Deflector on `main` is the one to keep** (Shane, 2026-11-07). It's the
+  robot-tested one that DriveTeleOp, Select Auto and Deflector Zero depend on:
+  it counts turns, zeroes once per power-up (Deflector Zero), and steps through
+  `DeflectorLogic.POSITIONS`. It also won the 2026-11-08 competition build.
+- The other one works out its own direction sign and was written for Prematch
+  and ShootingSequence.
+- **To finish it:** rebase `mentor/shooting-sequence` onto `main`, delete its
+  `subsystems/Deflector.java`, and make `ShootingSequence` (and anything else on
+  that branch) use `main`'s Deflector. If it needs something `main`'s doesn't
+  do, add that to `main`'s class. Don't keep two classes for one mechanism;
+  that's how the direction sign ends up different in each copy.
+- **Done when:** that branch merges into `main` with one `Deflector` class, and
+  ShootingSequence is robot-checked with it.
+
+---
+
 ## Needs the robot
 
 > **The robot was taken apart and rebuilt as of 2026-10-31.** Work through
@@ -12,6 +38,46 @@ would otherwise get lost in commit messages.
 > it covers the items below in dependency order, and it starts by re-measuring
 > the pivot band, which the whole repo's pivot safety depends on. Most measured
 > numbers in this file are now suspect.
+
+### 0. Odometry (Pinpoint) problems on both robots — found 2026-11-05
+**Why:** auto can only be as accurate as the odometry. Pedro follows where the
+robot *thinks* it is.
+
+**6494: phantom sideways drift.**
+- Tuning > Tests > Line drifts the robot ~6" LEFT over 6 round trips.
+- Localization Test, pushing it straight forward/back 24" by hand along a
+  tile seam: **y read -4.3 after ~6 round trips** (should stay ~0). The robot
+  thinks it slides right, so Pedro steers left.
+- Same drift with the old (2025) and new (measured) tuning numbers, so it's
+  NOT the tuning.
+- It accumulates instead of cancelling on the way back, so it's direction-
+  dependent: suspect the **strafe pod**. Check, robot lifted: rollers on the
+  pod wheel spin freely both ways (push the wheel along its axle); spring
+  presses it down firmly and flat; mount tight and square to the forward pod;
+  compare to the forward pod, which works. Also note heading after the push
+  test (if heading drifts > ~0.03 per round trip, it's heading, not the pod).
+- **Done when:** push test keeps y within ~0.5" over 6 round trips, and Line
+  stops drifting.
+
+**5618: RESOLVED 2026-11-06.** Localization Test passed (forward 24 -> x 24,
+right 24 -> y -24, one turn -> total heading 6.3, x/y back near 0), and Stage 2
+(velocities + zero-power accel) is done on a fresh battery; values are in
+`Constants` (28c5f53). The notes below are kept for history.
+
+**5618: two open issues (as of 2026-11-05).**
+- "x didn't move more than an inch" in Localization Test. If that was the
+  SIDEWAYS push, the strafe pod isn't counting (pod not touching, cable, or
+  dead pod). Re-check: push sideways 24", x should change by ~24.
+- Total heading read **+6.6 per full turn** (should be 6.28; 6494 read 6.3).
+  Redo carefully against a tile seam. If it's really 6.6, check the Pinpoint
+  is mounted flat and solid; there's a heading-scale setting to correct it.
+- Don't run autos or Pedro tuners on 5618 until both are resolved.
+
+**Already done:** both robots' forward pods are REVERSED (fixed in code);
+6494 velocities + zero-power acceleration measured on a fresh battery; Tuning
+start pose fixed to (0, 0, 0). Still to do: weigh both robots (`mass`), PID
+tuning if routes need more precision (not done on either robot), and maybe
+voltage compensation (off for now, so run auto on a fresh battery).
 
 ### 1. Pull the robot config XML into the repo
 **Blocked on:** building the config once on the Driver Station.
@@ -214,12 +280,26 @@ balls were not varied.
 
 ## Confirmed on the robot 2026-10-29
 
-- Collector and indexer directions are both correct as set in `RobotHardware`
+- Collector and indexer directions: what was checked here was **collector FORWARD,
+  indexer FORWARD** (Collection System Test runs the motors raw). It was first
+  written down as "correct as set in `RobotHardware`", which said collector
+  REVERSE -- wrong, corrected 2026-11-05 (`RobotHardware.applyCollectionDirections`).
+  Original note:
   (`collector` REVERSE, `indexer` FORWARD). The indexer direction was a guess
   until now
 - Collector RPM reads sane, so the 20:1 ratio constant is right
 - Still open: a MECHANICAL problem in the collection path, not a code problem
 - Not captured yet: the `Indexer Amps` jam number any future unjam logic needs
+
+### 4. Bring up the non-blocking Shooter
+**Why:** `subsystems/Shooter` (+ `shooting/ShooterLogic`) replaces the
+`sleep()`-based `ShootAprilTag.shoot()` so TeleOp and auto keep running while it
+fires. Its logic is laptop-tested; nothing about the real mechanism is.
+
+Run **Shooter Test** and follow the four checks in its header: wheels agree,
+READY comes on, one shot launches (tune `FEED_SEC`), a 3-volley goes 3 times the
+same distance. It also settles the PULSE vs CONTINUOUS feed question below.
+Needs item 1's indexer direction confirmed first.
 
 ---
 

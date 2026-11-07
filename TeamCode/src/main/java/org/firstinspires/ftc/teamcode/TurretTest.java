@@ -20,11 +20,13 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *   4. Where does the magnet switch trip, and does homing find it?
  *
  * Controls (gamepad1):
- *   Triggers      - JOG: right = positive power, left = negative power
+ *   Triggers      - JOG: left = swing left (CCW, angle up), right = swing right
  *   Y             - toggle JOG / HOLD (closed loop)
  *   X             - start the homing routine
  *   B             - "the turret is at 0 right now" (zeroes the encoder reference)
- *   D-pad L/R     - HOLD mode: nudge the target angle by NUDGE_DEG
+ *   D-pad L/R     - HOLD mode: nudge the target NUDGE_DEG left (CCW) / right (CW)
+ *   Bumpers L/R   - HOLD mode: fine nudge, FINE_NUDGE_DEG left / right
+ *   After homing succeeds the turret is in HOLD at 0; press Y to jog again.
  *   A             - HOLD mode: send the target to 0 (straight ahead)
  *
  * Tune every Turret constant live at panels.bylazar.com while this runs.
@@ -35,10 +37,13 @@ public class TurretTest extends LinearOpMode {
 
     public static double JOG_SCALE = 0.35;   // trigger 1.0 -> this much power
     public static double NUDGE_DEG = 10.0;
+    // = Turret.TOLERANCE_DEG: a smaller step can sit inside the "close enough" band
+    // and not move the turret at all.
+    public static double FINE_NUDGE_DEG = 2.0;
 
     private final Turret turret = new Turret();
 
-    private boolean yPrev, xPrev, bPrev, aPrev, dpadLeftPrev, dpadRightPrev;
+    private boolean yPrev, xPrev, bPrev, aPrev, dpadLeftPrev, dpadRightPrev, lbPrev, rbPrev;
 
     private TelemetryManager telemetryM;
 
@@ -53,10 +58,12 @@ public class TurretTest extends LinearOpMode {
         PanelsConfigurables.INSTANCE.refreshClass(turret);
 
         telemetry.addLine("TURRET TEST");
-        telemetry.addLine("Triggers = jog | Y = jog/hold | X = home | B = call this 0");
+        telemetry.addLine("Triggers = jog (L = left, R = right) | Y = jog/hold | D-pad 10, bumpers 2 deg | X = home | B = call this 0");
         telemetry.addLine("Gear ratio (servo revs per turret rev): " + Turret.gearRatio());
         telemetry.addLine("");
-        telemetry.addLine("NOT HOMED on start: soft limits are OFF. Jog gently.");
+        telemetry.addLine(turret.wasHomingKept()
+                ? "HOMED from an earlier op mode (HOLD). X re-homes; Y to jog."
+                : "NOT HOMED on start: soft limits are OFF. Jog gently.");
         telemetry.update();
 
         waitForStart();
@@ -68,6 +75,8 @@ public class TurretTest extends LinearOpMode {
             boolean a = gamepad1.a;
             boolean dpadLeft = gamepad1.dpad_left;
             boolean dpadRight = gamepad1.dpad_right;
+            boolean lb = gamepad1.left_bumper;
+            boolean rb = gamepad1.right_bumper;
 
             if (y && !yPrev) {
                 turret.setControlMode(turret.getControlMode() == Turret.ControlMode.JOG
@@ -86,10 +95,16 @@ public class TurretTest extends LinearOpMode {
                 turret.setTargetAngle(0.0);
             }
             if (dpadRight && !dpadRightPrev) {
-                turret.setTargetAngle(turret.getTargetAngle() + NUDGE_DEG);
+                turret.setTargetAngle(turret.getTargetAngle() - NUDGE_DEG);
             }
             if (dpadLeft && !dpadLeftPrev) {
-                turret.setTargetAngle(turret.getTargetAngle() - NUDGE_DEG);
+                turret.setTargetAngle(turret.getTargetAngle() + NUDGE_DEG);
+            }
+            if (rb && !rbPrev) {
+                turret.setTargetAngle(turret.getTargetAngle() - FINE_NUDGE_DEG);
+            }
+            if (lb && !lbPrev) {
+                turret.setTargetAngle(turret.getTargetAngle() + FINE_NUDGE_DEG);
             }
 
             yPrev = y;
@@ -98,10 +113,14 @@ public class TurretTest extends LinearOpMode {
             aPrev = a;
             dpadLeftPrev = dpadLeft;
             dpadRightPrev = dpadRight;
+            lbPrev = lb;
+            rbPrev = rb;
 
             // Raw power from the triggers. Deliberately NOT deadband-compensated,
             // so you can feel exactly where the servo starts to move.
-            double jog = (gamepad1.right_trigger - gamepad1.left_trigger) * JOG_SCALE;
+            // Left = swing left (CCW from above, angle up); right = swing right.
+            // Matches the D-pad below. Shane, 6494, 2026-11-06.
+            double jog = (gamepad1.left_trigger - gamepad1.right_trigger) * JOG_SCALE;
             turret.setRawPower(jog);
 
             turret.update();
