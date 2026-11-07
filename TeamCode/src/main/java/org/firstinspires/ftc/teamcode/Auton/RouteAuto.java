@@ -67,7 +67,7 @@ public abstract class RouteAuto extends OpMode {
     public static int LAUNCH_SHOTS = 4;          // the 4 preloads (Routes.gardenWallLaunch)
     public static double AIM_WAIT_SEC = 2.0;
     /** Seconds of firing (collector + indexer + flywheels), counted from when firing starts. */
-    public static double LAUNCH_MAX_SEC = 8.0;
+    public static double LAUNCH_MAX_SEC = 12.0;   // 8 s was too short (Shane, 2026-11-06)
     /**
      * true = always fire the full LAUNCH_MAX_SEC, ignoring the shot count and
      * "no ball" (Shane, 2026-11-06: certain to empty the robot; dip counting
@@ -106,6 +106,11 @@ public abstract class RouteAuto extends OpMode {
     private boolean launching = false;
     private boolean launchFiring = false;   // aim wait over, shots going
     private double fireStartSec = 0;         // launchTimer time when firing started
+
+    // End of route: turret to the magnet, then off until TeleOp (see stowTurret).
+    public static double STOW_MAX_SEC = 3.0;
+    private Timer stowTimer = null;
+    private boolean turretStowed = false;
     private int shotsAtLaunchStart = 0;
     private String launchNote = "";
 
@@ -293,6 +298,30 @@ public abstract class RouteAuto extends OpMode {
         return false;
     }
 
+    /**
+     * Route done: stop aiming, swing the turret to the magnet (HOME_SWITCH_ANGLE,
+     * this robot's), then cut its power and leave it there until TeleOp. Aimed at
+     * the hive from the park it hangs over the back of the arena (Shane,
+     * 2026-11-06). Gives up after STOW_MAX_SEC rather than chase forever.
+     */
+    private void stowTurret() {
+        if (turretStowed) return;   // power already cut; leave it alone
+        if (stowTimer == null) {
+            stowTimer = new Timer();
+            if (turret.isHomed()) {
+                turret.setControlMode(Turret.ControlMode.HOLD);
+                turret.setTargetAngle(Turret.HOME_SWITCH_ANGLE);
+            }
+        }
+        if (!turret.isHomed() || turret.isOnTarget()
+                || stowTimer.getElapsedTimeSeconds() > STOW_MAX_SEC) {
+            turret.stop();
+            turretStowed = true;
+            return;
+        }
+        turret.update();
+    }
+
     private boolean hasLaunchAfter(int s) {
         for (int i = s + 1; i < route.steps.size(); i++) {
             if (route.steps.get(i).action == Route.Action.LAUNCH) return true;
@@ -394,8 +423,12 @@ public abstract class RouteAuto extends OpMode {
             aimCell = side;
             aim.setTargetTagIds(aimCell.tagIds);
         }
-        aim.update(camera.getDetections(), turret, turret.isHomed());
-        turret.update();
+        if (finishedSeconds < 0) {
+            aim.update(camera.getDetections(), turret, turret.isHomed());
+            turret.update();
+        } else {
+            stowTurret();
+        }
 
         controls.collectIn = collectorOn;
         // Launch = collector + indexer + flywheels, like RT in TeleOp: the

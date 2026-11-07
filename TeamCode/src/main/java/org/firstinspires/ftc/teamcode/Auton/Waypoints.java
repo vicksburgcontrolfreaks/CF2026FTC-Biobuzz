@@ -99,7 +99,8 @@ public final class Waypoints {
     // PARK_WALL_GAP inches off the wall to get both.
 
     public static final double PARK_OVERLAP  = 8; // inches of robot inside the zone
-    public static final double PARK_WALL_GAP = 2; // inches between robot and wall
+    // 6, was 2: too close to the wall for comfort on the first run (Shane, 2026-11-06).
+    public static final double PARK_WALL_GAP = 6; // inches between robot and wall
 
     private static final double PARK_X = HALF_LENGTH + PARK_WALL_GAP;
 
@@ -137,14 +138,15 @@ public final class Waypoints {
     public static final Pose GARDEN_EDGE_START = new Pose(
             FieldConstants.RED_GARDEN.maxX + HALF_LENGTH, ON_GARDEN_WALL_Y, FACING_BLUE);
 
-    // 1 ft forward and 1 ft left (toward the hive) of the start, turned to face
+    // 18 in. forward and 18 in. left (toward the hive) of the start, turned to face
     // the hive center. The turret does the fine aim by camera from there.
-    public static final double SHOT_FORWARD = 12;
-    public static final double SHOT_LEFT = 12;
+    // Was 12 / 12; moved 6 in. further each way after the first run (Shane, 2026-11-06).
+    public static final double SHOT_FORWARD = 18;
+    public static final double SHOT_LEFT = 18;
     private static final double SHOT_X = GARDEN_EDGE_START.getX() + SHOT_FORWARD;
     private static final double SHOT_Y = GARDEN_EDGE_START.getY() + SHOT_LEFT;
     public static final Pose GARDEN_SHOT = new Pose(SHOT_X, SHOT_Y,
-            Math.atan2(FieldConstants.CENTER - SHOT_Y, FieldConstants.CENTER - SHOT_X));   // ~62 deg
+            Math.atan2(FieldConstants.CENTER - SHOT_Y, FieldConstants.CENTER - SHOT_X));   // ~65 deg
 
     // Back toward the garden and turned to face blue again, BEFORE heading up
     // past the hive. The robot must finish turning down here: mid-turn, an 18 in.
