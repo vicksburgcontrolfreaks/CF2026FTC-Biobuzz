@@ -75,8 +75,8 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  * pollen spacing. Harmless here, but do not build ball counting on this.
  */
 @Configurable
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
-@Disabled
+// Shown again 2026-11-09 for tuning on 6494. Was hidden for competition on
+// 2026-11-07; put @Disabled back above @TeleOp to hide it from the DS again.
 @TeleOp(name = "Load Sort Test", group = "Test")
 public class LoadSortTest extends LinearOpMode {
 

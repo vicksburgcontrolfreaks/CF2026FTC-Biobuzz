@@ -30,7 +30,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *   A                   = run the direction test (short nudge each way)
  *   B                   = stop the direction test early
  */
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+// Shown again 2026-11-09 for tuning on 6494. Was hidden for competition on
+// 2026-11-07; put @Disabled back above @TeleOp to hide it from the DS again.
 @Disabled
 @TeleOp(name = "Servo Feedback Test", group = "Test")
 public class ServoFeedbackTest extends LinearOpMode {
