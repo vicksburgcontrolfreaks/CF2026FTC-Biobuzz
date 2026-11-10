@@ -45,12 +45,12 @@ import java.util.List;
  * Still protected (parts, not shooting behavior): the pivot is clipped to its
  * measured safe band (ShooterPivot), and the deflector keeps its soft limits.
  *
- * THE DEFLECTOR STOWS ITSELF IN INIT (2026-11-10). Press INIT and it homes if
- * needed -- down to the hard stop, then up to Deflector.STOW_ANGLE_DEG, the
- * 18 in. pre-match park -- so the stow can be measured without pressing Start.
- * Already zeroed, it just goes there rather than re-homing, because re-homing
- * every INIT means pushing into the stop all session. LB and RB jump between
- * the stow and the shot.
+ * THE DEFLECTOR HOMES ITSELF IN INIT (2026-11-10). Press INIT and it drives down
+ * to the hard stop and parks there, which on 6494 is flat -- 0 degrees, and the
+ * zero reference at the same time. Already zeroed, it just goes to
+ * Deflector.STOW_ANGLE_DEG rather than re-homing, because re-homing every INIT
+ * means pushing into the stop all session. LB and RB jump between the park and
+ * the shot.
  *
  * That INIT movement is fine in a bench tuner and WRONG in a match op mode:
  * DriveTeleOp homes at Start precisely because G403 forbids moving during the
@@ -67,7 +67,7 @@ import java.util.List;
  *   A (hold)       fine steps while held
  *   Y              reset the picked knob to its starting value
  *   B              clear the shot log
- *   LB             deflector to the STOW angle (18 in. pre-match park)
+ *   LB             deflector to the park angle (STOW_ANGLE_DEG, 0 = flat)
  *   RB             deflector to the SHOOTING angle
  *
  * GAMEPAD 2 (operator) -- same buttons as DriveTeleOp, but direct, no gating:
@@ -245,9 +245,9 @@ public class PollenShotTune extends OpMode {
             telemetry.addLine(">>> Deflector NOT zeroed and homing did not take.");
             telemetry.addLine("    Run Deflector Zero, or it won't move.");
         } else {
-            telemetry.addData("Deflector", "now %.1f deg, stowing to %.0f -> %.0f at Start",
+            telemetry.addData("Deflector", "now %.1f deg, parking at %.0f -> %.0f at Start",
                     deflector.getAngle(), Deflector.STOW_ANGLE_DEG, START_DEFLECTOR_DEG);
-            telemetry.addLine("LB = stow, RB = shot. Measure the 18 in. at the stow angle.");
+            telemetry.addLine("LB = park (flat), RB = shot. CHECK the robot fits 18 in. here.");
         }
         if (!turret.isHomed() && Turret.isMeasured()) {
             telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");

@@ -68,10 +68,16 @@ public class Deflector {
      * position: the robot has to fit inside the 18 in. starting cube, so the
      * deflector cannot sit wherever it likes at the start of a match.
      *
-     * 45 deg above the stop measures about 18 in. on 6494 (Jade, 2026-11-10), so
-     * that is the pre-match park. 0 would mean parking on the stop itself.
+     * 0 = park ON the hard stop, which on 6494 is flat / parallel to the floor
+     * (Jade, 2026-11-10). So homing ends where it found its reference and the UP
+     * phase is a no-op.
+     *
+     * CHECK THIS AGAINST THE 18 in. CUBE. 45 was measured as about 18 in. earlier
+     * the same day, and flat is not obviously more compact than 45 -- a deflector
+     * lying flat can stick further OUT than one tilted up, even though it is
+     * lower. If the robot does not fit at 0, 45 is the number to come back to.
      */
-    public static double STOW_ANGLE_DEG = 45.0;
+    public static double STOW_ANGLE_DEG = 0.0;
 
     public static double HOME_POWER = 0.25;          // down toward the stop; slow on purpose
     public static double HOME_SETTLE_SEC = 0.4;      // ignore stall checks while it starts moving

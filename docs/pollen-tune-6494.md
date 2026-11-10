@@ -110,3 +110,15 @@ outside the 18 in. cube.
 
 **5618 is untouched and still zeroes at level**, where 45 and 80 would mean
 different physical angles. Do not copy these numbers across.
+
+### Park changed to flat / 0 (2026-11-10, later)
+
+`STOW_ANGLE_DEG` went 45 -> **0**. INIT now drives down to the hard stop and
+parks there, which on 6494 is flat, and that is the zero reference too -- so
+homing ends where it found its reference instead of travelling back up.
+
+**Still to confirm: does the robot fit the 18 in. cube at 0?** 45 was measured as
+about 18 in. earlier the same day, and flat is not obviously more compact than
+45 -- a deflector lying flat can stick further OUT than one tilted up, even
+though it sits lower. If it does not fit at 0, 45 is the number to go back to and
+it is one constant.
