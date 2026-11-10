@@ -149,6 +149,9 @@ public class DeflectorAutoHome extends LinearOpMode {
     private double lastWindowMovement = Double.NaN;
     private double seekStartAngle;
 
+    /** Where the climb cut power. Compared with the live angle to show drift. */
+    private double stoppedAtAngle = Double.NaN;
+
     /** Captured with X: how far true level is from where we called ZERO. */
     private double levelError = Double.NaN;
 
@@ -214,6 +217,7 @@ public class DeflectorAutoHome extends LinearOpMode {
         stallRefAngle = seekStartAngle;
         lastWindowMovement = Double.NaN;
         levelError = Double.NaN;
+        stoppedAtAngle = Double.NaN;
         phase = Phase.SEEKING_HOME;
         note = "driving down to HOME";
         phaseTimer.reset();
@@ -269,8 +273,9 @@ public class DeflectorAutoHome extends LinearOpMode {
 
         if (remaining <= 0) {
             deflector.jog(0);   // Deflector.jog(0) holds where it stopped
+            stoppedAtAngle = angle;
             phase = Phase.READY;
-            note = String.format("at %.2f deg -- ZERO reached", angle);
+            note = "ZERO reached";   // no number here: the readout below is live
             return;
         }
         if (phaseTimer.seconds() > RISE_TIMEOUT_SEC) {
@@ -302,7 +307,9 @@ public class DeflectorAutoHome extends LinearOpMode {
 
         double angle = deflector.getAngle();
         telemetry.addData("Angle", "%.2f deg  %s", angle,
-                phase == Phase.READY ? "from ZERO (level)" : "from where the run started");
+                phase == Phase.IDLE || phase == Phase.SEEKING_HOME
+                        ? "from where the run started"
+                        : "from ZERO (level)");
         if (phase == Phase.READY) {
             telemetry.addData("HOME is at", "%.1f deg", -ZERO_ABOVE_HOME_DEG);
         }
@@ -345,8 +352,19 @@ public class DeflectorAutoHome extends LinearOpMode {
 
         if (phase == Phase.READY) {
             telemetry.addLine();
-            telemetry.addLine("Done. It should be sitting at ZERO (level) now.");
-            telemetry.addLine("Only if it looks off: jog to true level and press X.");
+            // Two different numbers, which was confusing before: where the climb
+            // CUT POWER, and where it is NOW. The gap is what the mechanism did
+            // afterwards -- coasting up or sagging back down -- and the hold loop
+            // cannot correct it, because at a few tenths of error it commands
+            // about MIN_POWER and that will not lift this deflector. So this gap
+            // IS the accuracy of the whole routine right now.
+            telemetry.addData("Stopped at", "%.2f deg  (when power was cut)", stoppedAtAngle);
+            telemetry.addData("Resting at", "%.2f deg  (live)", angle);
+            telemetry.addData("Drifted", "%+.2f deg after power off%s", angle - stoppedAtAngle,
+                    Math.abs(angle - stoppedAtAngle) > DeflectorLogic.TOLERANCE_DEG
+                            ? "   -- beyond tolerance, the hold loop is too weak to pull it back"
+                            : "");
+            telemetry.addLine("Only if level looks wrong: jog to true level and press X.");
             if (!Double.isNaN(levelError)) {
                 telemetry.addLine("==== ZERO_ABOVE_HOME_DEG ====");
                 telemetry.addData("Corrected", "%.1f   (is %.1f, off by %+.1f)",
