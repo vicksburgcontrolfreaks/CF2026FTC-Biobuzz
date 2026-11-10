@@ -48,8 +48,12 @@ public class CollectionSystem {
     // Indexer speeds, closed loop, in indexer RPM (after the 20:1). 50 RPM is
     // what Collection System Test, Load Recovery and the ball classifier use;
     // full power (~300 RPM) was far too fast (seen on 6494, 2026-11-05).
-    // 25 on 6494, 2026-11-06: at 75 the second ball followed the first with no
-    // visible pause. If you change it, scale ShooterLogic.NO_BALL_SEC to match.
+    // 6494 history: 75 was tried 2026-11-06 and dropped to 25 ("the second ball
+    // followed the first with no visible pause"), then found again as the
+    // goldilocks feed on 2026-11-09 with the pivot and deflector tuned. Back at
+    // 75 -- see loadRobotFeedNumbers(). This bare value is only the fallback for
+    // an unknown robot. If you change a feed rate, scale
+    // ShooterLogic.NO_BALL_SEC with it and re-measure NectarGuard.TRIP_AMPS.
     public static double FEED_RPM = 25.0;   // forward = up into the flywheels
     public static double UNJAM_RPM = 50.0;  // run in reverse by unjam()
 
@@ -78,7 +82,14 @@ public class CollectionSystem {
      *     6494 data, 10/30: baseline 0.79 + nectar rise 0.72). NOT measured on
      *     5618 -- run Indexer Load Test there to confirm.
      *   - ShooterLogic.NO_BALL_SEC 3.0 = same indexer travel as 6 s at 25.
-     * 6494 stays at its 11-06 calibration: 25 RPM, 2.72 A, 6 s.
+     *
+     * 6494 at 75 RPM (Jade, 2026-11-09, Pollen Shot Tune, shooting real pollen):
+     *   - ShooterLogic.NO_BALL_SEC 2.0 = same indexer travel as 6 s at 25.
+     *   - NectarGuard.TRIP_AMPS is STILL 2.72, the 25 RPM calibration, so nectar
+     *     detection is uncalibrated until Indexer Load Test is re-run at 75.
+     *     Low risk while 6494 is pollen-only, wrong as soon as it is not.
+     *   - Reverses the 11-06 call that dropped 75 to 25. Both runs are real; the
+     *     11-09 one is newer and the only one with the pivot and deflector tuned.
      */
     private static void loadRobotFeedNumbers() {
         try {
@@ -89,9 +100,21 @@ public class CollectionSystem {
                     org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 3.0;
                     break;
                 case R6494:
-                    FEED_RPM = 25.0;
+                    // 25 -> 75: Pollen Shot Tune, Jade, 2026-11-09, shooting real pollen.
+                    // NOTE this reverses the 11-06 call, which dropped 75 to 25 because
+                    // "the second ball followed the first with no visible pause". Both
+                    // runs are real; 11-09 is the newer one and the only one that shot
+                    // at the tuned pivot and deflector. If balls run together again,
+                    // that earlier finding is why.
+                    FEED_RPM = 75.0;
+                    // Scaled with the feed rate: same indexer travel as 6.0 s at 25 RPM.
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 2.0;
+                    // STILL THE 25 RPM CALIBRATION, so the nectar guard is now
+                    // uncalibrated: the current signature of a ball changes with feed
+                    // speed. Re-measure with Indexer Load Test before trusting nectar
+                    // detection. Low risk for now -- 6494 is pollen-only for the first
+                    // competition -- but it will mis-trip on nectar until re-measured.
                     org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = 2.72;
-                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 6.0;
                     break;
             }
         } catch (IllegalStateException e) {

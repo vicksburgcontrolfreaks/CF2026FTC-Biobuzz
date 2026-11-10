@@ -257,7 +257,10 @@ public class ShooterPivot {
                 MIN_SAFE_POSITION = 0.27;
                 MAX_SAFE_POSITION = 0.744;
                 OPEN_POSITION = 0.272;
-                POLLEN_POSITION = 0.67;
+                // Pollen 0.67 -> 0.69: Pollen Shot Tune, Jade, 2026-11-09, shooting
+                // real pollen on 6494. Inside the safe band. Session notes in
+                // docs/pollen-tune-6494.md.
+                POLLEN_POSITION = 0.69;
                 NECTAR_POSITION = 0.287;
                 break;
         }
