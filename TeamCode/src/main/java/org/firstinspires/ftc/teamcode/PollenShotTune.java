@@ -62,13 +62,17 @@ import java.util.List;
  * GAMEPAD 1 (tuner + driving)
  *   Sticks         drive, field-centric, same as DriveTeleOp
  *   X              heading reset ("robot faces away from me")
- *   D-pad Up/Down  pick the knob to tune (">" marks it)
- *   D-pad R / L    step it up / down
+ *   D-pad Up/Down  DEFLECTOR angle up / down (works whatever knob is picked)
+ *   Stick clicks   pick the knob to tune (">" marks it): L = previous, R = next
+ *   D-pad R / L    step the picked knob up / down
  *   A (hold)       fine steps while held
  *   Y              reset the picked knob to its starting value
  *   B              clear the shot log
  *   LB             deflector to the park angle (STOW_ANGLE_DEG, 0 = flat)
  *   RB             deflector to the SHOOTING angle
+ *
+ * START does NOT move the deflector to the shot. It stays parked at
+ * STOW_ANGLE_DEG and you walk it up with D-pad Up.
  *
  * GAMEPAD 2 (operator) -- same buttons as DriveTeleOp, but direct, no gating:
  *   B  (hold)      flywheel on + indexer forward
@@ -155,6 +159,7 @@ public class PollenShotTune extends OpMode {
     private boolean turretParked = false;
     private boolean turretManual = false;
     private boolean deflectorStickArmed = true;
+    private boolean lastLsb, lastRsb;
     private final ElapsedTime loopTimer = new ElapsedTime();
     private final ElapsedTime clock = new ElapsedTime();
 
@@ -245,8 +250,9 @@ public class PollenShotTune extends OpMode {
             telemetry.addLine(">>> Deflector NOT zeroed and homing did not take.");
             telemetry.addLine("    Run Deflector Zero, or it won't move.");
         } else {
-            telemetry.addData("Deflector", "now %.1f deg, parking at %.0f -> %.0f at Start",
-                    deflector.getAngle(), Deflector.STOW_ANGLE_DEG, START_DEFLECTOR_DEG);
+            telemetry.addData("Deflector", "now %.1f deg, parking at %.0f",
+                    deflector.getAngle(), Deflector.STOW_ANGLE_DEG);
+            telemetry.addLine("Stays parked at Start -- D-pad Up walks it to the shot.");
             telemetry.addLine("LB = park (flat), RB = shot. CHECK the robot fits 18 in. here.");
         }
         if (!turret.isHomed() && Turret.isMeasured()) {
@@ -264,7 +270,10 @@ public class PollenShotTune extends OpMode {
         aim = new TurretAim(targetCell.tagIds);
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
         pivot.setPosition(value[Knob.PIVOT.ordinal()]);           // servos move at Start, not INIT
-        if (deflector.isZeroed()) deflector.goTo(value[Knob.DEFLECTOR.ordinal()]);
+        // Do NOT fling it to the shot at Start. Leave it parked and let the dpad
+        // walk it up. The knob is re-seated to where the deflector actually is, so
+        // the first dpad press steps from there instead of jumping.
+        if (deflector.isZeroed()) set(Knob.DEFLECTOR, deflector.getAngle());
         loopTimer.reset();
         clock.reset();
     }
@@ -305,8 +314,22 @@ public class PollenShotTune extends OpMode {
 
     private void tune() {
         int n = Knob.values().length;
-        if (gamepad1.dpadUpWasPressed()) selected = (selected + n - 1) % n;
-        if (gamepad1.dpadDownWasPressed()) selected = (selected + 1) % n;
+
+        // Knob picking moved off the dpad onto the stick clicks, because dpad
+        // up/down now drives the DEFLECTOR directly -- it is the knob that gets
+        // touched between shots, and hunting for it through a selector first was
+        // the slow part.
+        boolean lsb = gamepad1.left_stick_button, rsb = gamepad1.right_stick_button;
+        if (lsb && !lastLsb) selected = (selected + n - 1) % n;
+        if (rsb && !lastRsb) selected = (selected + 1) % n;
+        lastLsb = lsb;
+        lastRsb = rsb;
+
+        // Deflector on dpad up/down, whatever knob is picked. A still means fine.
+        Knob d = Knob.DEFLECTOR;
+        double dStep = gamepad1.a ? d.fine : d.step;
+        if (gamepad1.dpadUpWasPressed()) set(d, value[d.ordinal()] + dStep);
+        if (gamepad1.dpadDownWasPressed()) set(d, value[d.ordinal()] - dStep);
         if (gamepad1.bWasPressed()) clearLog();
 
         // Jump the deflector between the only two angles that matter, so the
