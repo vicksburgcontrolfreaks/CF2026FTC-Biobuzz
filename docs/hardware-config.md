@@ -32,6 +32,7 @@ character for character.
 |---|---|---|---|
 | 0 | `turret` | **Continuous Rotation** Servo | CR, not standard — see `docs/turret-bringup.md` |
 | 1 | `blinkin` | **REV Blinkin LED Driver** | not type "Servo" -- `RevBlinkinLedDriver` can only be fetched from a device configured as a Blinkin. Confirmed on the robot 2026-11-06 |
+| 2 | `deflector` | **Continuous Rotation** Servo | Axon MAX MK2, sets the shot arc. Confirmed on 6494 2026-11-10. Its feedback wire is `deflectorPos` on analog 1 -- two separate config entries, because a servo cannot live on an analog port |
 
 ### Digital
 | Port | Name | Notes |
@@ -41,7 +42,7 @@ character for character.
 ### Analog
 | Port | Name | Notes |
 |---|---|---|
-| 1 | `deflectorPos` | **6494** (Shane, 2026-11-06): feedback wire of the `deflector` CR servo (Axon, 0-3.3 V per turn, wraps). Was `pivotPos`. Read by Servo Feedback Test. 5618's notes (11-05) had it on EH analog 1 instead -- check per robot |
+| 1 | `deflectorPos` | **6494** (Shane, 2026-11-06): feedback wire of the `deflector` CR servo (Axon, 0-3.3 V per turn, wraps). Was `pivotPos`. Read by Servo Feedback Test. Re-confirmed on 6494 2026-11-10 (Jade): the analog pair is labelled 0-1, device lands on 1. 5618 notes (11-05) said EH analog 1 -- still unchecked on 5618 |
 
 ### I2C
 | Bus | Name | Notes |
