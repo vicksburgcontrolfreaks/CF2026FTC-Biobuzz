@@ -28,8 +28,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  *
  * ZERO IS SET BY ARITHMETIC; THE CLIMB IS SEPARATE
  * On HOME the op mode says "this position is -11.9", so level becomes 0 with
- * nothing having to move. THEN it climbs to RISE_TO_DEG (0, level) and stops
- * there. Two separate things: the reference cannot fail, and the climb is a
+ * nothing having to move. THEN it climbs to RISE_TO_DEG -- the stow position,
+ * 35 deg above ZERO -- and stops there, ready for auton or TeleOp. Two separate things: the reference cannot fail, and the climb is a
  * plain move that either arrives or says it did not.
  *
  * The first version drove UP to level and zeroed there, and it failed every
@@ -121,8 +121,17 @@ public class DeflectorAutoHome extends LinearOpMode {
     // stalls short and at a different place every time. These are plain powers
     // that do move it, with a slow final approach so it does not coast past.
 
-    /** Where to finish. 0 = level. */
-    public static double RISE_TO_DEG = 0.0;
+    /**
+     * Where the run finishes: the STOW position, in degrees above ZERO.
+     *
+     * 35 (Shane, 2026-11-10) -- close to the shooting angles so the first move
+     * in a match is short, while still inside the 18 in. starting cube. The
+     * full park is therefore HOME + ZERO_ABOVE_HOME_DEG + 35.
+     *
+     * This is the number that becomes the subsystem.s stow angle once auton and
+     * TeleOp pick the routine up.
+     */
+    public static double RISE_TO_DEG = 35.0;
 
     /** Fast part of the climb. */
     public static double RISE_POWER = 0.25;
@@ -133,7 +142,12 @@ public class DeflectorAutoHome extends LinearOpMode {
     /** Slow part. Must still be enough to actually lift it. */
     public static double RISE_SLOW_POWER = 0.12;
 
-    public static double RISE_TIMEOUT_SEC = 8.0;
+    // 8.0 was sized for the old climb to level, which was 11.9 deg -- about ONE
+    // servo turn. Climbing to 35 is 46.9 deg from HOME, 1400 servo deg, nearly
+    // FOUR turns, so it takes roughly four times as long and 8 s would have
+    // timed out mid-climb and cleared the zero. INIT can be held as long as
+    // anyone likes, so this errs long on purpose.
+    public static double RISE_TIMEOUT_SEC = 20.0;
 
     /** Hand-jog power at full stick. */
     public static double JOG_POWER = 0.3;
@@ -275,7 +289,7 @@ public class DeflectorAutoHome extends LinearOpMode {
             deflector.jog(0);   // Deflector.jog(0) holds where it stopped
             stoppedAtAngle = angle;
             phase = Phase.READY;
-            note = "ZERO reached";   // no number here: the readout below is live
+            note = "STOW reached";   // no number here: the readout below is live
             return;
         }
         if (phaseTimer.seconds() > RISE_TIMEOUT_SEC) {
@@ -324,11 +338,13 @@ public class DeflectorAutoHome extends LinearOpMode {
                 deflector.getMaxStepSeen() > 120 ? "   <-- NEAR THE 180 UNWRAP LIMIT"
                         : "   (unwrap safe under 180)");
 
-        // What the position loop would command right here, heading for level.
-        // Under about 0.06 it cannot lift the deflector, which is why upward
-        // goTo moves stall short. This is the measurement for raising MIN_POWER.
+        // What the position loop would command to hold the stow from here. Under
+        // about 0.06 it cannot lift the deflector, which is why it sags a few
+        // tenths after the climb and the loop cannot pull it back. This is the
+        // measurement for raising MIN_POWER.
         telemetry.addData("Loop authority", "%.3f power at %.2f deg of error",
-                Math.abs(DeflectorLogic.power(angle, 0)), Math.abs(angle));
+                Math.abs(DeflectorLogic.power(angle, RISE_TO_DEG)),
+                Math.abs(RISE_TO_DEG - angle));
 
         if (phase == Phase.SEEKING_HOME) {
             telemetry.addLine();
@@ -364,7 +380,8 @@ public class DeflectorAutoHome extends LinearOpMode {
                     Math.abs(angle - stoppedAtAngle) > DeflectorLogic.TOLERANCE_DEG
                             ? "   -- beyond tolerance, the hold loop is too weak to pull it back"
                             : "");
-            telemetry.addLine("Only if level looks wrong: jog to true level and press X.");
+            telemetry.addLine("X still re-checks ZERO_ABOVE_HOME_DEG, but only from LEVEL --");
+            telemetry.addLine("jog down to level first, or the number will be meaningless.");
             if (!Double.isNaN(levelError)) {
                 telemetry.addLine("==== ZERO_ABOVE_HOME_DEG ====");
                 telemetry.addData("Corrected", "%.1f   (is %.1f, off by %+.1f)",
