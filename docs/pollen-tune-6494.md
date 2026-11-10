@@ -10,7 +10,7 @@ code, because a session ran out of time and these were only in someone's head.
 | Knob | Started at | Goldilocks zone | Maps to |
 |---|---|---|---|
 | Pivot (flywheel gap) | 0.67 | **0.69** | `ShooterPivot.POLLEN_POSITION` |
-| Deflector angle | 67.5° | **69.5°** | `DeflectorLogic.POSITIONS` |
+| Deflector angle | 67.5° | **69.5°** — see caveat | `DeflectorLogic.POSITIONS` |
 | Indexer feed | 25 RPM | **75 RPM** | `CollectionSystem.FEED_RPM` (6494's case) |
 | Flywheel RPM | — | **not tested** | `Shooter` / `ShotTable` |
 
@@ -51,3 +51,34 @@ A per-robot deflector table may be what this actually wants.
 Three times the old 25, so worth a second confirmation run before trusting it in
 a match: a feed that fast changes how the flywheels dip per shot, and Pollen
 Shot Tune's shot log measures exactly that.
+
+## The deflector number needs re-measuring after auto-homing (Jade, 2026-11-09)
+
+**69.5° is measured against whatever zero was set that day**, by hand. The
+physical angle that worked is real; the *number* is only as good as its
+reference. Auto-homing will establish a different, repeatable zero, and the same
+physical angle will then read as a different number.
+
+So do not paste 69.5 into anything. Treat it as "about 2 degrees above the 67.5
+preset" -- it says where to look, not what to set.
+
+**Auto-homing is already written** (commit 47911bd, on this branch): every auto
+homes the deflector in INIT -- down to the hard stop, up to level, power off --
+and TeleOp homes at Start if it is not already zeroed. It stall-detects the stop
+and sets zero from a per-robot constant.
+
+**But it is inert**, because that constant is not measured:
+
+    Deflector.LEVEL_ABOVE_STOP_DEG = NaN   // both robots
+
+While it is NaN, homing refuses and nothing changes. So the order is:
+
+1. Measure `LEVEL_ABOVE_STOP_DEG` for 6494 -- how many degrees above the hard
+   stop is level. **Deflector Zero** shows the stop reading for exactly this.
+2. Auto-homing wakes up on its own, no other change needed.
+3. **Then** re-find the pollen deflector angle in Pollen Shot Tune. That number
+   is worth writing into code, because the zero behind it is now repeatable
+   across power cycles.
+
+The pivot (0.69) and indexer (75 RPM) figures are unaffected -- neither depends
+on the deflector's zero.
