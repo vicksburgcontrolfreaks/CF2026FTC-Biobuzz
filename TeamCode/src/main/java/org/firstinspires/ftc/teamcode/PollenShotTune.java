@@ -45,9 +45,16 @@ import java.util.List;
  * Still protected (parts, not shooting behavior): the pivot is clipped to its
  * measured safe band (ShooterPivot), and the deflector keeps its soft limits.
  *
- * BEFORE STARTING: the deflector must already be zeroed (level), e.g. by running
- * Deflector Zero or by INIT-ing an auto. If it isn't, it won't move and the
- * screen says so. The turret homes itself at Start if needed (start it roughly
+ * THE DEFLECTOR STOWS ITSELF IN INIT (2026-11-10). Press INIT and it homes if
+ * needed -- down to the hard stop, then up to Deflector.STOW_ANGLE_DEG, the
+ * 18 in. pre-match park -- so the stow can be measured without pressing Start.
+ * Already zeroed, it just goes there rather than re-homing, because re-homing
+ * every INIT means pushing into the stop all session. LB and RB jump between
+ * the stow and the shot.
+ *
+ * That INIT movement is fine in a bench tuner and WRONG in a match op mode:
+ * DriveTeleOp homes at Start precisely because G403 forbids moving during the
+ * auto-to-TeleOp INIT. Do not copy it. The turret homes itself at Start if needed (start it roughly
  * forward), same as DriveTeleOp.
  *
  * GAMEPAD 1 (tuner + driving)
@@ -195,13 +202,33 @@ public class PollenShotTune extends OpMode {
         start[Knob.PIVOT.ordinal()] = ShooterPivot.POLLEN_POSITION;
         start[Knob.DEFLECTOR.ordinal()] = START_DEFLECTOR_DEG;
         System.arraycopy(start, 0, value, 0, value.length);
+
+        // Stow the deflector during INIT, so the 18 in. pre-match position can be
+        // checked and measured without pressing Start.
+        //
+        // Not zeroed yet -> home, which already parks at STOW_ANGLE_DEG. Already
+        // zeroed -> just go there, because re-homing every INIT means pushing into
+        // the hard stop and ~10 s of travel on every run of a tuning session.
+        //
+        // MOVING IN INIT IS FINE *HERE* AND NOWHERE NEAR A MATCH. DriveTeleOp
+        // deliberately homes at Start instead, because during the auto-to-TeleOp
+        // transition G403 says INIT must not move anything. This is a bench tuner
+        // in the Tune group that never runs in a match -- do not copy the pattern
+        // into a match op mode.
+        if (deflector.isPresent()) {
+            if (!deflector.isZeroed()) {
+                deflector.startHoming();
+            } else {
+                deflector.goTo(Deflector.STOW_ANGLE_DEG);
+            }
+        }
     }
 
     @Override
     public void init_loop() {
         menu.update(gamepad1);
         camera.update();
-        deflector.update(false);   // keep counting turns; nothing moves in INIT
+        deflector.update(true);    // allowed to move in INIT: stowing to 45 (see init())
 
         telemetry.addLine("POLLEN SHOT TUNE -- pollen only, NO nectar guard");
         menu.show(telemetry);
@@ -209,11 +236,16 @@ public class PollenShotTune extends OpMode {
         telemetry.addData("Camera", camera.getNote());
         if (!deflector.isPresent()) {
             telemetry.addLine(">>> No deflector found -- arc can't be tuned.");
+        } else if (deflector.isHoming()) {
+            telemetry.addData("Deflector", "HOMING -- %s", deflector.getHomeNote());
+            telemetry.addLine("Finding the hard stop, then stowing. Give it a few seconds.");
         } else if (!deflector.isZeroed()) {
-            telemetry.addLine(">>> Deflector NOT zeroed. Run Deflector Zero first, or it won't move.");
+            telemetry.addLine(">>> Deflector NOT zeroed and homing did not take.");
+            telemetry.addLine("    Run Deflector Zero, or it won't move.");
         } else {
-            telemetry.addData("Deflector", "zeroed, now %.1f deg -> goes to %.0f at Start",
-                    deflector.getAngle(), START_DEFLECTOR_DEG);
+            telemetry.addData("Deflector", "now %.1f deg, stowing to %.0f -> %.0f at Start",
+                    deflector.getAngle(), Deflector.STOW_ANGLE_DEG, START_DEFLECTOR_DEG);
+            telemetry.addLine("LB = stow, RB = shot. Measure the 18 in. at the stow angle.");
         }
         if (!turret.isHomed() && Turret.isMeasured()) {
             telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
