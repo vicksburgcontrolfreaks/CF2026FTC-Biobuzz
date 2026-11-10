@@ -36,7 +36,12 @@ public final class DeflectorLogic {
      */
     public static double POWER_SIGN = 1.0;
 
-    /** The arc positions, low to high (Shane, 2026-11-06). */
+    /**
+     * The arc positions, low to high (Shane, 2026-11-06), measured with ZERO AT
+     * LEVEL. Still true on 5618. NOT true on 6494 since 2026-11-10, which zeroes
+     * at the hard stop -- there these are degrees above the stop, so every one is
+     * a shallower arc than its number says. Needs re-basing or making per robot.
+     */
     public static double[] POSITIONS = {0, 67.5, 70, 72.5, 75, 80, 90};
 
     // Soft limits: never push past these. Just outside the positions so 0 and
