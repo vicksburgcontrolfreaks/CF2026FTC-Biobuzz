@@ -9,56 +9,61 @@ import org.firstinspires.ftc.teamcode.shooting.DeflectorLogic;
 import org.firstinspires.ftc.teamcode.subsystems.Deflector;
 
 /**
- * Deflector Auto Home -- find HOME by itself, set ZERO from it, and measure how
- * far apart they really are. One job, nothing else, so it can be proved before
- * any of it gets wired into a match path.
+ * Deflector Auto Home -- find HOME by itself and set ZERO from it. One job,
+ * nothing else, so it can be proved before any of it gets wired into a match.
  *
  * TWO WORDS, AND THEY ARE NOT THE SAME PLACE
  *
  *   HOME  the hard stop at the bottom. Found by driving down until the angle
  *         stops changing. A physical fact, repeatable, needs no judgement.
- *   ZERO  parallel to the ground. This is the reference every angle in the code
- *         is measured from, so 70 means a 70 degree arc. It is
- *         ZERO_ABOVE_HOME_DEG above HOME -- measured at 11.9 on 6494, and being
- *         checked for repeatability.
+ *   ZERO  parallel to the ground. The reference every angle in the code is
+ *         measured from, so 70 means a 70 degree arc. It sits
+ *         ZERO_ABOVE_HOME_DEG above HOME -- 11.9 on 6494, confirmed to land
+ *         level consistently (Shane, 2026-11-10).
  *
  * Using HOME as the reference would be easier and wrong: the stop is not level,
  * so every angle would stop meaning an arc and none of the existing numbers
  * (DeflectorLogic.POSITIONS, RouteAuto.AUTO_ARC_DEG) would mean what they say.
- * So HOME is how we FIND the mechanism, and ZERO is what we MEASURE FROM.
+ * HOME is how we FIND the mechanism; ZERO is what we MEASURE FROM.
  *
- * THE FINE-TUNE LOOP, which is the point of this op mode
- *   1. A -- it seeks HOME, then rises ZERO_ABOVE_HOME_DEG and calls that ZERO.
- *   2. Look at the deflector. Is it actually parallel to the ground? Use a phone
- *      level, not your eye.
- *   3. If not, jog to true level and press X. It prints the corrected
- *      ZERO_ABOVE_HOME_DEG -- the current value plus however far off it was.
- *   4. Put that number in ZERO_ABOVE_HOME_DEG and run it again. Repeat until
- *      step 2 says yes, and the deflector zeroes itself correctly every time
- *      with nobody eyeballing anything.
+ * ZERO IS SET BY ARITHMETIC, NOT BY DRIVING TO IT
+ * On HOME the op mode says "this position is -11.9", and level becomes 0 with
+ * nothing having to move.
+ *
+ * The first version drove UP to level and zeroed there, and it failed every
+ * time, stopping around 11.2 instead of 11.9. The position loop commands
+ * kP * error floored at MIN_POWER = 0.05, and 5% will not lift this deflector
+ * through its ~30:1. So it stalled about 0.7 deg short -- which is OUTSIDE the
+ * 0.5 deg TOLERANCE_DEG, so it never reported arriving, the rise timed out, and
+ * the abort path cleared the zero. A reference that depends on a mechanism
+ * creeping uphill is the wrong design. Arithmetic cannot stall.
+ *
+ * THAT WEAKNESS IS STILL THERE FOR EVERY OTHER UPWARD MOVE, including auto's
+ * goTo(AUTO_ARC_DEG) -- expect it to land ~0.7 deg low and sit there. Fixing it
+ * means raising DeflectorLogic.MIN_POWER or adding gravity feedforward, which
+ * touches every deflector move on both robots, so it is a separate decision.
+ * The "Loop authority" readout below is the measurement for it.
  *
  * WHY THIS IS ITS OWN OP MODE
  * Auto-homing was switched on globally and added to Pollen Shot Tune in one
  * change (2026-11-10). When the zero came out wrong there was nothing to
- * isolate: Deflector Zero behaved differently, the tuner's zeroing behaved
- * differently, and every angle downstream was suspect. That is reverted.
+ * isolate: Deflector Zero behaved differently, the tuner behaved differently,
+ * and every angle downstream was suspect. That is reverted.
  *
  * IT TOUCHES NO SHARED STATE. It never calls Deflector.startHoming() and never
  * writes Deflector.LEVEL_ABOVE_STOP_DEG, which stays NaN on both robots -- so
- * autos and TeleOp keep refusing to auto-home exactly as they do today. The seek
- * lives in this file, in constants you can read. Running this op mode cannot
- * change how anything else behaves.
+ * autos and TeleOp keep refusing to auto-home exactly as they do today.
  *
  * IT PUSHES INTO HOME ON PURPOSE. That is what stall detection is. Low power, a
- * short window and a timeout keep it brief -- but watch the mechanism the first
- * few runs, and B stops everything.
+ * short window and a timeout keep it brief -- but watch it the first few runs,
+ * and B stops everything.
  *
  * A FAILED OR ABORTED RUN LEAVES NO ZERO, rather than one at wherever the seek
  * happened to start. A half-set zero inherited by the next op mode through the
  * statics is the failure that started all this.
  *
  * CONTROLS (gamepad1)
- *   A              run it: seek HOME, rise to ZERO
+ *   A              run it: seek HOME, set ZERO
  *   B              STOP. Aborts and clears the zero.
  *   Left stick Y   jog by hand, up is up. Any time, no limits.
  *   X              "this is true level" -> prints the corrected ZERO_ABOVE_HOME_DEG
@@ -74,19 +79,19 @@ public class DeflectorAutoHome extends LinearOpMode {
      * How far ZERO (parallel to the ground) sits above HOME (the hard stop), in
      * deflector degrees.
      *
-     * 11.9 measured on 6494 (Shane, 2026-11-10), replacing the 15 estimate. Being
-     * checked for repeatability before it goes anywhere near the subsystem --
-     * Deflector.LEVEL_ABOVE_STOP_DEG is still NaN on purpose.
+     * 11.9 on 6494 (Shane, 2026-11-10), confirmed to land level consistently.
+     * Deflector.LEVEL_ABOVE_STOP_DEG is still NaN on purpose: this moves there
+     * once auto-homing itself is trusted, not just the number.
      *
      * WATCH OUT: 11.9 deflector degrees is 355 servo degrees -- 0.987 of a FULL
-     * TURN, only 4.7 short of 360. Two consequences while testing:
+     * TURN, only 4.7 short of 360. Two consequences:
      *
      *   - the raw feedback at ZERO reads almost the same as at HOME, so voltage
      *     alone cannot tell them apart. Only the accumulated turn count can.
-     *   - a dropped turn costs 12.06 deflector degrees, which is almost exactly
-     *     the HOME-to-ZERO distance. So a lost turn makes ZERO look like HOME.
-     *     If a run ever comes out about 12 deg off, suspect the unwrap, not the
-     *     stall detection -- and check "Max step" below.
+     *   - a dropped turn costs 12.06 deflector degrees, almost exactly the
+     *     HOME-to-ZERO distance, so a lost turn makes ZERO look like HOME. A
+     *     result about 12 deg out is the unwrap, not the stall detection --
+     *     check "Max step" before suspecting anything else.
      */
     public static double ZERO_ABOVE_HOME_DEG = 11.9;
 
@@ -108,13 +113,10 @@ public class DeflectorAutoHome extends LinearOpMode {
     /** No HOME found by now = give up, and leave no zero behind. */
     public static double SEEK_TIMEOUT_SEC = 12.0;
 
-    /** HOME -> ZERO is only ~1.2 turns, so this is generous. */
-    public static double RISE_TIMEOUT_SEC = 6.0;
-
     /** Hand-jog power at full stick. */
     public static double JOG_POWER = 0.3;
 
-    private enum Phase { IDLE, SEEKING_HOME, RISING_TO_ZERO, READY, FAILED }
+    private enum Phase { IDLE, SEEKING_HOME, READY, FAILED }
 
     private Phase phase = Phase.IDLE;
     private String note = "press A to find HOME";
@@ -156,8 +158,7 @@ public class DeflectorAutoHome extends LinearOpMode {
             if (gamepad1.bWasPressed()) {
                 abort(deflector, "stopped by B");
             }
-            if (gamepad1.aWasPressed()
-                    && phase != Phase.SEEKING_HOME && phase != Phase.RISING_TO_ZERO) {
+            if (gamepad1.aWasPressed() && phase != Phase.SEEKING_HOME) {
                 startSeek(deflector);
             }
             if (gamepad1.xWasPressed() && phase == Phase.READY) {
@@ -167,12 +168,11 @@ public class DeflectorAutoHome extends LinearOpMode {
                 levelError = Double.NaN;
             }
 
-            switch (phase) {
-                case SEEKING_HOME:   seekHome(deflector); break;
-                case RISING_TO_ZERO: riseToZero(deflector); break;
-                default:
-                    double stick = -gamepad1.left_stick_y;
-                    deflector.jog(Math.abs(stick) > 0.05 ? stick * JOG_POWER : 0);
+            if (phase == Phase.SEEKING_HOME) {
+                seekHome(deflector);
+            } else {
+                double stick = -gamepad1.left_stick_y;
+                deflector.jog(Math.abs(stick) > 0.05 ? stick * JOG_POWER : 0);
             }
 
             deflector.update(true);
@@ -184,8 +184,7 @@ public class DeflectorAutoHome extends LinearOpMode {
 
     private void startSeek(Deflector deflector) {
         // Zero here first so the screen can show how far the seek has travelled.
-        // HOME becomes the zero when it is found, and ZERO replaces that after
-        // the rise -- this first one is only to make the readout meaningful.
+        // The real ZERO is set the moment HOME is found.
         deflector.zeroHere();
         seekStartAngle = deflector.getAngle();
         stallRefAngle = seekStartAngle;
@@ -204,7 +203,8 @@ public class DeflectorAutoHome extends LinearOpMode {
         if (phaseTimer.seconds() > SEEK_TIMEOUT_SEC) {
             abort(deflector, String.format(
                     "FAILED: no HOME in %.0f s (moved %.1f deg). Wrong SEEK_DIRECTION, "
-                            + "or the wire is not reading.", SEEK_TIMEOUT_SEC, angle - seekStartAngle));
+                            + "or the wire is not reading.",
+                    SEEK_TIMEOUT_SEC, angle - seekStartAngle));
             return;
         }
 
@@ -216,38 +216,17 @@ public class DeflectorAutoHome extends LinearOpMode {
             stallTimer.reset();
 
             if (settled && moved < STALL_DEG) {
-                // On HOME. Call it 0 for now, so the rise can be commanded as a
-                // plain "go up ZERO_ABOVE_HOME_DEG".
+                // On HOME. ZERO is set by arithmetic -- see the class comment for
+                // why driving up to level instead failed at 11.2 every time.
                 deflector.jog(0);
-                deflector.zeroHere();
-                deflector.goTo(ZERO_ABOVE_HOME_DEG);
-                phase = Phase.RISING_TO_ZERO;
-                note = String.format("HOME found -- rising %.1f deg to ZERO", ZERO_ABOVE_HOME_DEG);
-                phaseTimer.reset();
+                deflector.zeroAt(-ZERO_ABOVE_HOME_DEG);
+                phase = Phase.READY;
+                note = "HOME found, ZERO set -- nothing had to move";
                 return;
             }
         }
 
         deflector.jog(SEEK_DIRECTION * SEEK_POWER);
-    }
-
-    /** Ride the position loop up to the estimated ZERO, then declare it zero. */
-    private void riseToZero(Deflector deflector) {
-        boolean arrived = Math.abs(deflector.getAngle() - ZERO_ABOVE_HOME_DEG)
-                <= DeflectorLogic.TOLERANCE_DEG;
-
-        if (arrived) {
-            deflector.zeroHere();   // this position is now 0 = level, by definition
-            phase = Phase.READY;
-            note = "ZERO set. Check it is actually level.";
-            return;
-        }
-        if (phaseTimer.seconds() > RISE_TIMEOUT_SEC) {
-            abort(deflector, String.format(
-                    "FAILED: did not reach ZERO in %.0f s (got %.1f of %.1f).",
-                    RISE_TIMEOUT_SEC, deflector.getAngle(), ZERO_ABOVE_HOME_DEG));
-        }
-        // Otherwise the subsystem's position loop is already driving it.
     }
 
     /**
@@ -268,24 +247,34 @@ public class DeflectorAutoHome extends LinearOpMode {
         telemetry.addData("Zeroed", deflector.isZeroed() ? "yes" : "NO");
         telemetry.addLine();
 
-        String frame = phase == Phase.READY ? "from ZERO (level)"
-                : phase == Phase.RISING_TO_ZERO ? "from HOME"
-                : "from where the run started";
-        telemetry.addData("Angle", "%.2f deg  %s", deflector.getAngle(), frame);
+        double angle = deflector.getAngle();
+        telemetry.addData("Angle", "%.2f deg  %s", angle,
+                phase == Phase.READY ? "from ZERO (level)" : "from where the run started");
+        if (phase == Phase.READY) {
+            telemetry.addData("HOME is at", "%.1f deg", -ZERO_ABOVE_HOME_DEG);
+        }
+        telemetry.addData("ZERO is", "%.1f deg above HOME", ZERO_ABOVE_HOME_DEG);
         telemetry.addData("Servo total", "%.0f deg  (unwrapped, counts turns)",
                 deflector.getServoTotal());
-        telemetry.addData("ZERO is", "%.1f deg above HOME", ZERO_ABOVE_HOME_DEG);
-        // The unwrap assumes under 180 servo deg per loop. HOME-to-ZERO is 0.987 of
-        // a turn, so a dropped turn lands almost exactly on the other one -- this is
-        // the number that says whether that is close to happening.
+
+        // The unwrap assumes under 180 servo deg per loop. HOME-to-ZERO is 0.987
+        // of a turn, so a dropped turn lands almost exactly on the other one --
+        // this says whether that is close to happening.
         telemetry.addData("Max step", "%.0f servo deg/loop%s", deflector.getMaxStepSeen(),
                 deflector.getMaxStepSeen() > 120 ? "   <-- NEAR THE 180 UNWRAP LIMIT"
                         : "   (unwrap safe under 180)");
 
+        // What the position loop would command right here, heading for level.
+        // Under about 0.06 it cannot lift the deflector, which is why upward
+        // goTo moves stall short. This is the measurement for raising MIN_POWER.
+        telemetry.addData("Loop authority", "%.3f power at %.2f deg of error",
+                Math.abs(DeflectorLogic.power(angle, 0)), Math.abs(angle));
+
         if (phase == Phase.SEEKING_HOME) {
             telemetry.addLine();
-            telemetry.addData("Seeking for", "%.1f s of %.0f", phaseTimer.seconds(), SEEK_TIMEOUT_SEC);
-            telemetry.addData("Travelled", "%.1f deg", deflector.getAngle() - seekStartAngle);
+            telemetry.addData("Seeking for", "%.1f s of %.0f",
+                    phaseTimer.seconds(), SEEK_TIMEOUT_SEC);
+            telemetry.addData("Travelled", "%.1f deg", angle - seekStartAngle);
             telemetry.addData("Last window moved", Double.isNaN(lastWindowMovement)
                     ? "(first window)"
                     : String.format("%.3f deg -- HOME when under %.3f",
@@ -294,17 +283,11 @@ public class DeflectorAutoHome extends LinearOpMode {
 
         if (phase == Phase.READY) {
             telemetry.addLine();
-            telemetry.addLine("Is the deflector parallel to the ground? Phone level, not your eye.");
-            if (Double.isNaN(levelError)) {
-                telemetry.addLine("If not: jog to true level, then press X.");
-            } else {
-                telemetry.addLine("==== PUT THIS IN ZERO_ABOVE_HOME_DEG ====");
-                telemetry.addData("Corrected", "%.1f   (was %.1f, off by %+.1f)",
+            telemetry.addLine("Jog to true level and press X to re-check ZERO_ABOVE_HOME_DEG.");
+            if (!Double.isNaN(levelError)) {
+                telemetry.addLine("==== ZERO_ABOVE_HOME_DEG ====");
+                telemetry.addData("Corrected", "%.1f   (is %.1f, off by %+.1f)",
                         ZERO_ABOVE_HOME_DEG + levelError, ZERO_ABOVE_HOME_DEG, levelError);
-                telemetry.addData("  in servo degrees", "%.0f",
-                        (ZERO_ABOVE_HOME_DEG + levelError)
-                                * DeflectorLogic.SERVO_DEG_PER_DEFLECTOR_DEG);
-                telemetry.addLine("Then run A again and check level once more.");
             }
         }
 

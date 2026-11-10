@@ -250,6 +250,34 @@ public class Deflector {
     public HomeState getHomeState() { return homeState; }
     public String getHomeNote() { return homeNote; }
 
+    /**
+     * "The deflector is at THIS angle right now" -- set the zero by arithmetic
+     * instead of by driving somewhere.
+     *
+     * zeroAt(-11.9) while sitting on the hard stop means HOME is 11.9 below
+     * level, so level becomes 0 with nothing having to move. Same offset the
+     * homing path computes internally; this exposes it so an op mode can set the
+     * reference from a place it can actually reach.
+     *
+     * Driving to level and calling zeroHere() there looks equivalent and is not:
+     * it makes the reference depend on the position loop closing its last degree
+     * uphill, which it cannot. DeflectorLogic.MIN_POWER runs out of authority
+     * around 0.7 deg of error, so an upward move stalls short of tolerance and
+     * never reports arriving.
+     */
+    public void zeroAt(double angleHere) {
+        if (!isPresent()) return;
+        homeState = HomeState.NOT_STARTED;
+        homeNote = "zeroed by hand";
+        zeroTotal = total - angleHere * DeflectorLogic.SERVO_DEG_PER_DEFLECTOR_DEG;
+        zeroed = true;
+        keptZeroed = true;
+        keptZeroTotal = zeroTotal;
+        target = DeflectorLogic.clipToLimits(angleHere);
+        index = DeflectorLogic.nearestIndex(target);
+    }
+
+
     /** "It's level right now": this is 0 degrees. Kept for later op modes. */
     public void zeroHere() {
         if (!isPresent()) return;
