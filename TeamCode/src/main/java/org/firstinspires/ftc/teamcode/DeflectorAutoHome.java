@@ -19,7 +19,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  *         stops changing. A physical fact, repeatable, needs no judgement.
  *   ZERO  parallel to the ground. This is the reference every angle in the code
  *         is measured from, so 70 means a 70 degree arc. It is
- *         ZERO_ABOVE_HOME_DEG above HOME -- currently ESTIMATED at 15.
+ *         ZERO_ABOVE_HOME_DEG above HOME -- measured at 11.9 on 6494, and being
+ *         checked for repeatability.
  *
  * Using HOME as the reference would be easier and wrong: the stop is not level,
  * so every angle would stop meaning an arc and none of the existing numbers
@@ -31,7 +32,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  *   2. Look at the deflector. Is it actually parallel to the ground? Use a phone
  *      level, not your eye.
  *   3. If not, jog to true level and press X. It prints the corrected
- *      ZERO_ABOVE_HOME_DEG -- the estimate plus however far off it was.
+ *      ZERO_ABOVE_HOME_DEG -- the current value plus however far off it was.
  *   4. Put that number in ZERO_ABOVE_HOME_DEG and run it again. Repeat until
  *      step 2 says yes, and the deflector zeroes itself correctly every time
  *      with nobody eyeballing anything.
@@ -73,12 +74,21 @@ public class DeflectorAutoHome extends LinearOpMode {
      * How far ZERO (parallel to the ground) sits above HOME (the hard stop), in
      * deflector degrees.
      *
-     * 15 is an ESTIMATE (Shane, 2026-11-10), not a measurement. Refining it is
-     * what this op mode is for -- see the fine-tune loop above. Once it is right,
-     * this is the number that goes into Deflector.LEVEL_ABOVE_STOP_DEG and makes
-     * auto-homing trustworthy everywhere else.
+     * 11.9 measured on 6494 (Shane, 2026-11-10), replacing the 15 estimate. Being
+     * checked for repeatability before it goes anywhere near the subsystem --
+     * Deflector.LEVEL_ABOVE_STOP_DEG is still NaN on purpose.
+     *
+     * WATCH OUT: 11.9 deflector degrees is 355 servo degrees -- 0.987 of a FULL
+     * TURN, only 4.7 short of 360. Two consequences while testing:
+     *
+     *   - the raw feedback at ZERO reads almost the same as at HOME, so voltage
+     *     alone cannot tell them apart. Only the accumulated turn count can.
+     *   - a dropped turn costs 12.06 deflector degrees, which is almost exactly
+     *     the HOME-to-ZERO distance. So a lost turn makes ZERO look like HOME.
+     *     If a run ever comes out about 12 deg off, suspect the unwrap, not the
+     *     stall detection -- and check "Max step" below.
      */
-    public static double ZERO_ABOVE_HOME_DEG = 15.0;
+    public static double ZERO_ABOVE_HOME_DEG = 11.9;
 
     /** Down toward HOME. Gentle: this ends by pushing into a hard stop. */
     public static double SEEK_POWER = 0.25;
@@ -133,7 +143,7 @@ public class DeflectorAutoHome extends LinearOpMode {
             } else {
                 telemetry.addLine("DEFLECTOR AUTO HOME -- nothing moves until you press A.");
                 telemetry.addLine();
-                telemetry.addData("ZERO is estimated", "%.1f deg above HOME", ZERO_ABOVE_HOME_DEG);
+                telemetry.addData("ZERO is", "%.1f deg above HOME", ZERO_ABOVE_HOME_DEG);
                 telemetry.addData("Servo total", "%.0f deg", deflector.getServoTotal());
                 telemetry.addLine("Turn it by hand and watch Servo total change, to");
                 telemetry.addLine("prove the wire reads before trusting a seek.");
@@ -264,7 +274,13 @@ public class DeflectorAutoHome extends LinearOpMode {
         telemetry.addData("Angle", "%.2f deg  %s", deflector.getAngle(), frame);
         telemetry.addData("Servo total", "%.0f deg  (unwrapped, counts turns)",
                 deflector.getServoTotal());
-        telemetry.addData("ZERO estimate", "%.1f deg above HOME", ZERO_ABOVE_HOME_DEG);
+        telemetry.addData("ZERO is", "%.1f deg above HOME", ZERO_ABOVE_HOME_DEG);
+        // The unwrap assumes under 180 servo deg per loop. HOME-to-ZERO is 0.987 of
+        // a turn, so a dropped turn lands almost exactly on the other one -- this is
+        // the number that says whether that is close to happening.
+        telemetry.addData("Max step", "%.0f servo deg/loop%s", deflector.getMaxStepSeen(),
+                deflector.getMaxStepSeen() > 120 ? "   <-- NEAR THE 180 UNWRAP LIMIT"
+                        : "   (unwrap safe under 180)");
 
         if (phase == Phase.SEEKING_HOME) {
             telemetry.addLine();
