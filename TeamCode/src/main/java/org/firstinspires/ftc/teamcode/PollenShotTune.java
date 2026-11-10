@@ -54,7 +54,9 @@ import java.util.List;
  *
  * That INIT movement is fine in a bench tuner and WRONG in a match op mode:
  * DriveTeleOp homes at Start precisely because G403 forbids moving during the
- * auto-to-TeleOp INIT. Do not copy it. The turret homes itself at Start if needed (start it roughly
+ * auto-to-TeleOp INIT. Do not copy it.
+ *
+ * The turret homes itself at Start if needed (start it roughly
  * forward), same as DriveTeleOp.
  *
  * GAMEPAD 1 (tuner + driving)
