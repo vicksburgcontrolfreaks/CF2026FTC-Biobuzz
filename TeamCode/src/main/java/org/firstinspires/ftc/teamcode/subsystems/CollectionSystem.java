@@ -54,7 +54,9 @@ public class CollectionSystem {
     // 75 -- see loadRobotFeedNumbers(). This bare value is only the fallback for
     // an unknown robot. If you change a feed rate, scale
     // ShooterLogic.NO_BALL_SEC with it and re-measure NectarGuard.TRIP_AMPS.
-    public static double FEED_RPM = 25.0;   // forward = up into the flywheels
+    // 6494's value: the catch in loadRobotFeedNumbers() falls back to these, and
+    // says so, so this has to track the R6494 case.
+    public static double FEED_RPM = 75.0;   // forward = up into the flywheels
     public static double UNJAM_RPM = 50.0;  // run in reverse by unjam()
 
     private static final double TICKS_PER_REV = RobotHardware.TICKS_PER_MOTOR_REV;

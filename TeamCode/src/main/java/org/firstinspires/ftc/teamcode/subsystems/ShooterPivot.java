@@ -197,7 +197,9 @@ public class ShooterPivot {
     //
     // RE-MEASURED 2026-11-02 after the rebuild: pollen 0.539 -> 0.67 (+0.131),
     // nectar 0.21 -> 0.287 (+0.077). Different shifts again.
-    public static double POLLEN_POSITION = 0.67;
+    // 6494's value, which is what an unknown robot falls back to. Kept equal to
+    // the R6494 case in loadRobotNumbers() so the two cannot disagree.
+    public static double POLLEN_POSITION = 0.69;
     public static double NECTAR_POSITION = 0.287;
 
     private final Servo pivot;
