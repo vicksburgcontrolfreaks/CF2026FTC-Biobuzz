@@ -75,22 +75,7 @@ public abstract class RouteAuto extends OpMode {
      */
     public static boolean LAUNCH_FULL_TIME = true;
     /** Deflector (shot arc) for auto, if it was zeroed pre-match. 67.5 (Shane, 2026-11-06); 75 looked great on 6494. */
-    /**
-     * The shooting arc auto drives to at Start.
-     *
-     * 80 on 6494, measured against the HARD-STOP zero (Jade, 2026-11-10). This is
-     * degrees above the stop, NOT an arc angle.
-     *
-     * It replaces 70, which was measured with zero at LEVEL (Shane, 2026-11-06;
-     * 67.5 came up short). The two are not comparable, and the jump from 70 to 80
-     * is roughly what moving the zero down to the stop predicts: stop-relative
-     * angles read shallower, so the number has to grow to reach the same arc.
-     * That agreement is mild evidence the new reference is behaving.
-     *
-     * 5618 still zeroes at level, where this number would mean an 80 degree ARC --
-     * a different shot. Re-measure before running autos there.
-     */
-    public static double AUTO_ARC_DEG = 80;
+    public static double AUTO_ARC_DEG = 70;   // 67.5 came up short (Shane, 2026-11-06)
 
     // ---- TIP_LAUNCH (Far Wall Tip Shoot + Park, 2026-11-08) -------------------
     /**

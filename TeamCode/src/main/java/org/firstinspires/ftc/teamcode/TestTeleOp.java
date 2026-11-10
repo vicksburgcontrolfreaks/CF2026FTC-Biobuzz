@@ -9,6 +9,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 // Hidden from the Driver Station 2026-11-05 (op mode cleanup): sits in the TeleOp group next to DriveTeleOp, too easy to pick in a match; Shooter Flywheel Test + Collection System Test cover it.
 // The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "TestTeleOp", group = "TeleOp")
 public class TestTeleOp extends OpMode {
     private RobotHardware hardware;

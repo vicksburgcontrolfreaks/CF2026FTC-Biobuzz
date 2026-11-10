@@ -45,53 +45,19 @@ public class Deflector {
     // ---- Auto-homing (Shane, 2026-11-08) --------------------------------------
     // Both drive teams forgot Deflector Zero, so nothing shot. Now every auto
     // homes in INIT (and TeleOp at Start, if it isn't zeroed): jog DOWN slowly
-    // until it stalls on the hard stop, call that -LEVEL_ABOVE_STOP_DEG, drive to
-    // STOW_ANGLE_DEG, then CUT POWER -- G304.H: motionless once INIT is done.
+    // until it stalls on the hard stop, call that -LEVEL_ABOVE_STOP_DEG, drive up
+    // to level (0), then CUT POWER -- G304.H: motionless once INIT is done.
     //
-    // THE TWO ROBOTS NOW MEASURE ANGLES FROM DIFFERENT PLACES (2026-11-10):
-    //
-    //   6494  LEVEL_ABOVE_STOP_DEG = 0, so ZERO IS THE HARD STOP. Angles are
-    //         degrees above the stop. They are NOT arc angles, because the stop
-    //         is not level.
-    //   5618  still NaN, so homing refuses and someone zeroes it by hand at
-    //         level. Zero is level and angles ARE arc angles.
-    //
-    // So the SAME number means a different physical arc on each robot, and
-    // anything shared between them -- DeflectorLogic.POSITIONS,
-    // RouteAuto.AUTO_ARC_DEG -- cannot be right for both. Measure per robot
-    // until one reference wins. To put 6494 back on arc angles, measure the
-    // offset instead: Deflector Zero, jog LEVEL, A, then jog DOWN onto the stop
-    // and read "Angle" -- e.g. -4.3 means 4.3.
+    // LEVEL_ABOVE_STOP_DEG is PER ROBOT (loadRobotNumbers). Measure it: Deflector
+    // Zero, jog LEVEL, A, then jog DOWN onto the stop and read "Angle" -- e.g.
+    // -4.3 means 4.3. NaN = not measured: homing refuses and you zero by hand.
     public static double LEVEL_ABOVE_STOP_DEG = Double.NaN;
-    /**
-     * Where homing PARKS, in degrees above the stop. This is the pre-match stow
-     * position: the robot has to fit inside the 18 in. starting cube, so the
-     * deflector cannot sit wherever it likes at the start of a match.
-     *
-     * 0 = park ON the hard stop, which on 6494 is flat / parallel to the floor
-     * (Jade, 2026-11-10). So homing ends where it found its reference and the UP
-     * phase is a no-op.
-     *
-     * CHECK THIS AGAINST THE 18 in. CUBE. 45 was measured as about 18 in. earlier
-     * the same day, and flat is not obviously more compact than 45 -- a deflector
-     * lying flat can stick further OUT than one tilted up, even though it is
-     * lower. If the robot does not fit at 0, 45 is the number to come back to.
-     */
-    public static double STOW_ANGLE_DEG = 0.0;
-
     public static double HOME_POWER = 0.25;          // down toward the stop; slow on purpose
     public static double HOME_SETTLE_SEC = 0.4;      // ignore stall checks while it starts moving
     public static double STALL_WINDOW_SEC = 0.25;    // check movement over this long...
     public static double STALL_SERVO_DEG = 3.0;      // ...less than this = sitting on the stop (~0.1 deflector deg)
     public static double HOME_DOWN_MAX_SEC = 12.0;   // no stop found by then = give up
-    // Stop -> STOW_ANGLE_DEG. Was 5.0, which was sized for parking at level (0),
-    // i.e. no travel at all. Parking at 45 deg is 1344 servo deg, about 3.7
-    // TURNS, roughly 3.7 s at full speed plus the slow final approach -- so 5.0
-    // was close enough to the real time to risk timing out. A timeout cuts power
-    // wherever it got to, which at the start of a match could leave the robot
-    // outside the 18 in. cube, so this errs long: INIT can be held as long as
-    // anyone likes, and waiting costs nothing.
-    public static double HOME_UP_MAX_SEC = 8.0;
+    public static double HOME_UP_MAX_SEC = 5.0;      // stop -> level
 
     public enum HomeState { NOT_STARTED, DOWN, UP, DONE, FAILED }
 
@@ -99,11 +65,7 @@ public class Deflector {
         try {
             switch (WhichRobot.get()) {
                 case R5618: LEVEL_ABOVE_STOP_DEG = Double.NaN; break;   // TODO measure (Deflector Zero)
-                // 0 = the hard stop IS zero (Jade, 2026-11-10). Chosen over measuring
-                // the offset to level: the stop is a physical fact, level is a
-                // judgement. Cost: every angle is now measured from the stop, so it
-                // is NOT an arc angle any more. See the class comment.
-                case R6494: LEVEL_ABOVE_STOP_DEG = 0.0; break;
+                case R6494: LEVEL_ABOVE_STOP_DEG = Double.NaN; break;   // TODO measure (Deflector Zero)
             }
         } catch (IllegalStateException e) {
             LEVEL_ABOVE_STOP_DEG = Double.NaN;   // unknown robot: don't guess
@@ -238,7 +200,7 @@ public class Deflector {
         }
         homeState = HomeState.DOWN;
         jogging = false;
-        target = STOW_ANGLE_DEG;   // park stowed unless someone asks for another angle meanwhile
+        target = 0;   // end at level unless someone asks for another angle meanwhile
         index = 0;
         homeTimer.reset();
         stallTimer.reset();
@@ -273,18 +235,15 @@ public class Deflector {
             }
             return -HOME_POWER * DeflectorLogic.POWER_SIGN;
         }
-        // UP: to the stow angle, then power off. On 6494 that is a real traverse
-        // of about 3.7 servo turns, not an instant finish -- see HOME_UP_MAX_SEC.
+        // UP: to level, then power off.
         double a = getAngle();
-        boolean parked = Math.abs(a - STOW_ANGLE_DEG) <= DeflectorLogic.TOLERANCE_DEG;
-        if (parked || homeTimer.seconds() > HOME_UP_MAX_SEC) {
+        boolean level = Math.abs(a) <= DeflectorLogic.TOLERANCE_DEG;
+        if (level || homeTimer.seconds() > HOME_UP_MAX_SEC) {
             homeState = HomeState.DONE;
-            homeNote = parked
-                    ? String.format("HOMED, stowed at %.1f deg", STOW_ANGLE_DEG)
-                    : String.format("homed, stopped at %.1f deg (wanted %.1f)", a, STOW_ANGLE_DEG);
+            homeNote = level ? "HOMED, level" : String.format("homed, stopped at %.1f deg (not quite level)", a);
             return 0;
         }
-        return DeflectorLogic.power(a, STOW_ANGLE_DEG);
+        return DeflectorLogic.power(a, 0);
     }
 
     public boolean isHoming() { return homeState == HomeState.DOWN || homeState == HomeState.UP; }

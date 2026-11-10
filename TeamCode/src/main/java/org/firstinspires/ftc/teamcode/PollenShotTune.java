@@ -45,34 +45,19 @@ import java.util.List;
  * Still protected (parts, not shooting behavior): the pivot is clipped to its
  * measured safe band (ShooterPivot), and the deflector keeps its soft limits.
  *
- * THE DEFLECTOR HOMES ITSELF IN INIT (2026-11-10). Press INIT and it drives down
- * to the hard stop and parks there, which on 6494 is flat -- 0 degrees, and the
- * zero reference at the same time. Already zeroed, it just goes to
- * Deflector.STOW_ANGLE_DEG rather than re-homing, because re-homing every INIT
- * means pushing into the stop all session. LB and RB jump between the park and
- * the shot.
- *
- * That INIT movement is fine in a bench tuner and WRONG in a match op mode:
- * DriveTeleOp homes at Start precisely because G403 forbids moving during the
- * auto-to-TeleOp INIT. Do not copy it.
- *
- * The turret homes itself at Start if needed (start it roughly
+ * BEFORE STARTING: the deflector must already be zeroed (level), e.g. by running
+ * Deflector Zero or by INIT-ing an auto. If it isn't, it won't move and the
+ * screen says so. The turret homes itself at Start if needed (start it roughly
  * forward), same as DriveTeleOp.
  *
  * GAMEPAD 1 (tuner + driving)
  *   Sticks         drive, field-centric, same as DriveTeleOp
  *   X              heading reset ("robot faces away from me")
- *   D-pad Up/Down  DEFLECTOR angle up / down (works whatever knob is picked)
- *   Stick clicks   pick the knob to tune (">" marks it): L = previous, R = next
- *   D-pad R / L    step the picked knob up / down
+ *   D-pad Up/Down  pick the knob to tune (">" marks it)
+ *   D-pad R / L    step it up / down
  *   A (hold)       fine steps while held
  *   Y              reset the picked knob to its starting value
  *   B              clear the shot log
- *   LB             deflector to the park angle (STOW_ANGLE_DEG, 0 = flat)
- *   RB             deflector to the SHOOTING angle
- *
- * START does NOT move the deflector to the shot. It stays parked at
- * STOW_ANGLE_DEG and you walk it up with D-pad Up.
  *
  * GAMEPAD 2 (operator) -- same buttons as DriveTeleOp, but direct, no gating:
  *   B  (hold)      flywheel on + indexer forward
@@ -124,15 +109,7 @@ public class PollenShotTune extends OpMode {
 
     private static final double START_COLLECTOR_RPM = 200;
     private static final double START_FLYWHEEL_RPM = 1300;
-    // The goldilocks shooting angle found on 6494 (Jade, 2026-11-10), measured
-    // against the hard-stop zero. Starts the deflector knob at the known-good
-    // shot instead of 66, which was from the old level-relative reference.
-    //
-    // KEEP THIS EQUAL TO RouteAuto.AUTO_ARC_DEG. Same physical angle, written in
-    // two places: here is where it gets FOUND, there is where auto USES it. Not
-    // referenced directly so a tuner cannot be broken by an op mode it has no
-    // business depending on -- but they drift if only one gets changed.
-    private static final double START_DEFLECTOR_DEG = 80;
+    private static final double START_DEFLECTOR_DEG = 66;
 
     private final double[] value = new double[Knob.values().length];
     private final double[] start = new double[Knob.values().length];
@@ -159,7 +136,6 @@ public class PollenShotTune extends OpMode {
     private boolean turretParked = false;
     private boolean turretManual = false;
     private boolean deflectorStickArmed = true;
-    private boolean lastLsb, lastRsb;
     private final ElapsedTime loopTimer = new ElapsedTime();
     private final ElapsedTime clock = new ElapsedTime();
 
@@ -209,33 +185,13 @@ public class PollenShotTune extends OpMode {
         start[Knob.PIVOT.ordinal()] = ShooterPivot.POLLEN_POSITION;
         start[Knob.DEFLECTOR.ordinal()] = START_DEFLECTOR_DEG;
         System.arraycopy(start, 0, value, 0, value.length);
-
-        // Stow the deflector during INIT, so the 18 in. pre-match position can be
-        // checked and measured without pressing Start.
-        //
-        // Not zeroed yet -> home, which already parks at STOW_ANGLE_DEG. Already
-        // zeroed -> just go there, because re-homing every INIT means pushing into
-        // the hard stop and ~10 s of travel on every run of a tuning session.
-        //
-        // MOVING IN INIT IS FINE *HERE* AND NOWHERE NEAR A MATCH. DriveTeleOp
-        // deliberately homes at Start instead, because during the auto-to-TeleOp
-        // transition G403 says INIT must not move anything. This is a bench tuner
-        // in the Tune group that never runs in a match -- do not copy the pattern
-        // into a match op mode.
-        if (deflector.isPresent()) {
-            if (!deflector.isZeroed()) {
-                deflector.startHoming();
-            } else {
-                deflector.goTo(Deflector.STOW_ANGLE_DEG);
-            }
-        }
     }
 
     @Override
     public void init_loop() {
         menu.update(gamepad1);
         camera.update();
-        deflector.update(true);    // allowed to move in INIT: stowing to 45 (see init())
+        deflector.update(false);   // keep counting turns; nothing moves in INIT
 
         telemetry.addLine("POLLEN SHOT TUNE -- pollen only, NO nectar guard");
         menu.show(telemetry);
@@ -243,17 +199,11 @@ public class PollenShotTune extends OpMode {
         telemetry.addData("Camera", camera.getNote());
         if (!deflector.isPresent()) {
             telemetry.addLine(">>> No deflector found -- arc can't be tuned.");
-        } else if (deflector.isHoming()) {
-            telemetry.addData("Deflector", "HOMING -- %s", deflector.getHomeNote());
-            telemetry.addLine("Finding the hard stop, then stowing. Give it a few seconds.");
         } else if (!deflector.isZeroed()) {
-            telemetry.addLine(">>> Deflector NOT zeroed and homing did not take.");
-            telemetry.addLine("    Run Deflector Zero, or it won't move.");
+            telemetry.addLine(">>> Deflector NOT zeroed. Run Deflector Zero first, or it won't move.");
         } else {
-            telemetry.addData("Deflector", "now %.1f deg, parking at %.0f",
-                    deflector.getAngle(), Deflector.STOW_ANGLE_DEG);
-            telemetry.addLine("Stays parked at Start -- D-pad Up walks it to the shot.");
-            telemetry.addLine("LB = park (flat), RB = shot. CHECK the robot fits 18 in. here.");
+            telemetry.addData("Deflector", "zeroed, now %.1f deg -> goes to %.0f at Start",
+                    deflector.getAngle(), START_DEFLECTOR_DEG);
         }
         if (!turret.isHomed() && Turret.isMeasured()) {
             telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
@@ -270,10 +220,7 @@ public class PollenShotTune extends OpMode {
         aim = new TurretAim(targetCell.tagIds);
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
         pivot.setPosition(value[Knob.PIVOT.ordinal()]);           // servos move at Start, not INIT
-        // Do NOT fling it to the shot at Start. Leave it parked and let the dpad
-        // walk it up. The knob is re-seated to where the deflector actually is, so
-        // the first dpad press steps from there instead of jumping.
-        if (deflector.isZeroed()) set(Knob.DEFLECTOR, deflector.getAngle());
+        if (deflector.isZeroed()) deflector.goTo(value[Knob.DEFLECTOR.ordinal()]);
         loopTimer.reset();
         clock.reset();
     }
@@ -314,36 +261,9 @@ public class PollenShotTune extends OpMode {
 
     private void tune() {
         int n = Knob.values().length;
-
-        // Knob picking moved off the dpad onto the stick clicks, because dpad
-        // up/down now drives the DEFLECTOR directly -- it is the knob that gets
-        // touched between shots, and hunting for it through a selector first was
-        // the slow part.
-        boolean lsb = gamepad1.left_stick_button, rsb = gamepad1.right_stick_button;
-        if (lsb && !lastLsb) selected = (selected + n - 1) % n;
-        if (rsb && !lastRsb) selected = (selected + 1) % n;
-        lastLsb = lsb;
-        lastRsb = rsb;
-
-        // Deflector on dpad up/down, whatever knob is picked. A still means fine.
-        Knob d = Knob.DEFLECTOR;
-        double dStep = gamepad1.a ? d.fine : d.step;
-        if (gamepad1.dpadUpWasPressed()) set(d, value[d.ordinal()] + dStep);
-        if (gamepad1.dpadDownWasPressed()) set(d, value[d.ordinal()] - dStep);
+        if (gamepad1.dpadUpWasPressed()) selected = (selected + n - 1) % n;
+        if (gamepad1.dpadDownWasPressed()) selected = (selected + 1) % n;
         if (gamepad1.bWasPressed()) clearLog();
-
-        // Jump the deflector between the only two angles that matter, so the
-        // 18 in. stow can be checked without stepping 35 degrees by hand and
-        // without leaving the tuner to INIT an auto. Selects the deflector knob
-        // too, so the screen shows what just moved.
-        if (gamepad1.leftBumperWasPressed()) {
-            selected = Knob.DEFLECTOR.ordinal();
-            set(Knob.DEFLECTOR, Deflector.STOW_ANGLE_DEG);
-        }
-        if (gamepad1.rightBumperWasPressed()) {
-            selected = Knob.DEFLECTOR.ordinal();
-            set(Knob.DEFLECTOR, START_DEFLECTOR_DEG);
-        }
 
         Knob k = Knob.values()[selected];
         double step = gamepad1.a ? k.fine : k.step;

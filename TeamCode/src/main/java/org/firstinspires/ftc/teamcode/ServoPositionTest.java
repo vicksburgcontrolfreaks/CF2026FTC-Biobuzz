@@ -23,6 +23,7 @@ import com.qualcomm.robotcore.util.Range;
  */
 // Hidden from the Driver Station 2026-11-05 (op mode cleanup): generic testServo tool; Pivot Jog Test replaced it for the pivot.
 // The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Servo Position Test", group = "Test")
 public class ServoPositionTest extends LinearOpMode {
 

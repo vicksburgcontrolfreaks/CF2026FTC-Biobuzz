@@ -9,6 +9,7 @@ import org.openftc.easyopencv.OpenCvCameraFactory;
 
 // Hidden from the Driver Station 2026-11-05 (op mode cleanup): AprilTag ID Test covers the camera check.
 // The code stays; delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Camera Test", group = "Test")
 public class CameraTest extends LinearOpMode {
     private OpenCvCamera camera;

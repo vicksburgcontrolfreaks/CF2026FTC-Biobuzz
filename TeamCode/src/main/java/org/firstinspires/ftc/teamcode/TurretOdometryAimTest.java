@@ -49,8 +49,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *   D-pad down - hive tilt FAR_UP / AUDIENCE_UP (hive target only)
  */
 @Configurable
-// Shown again 2026-11-09 for tuning on 6494. Was hidden for competition on
-// 2026-11-07; put @Disabled back above @TeleOp to hide it from the DS again.
+// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+@Disabled
 @TeleOp(name = "Turret Odometry Aim Test", group = "Test")
 public class TurretOdometryAimTest extends LinearOpMode {
 
