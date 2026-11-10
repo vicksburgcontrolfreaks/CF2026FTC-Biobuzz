@@ -68,18 +68,24 @@ public class Deflector {
      * position: the robot has to fit inside the 18 in. starting cube, so the
      * deflector cannot sit wherever it likes at the start of a match.
      *
-     * 0 = park on the stop itself. Set this to the measured 18 in.-legal angle
-     * once it is known; until then homing parks on the stop, which is the most
-     * folded-up the mechanism goes and so the safest default.
+     * 45 deg above the stop measures about 18 in. on 6494 (Jade, 2026-11-10), so
+     * that is the pre-match park. 0 would mean parking on the stop itself.
      */
-    public static double STOW_ANGLE_DEG = 0.0;
+    public static double STOW_ANGLE_DEG = 45.0;
 
     public static double HOME_POWER = 0.25;          // down toward the stop; slow on purpose
     public static double HOME_SETTLE_SEC = 0.4;      // ignore stall checks while it starts moving
     public static double STALL_WINDOW_SEC = 0.25;    // check movement over this long...
     public static double STALL_SERVO_DEG = 3.0;      // ...less than this = sitting on the stop (~0.1 deflector deg)
     public static double HOME_DOWN_MAX_SEC = 12.0;   // no stop found by then = give up
-    public static double HOME_UP_MAX_SEC = 5.0;      // stop -> level
+    // Stop -> STOW_ANGLE_DEG. Was 5.0, which was sized for parking at level (0),
+    // i.e. no travel at all. Parking at 45 deg is 1344 servo deg, about 3.7
+    // TURNS, roughly 3.7 s at full speed plus the slow final approach -- so 5.0
+    // was close enough to the real time to risk timing out. A timeout cuts power
+    // wherever it got to, which at the start of a match could leave the robot
+    // outside the 18 in. cube, so this errs long: INIT can be held as long as
+    // anyone likes, and waiting costs nothing.
+    public static double HOME_UP_MAX_SEC = 8.0;
 
     public enum HomeState { NOT_STARTED, DOWN, UP, DONE, FAILED }
 
@@ -261,8 +267,8 @@ public class Deflector {
             }
             return -HOME_POWER * DeflectorLogic.POWER_SIGN;
         }
-        // UP: to the stow angle, then power off. Stow is 0 by default, which is
-        // the stop itself, so this phase usually finishes immediately.
+        // UP: to the stow angle, then power off. On 6494 that is a real traverse
+        // of about 3.7 servo turns, not an instant finish -- see HOME_UP_MAX_SEC.
         double a = getAngle();
         boolean parked = Math.abs(a - STOW_ANGLE_DEG) <= DeflectorLogic.TOLERANCE_DEG;
         if (parked || homeTimer.seconds() > HOME_UP_MAX_SEC) {

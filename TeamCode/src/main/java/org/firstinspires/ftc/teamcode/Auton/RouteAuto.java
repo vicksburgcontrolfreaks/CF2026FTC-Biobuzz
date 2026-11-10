@@ -78,16 +78,19 @@ public abstract class RouteAuto extends OpMode {
     /**
      * The shooting arc auto drives to at Start.
      *
-     * 70 was measured on 6494 with ZERO AT LEVEL (Shane, 2026-11-06; 67.5 came
-     * up short). Since 2026-11-10, 6494 zeroes at the HARD STOP instead, so 70
-     * here is 70 degrees above the stop -- a SHALLOWER arc than the 70 that was
-     * measured, by however far the stop sits below level. Expect auto to fall
-     * short on 6494 until this is re-measured against the new zero. That is the
-     * "goldilocks angle" Pollen Shot Tune is for.
+     * 80 on 6494, measured against the HARD-STOP zero (Jade, 2026-11-10). This is
+     * degrees above the stop, NOT an arc angle.
      *
-     * 5618 still zeroes at level, where 70 means what it always did.
+     * It replaces 70, which was measured with zero at LEVEL (Shane, 2026-11-06;
+     * 67.5 came up short). The two are not comparable, and the jump from 70 to 80
+     * is roughly what moving the zero down to the stop predicts: stop-relative
+     * angles read shallower, so the number has to grow to reach the same arc.
+     * That agreement is mild evidence the new reference is behaving.
+     *
+     * 5618 still zeroes at level, where this number would mean an 80 degree ARC --
+     * a different shot. Re-measure before running autos there.
      */
-    public static double AUTO_ARC_DEG = 70;
+    public static double AUTO_ARC_DEG = 80;
 
     // ---- TIP_LAUNCH (Far Wall Tip Shoot + Park, 2026-11-08) -------------------
     /**

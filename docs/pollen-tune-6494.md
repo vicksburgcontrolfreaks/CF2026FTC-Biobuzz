@@ -82,3 +82,31 @@ While it is NaN, homing refuses and nothing changes. So the order is:
 
 The pivot (0.69) and indexer (75 RPM) figures are unaffected -- neither depends
 on the deflector's zero.
+
+## Deflector, zeroed at the hard stop (2026-11-10)
+
+6494 now zeroes the deflector at the **hard stop** instead of at level
+(`LEVEL_ABOVE_STOP_DEG = 0`), so every deflector angle below is **degrees above
+the stop, not an arc angle**.
+
+| | Value | What it is |
+|---|---|---|
+| `Deflector.STOW_ANGLE_DEG` | **45** | pre-match park. ~18 in., so the robot fits the starting cube |
+| `RouteAuto.AUTO_ARC_DEG` | **80** | goldilocks shooting angle |
+
+Sequence: INIT homes down to the stop, calls it zero, drives up to 45 and cuts
+power. At Start, auto drives to 80.
+
+**70 -> 80 is consistent.** 70 was the old level-relative number. Stop-relative
+angles read shallower, so the number has to grow to reach the same arc -- which
+is what happened. Mild evidence the new reference is behaving, not a coincidence
+worth ignoring.
+
+**`HOME_UP_MAX_SEC` went 5.0 -> 8.0.** Parking at 45 deg is 1344 servo degrees,
+about 3.7 turns, roughly 3.7 s at full speed plus the slow approach. The old 5.0
+was sized for parking at level, which was no travel at all, and a timeout cuts
+power wherever it got to -- at the start of a match that could leave the robot
+outside the 18 in. cube.
+
+**5618 is untouched and still zeroes at level**, where 45 and 80 would mean
+different physical angles. Do not copy these numbers across.
