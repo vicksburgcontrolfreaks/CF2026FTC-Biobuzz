@@ -109,7 +109,15 @@ public class PollenShotTune extends OpMode {
 
     private static final double START_COLLECTOR_RPM = 200;
     private static final double START_FLYWHEEL_RPM = 1300;
-    private static final double START_DEFLECTOR_DEG = 66;
+    // The goldilocks shooting angle found on 6494 (Jade, 2026-11-10), measured
+    // against the hard-stop zero. Starts the deflector knob at the known-good
+    // shot instead of 66, which was from the old level-relative reference.
+    //
+    // KEEP THIS EQUAL TO RouteAuto.AUTO_ARC_DEG. Same physical angle, written in
+    // two places: here is where it gets FOUND, there is where auto USES it. Not
+    // referenced directly so a tuner cannot be broken by an op mode it has no
+    // business depending on -- but they drift if only one gets changed.
+    private static final double START_DEFLECTOR_DEG = 80;
 
     private final double[] value = new double[Knob.values().length];
     private final double[] start = new double[Knob.values().length];
