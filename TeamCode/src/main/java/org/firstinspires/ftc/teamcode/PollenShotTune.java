@@ -58,6 +58,8 @@ import java.util.List;
  *   A (hold)       fine steps while held
  *   Y              reset the picked knob to its starting value
  *   B              clear the shot log
+ *   LB             deflector to the STOW angle (18 in. pre-match park)
+ *   RB             deflector to the SHOOTING angle
  *
  * GAMEPAD 2 (operator) -- same buttons as DriveTeleOp, but direct, no gating:
  *   B  (hold)      flywheel on + indexer forward
@@ -272,6 +274,19 @@ public class PollenShotTune extends OpMode {
         if (gamepad1.dpadUpWasPressed()) selected = (selected + n - 1) % n;
         if (gamepad1.dpadDownWasPressed()) selected = (selected + 1) % n;
         if (gamepad1.bWasPressed()) clearLog();
+
+        // Jump the deflector between the only two angles that matter, so the
+        // 18 in. stow can be checked without stepping 35 degrees by hand and
+        // without leaving the tuner to INIT an auto. Selects the deflector knob
+        // too, so the screen shows what just moved.
+        if (gamepad1.leftBumperWasPressed()) {
+            selected = Knob.DEFLECTOR.ordinal();
+            set(Knob.DEFLECTOR, Deflector.STOW_ANGLE_DEG);
+        }
+        if (gamepad1.rightBumperWasPressed()) {
+            selected = Knob.DEFLECTOR.ordinal();
+            set(Knob.DEFLECTOR, START_DEFLECTOR_DEG);
+        }
 
         Knob k = Knob.values()[selected];
         double step = gamepad1.a ? k.fine : k.step;
