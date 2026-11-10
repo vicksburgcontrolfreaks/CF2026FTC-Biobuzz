@@ -26,9 +26,11 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  * (DeflectorLogic.POSITIONS, RouteAuto.AUTO_ARC_DEG) would mean what they say.
  * HOME is how we FIND the mechanism; ZERO is what we MEASURE FROM.
  *
- * ZERO IS SET BY ARITHMETIC, NOT BY DRIVING TO IT
- * On HOME the op mode says "this position is -11.9", and level becomes 0 with
- * nothing having to move.
+ * ZERO IS SET BY ARITHMETIC; THE CLIMB IS SEPARATE
+ * On HOME the op mode says "this position is -11.9", so level becomes 0 with
+ * nothing having to move. THEN it climbs to RISE_TO_DEG (0, level) and stops
+ * there. Two separate things: the reference cannot fail, and the climb is a
+ * plain move that either arrives or says it did not.
  *
  * The first version drove UP to level and zeroed there, and it failed every
  * time, stopping around 11.2 instead of 11.9. The position loop commands
@@ -113,10 +115,30 @@ public class DeflectorAutoHome extends LinearOpMode {
     /** No HOME found by now = give up, and leave no zero behind. */
     public static double SEEK_TIMEOUT_SEC = 12.0;
 
+    // ---- Rising from HOME to ZERO -------------------------------------------
+    // Done with jog power, NOT the position loop. The loop commands kP * error
+    // floored at MIN_POWER = 0.05, and 5% will not lift this deflector, so it
+    // stalls short and at a different place every time. These are plain powers
+    // that do move it, with a slow final approach so it does not coast past.
+
+    /** Where to finish. 0 = level. */
+    public static double RISE_TO_DEG = 0.0;
+
+    /** Fast part of the climb. */
+    public static double RISE_POWER = 0.25;
+
+    /** Within this much of RISE_TO_DEG, slow down. */
+    public static double RISE_SLOW_DEG = 2.0;
+
+    /** Slow part. Must still be enough to actually lift it. */
+    public static double RISE_SLOW_POWER = 0.12;
+
+    public static double RISE_TIMEOUT_SEC = 8.0;
+
     /** Hand-jog power at full stick. */
     public static double JOG_POWER = 0.3;
 
-    private enum Phase { IDLE, SEEKING_HOME, READY, FAILED }
+    private enum Phase { IDLE, SEEKING_HOME, RISING, READY, FAILED }
 
     private Phase phase = Phase.IDLE;
     private String note = "press A to find HOME";
@@ -170,6 +192,8 @@ public class DeflectorAutoHome extends LinearOpMode {
 
             if (phase == Phase.SEEKING_HOME) {
                 seekHome(deflector);
+            } else if (phase == Phase.RISING) {
+                rise(deflector);
             } else {
                 double stick = -gamepad1.left_stick_y;
                 deflector.jog(Math.abs(stick) > 0.05 ? stick * JOG_POWER : 0);
@@ -220,13 +244,42 @@ public class DeflectorAutoHome extends LinearOpMode {
                 // why driving up to level instead failed at 11.2 every time.
                 deflector.jog(0);
                 deflector.zeroAt(-ZERO_ABOVE_HOME_DEG);
-                phase = Phase.READY;
-                note = "HOME found, ZERO set -- nothing had to move";
+                phase = Phase.RISING;
+                note = String.format("HOME found, ZERO set -- climbing to %.1f", RISE_TO_DEG);
+                phaseTimer.reset();
                 return;
             }
         }
 
         deflector.jog(SEEK_DIRECTION * SEEK_POWER);
+    }
+
+    /**
+     * Climb from HOME to RISE_TO_DEG on JOG POWER, not the position loop.
+     *
+     * The loop cannot do this: it commands kP * error floored at MIN_POWER =
+     * 0.05, and 5% will not lift this deflector, so it stalls short and in a
+     * different place every run. Jogging at a power that actually moves it, then
+     * easing off for the last RISE_SLOW_DEG, lands on the target instead of near
+     * it. Releasing the jog makes the subsystem hold wherever it stopped.
+     */
+    private void rise(Deflector deflector) {
+        double angle = deflector.getAngle();
+        double remaining = RISE_TO_DEG - angle;
+
+        if (remaining <= 0) {
+            deflector.jog(0);   // Deflector.jog(0) holds where it stopped
+            phase = Phase.READY;
+            note = String.format("at %.2f deg -- ZERO reached", angle);
+            return;
+        }
+        if (phaseTimer.seconds() > RISE_TIMEOUT_SEC) {
+            abort(deflector, String.format(
+                    "FAILED: stopped climbing %.2f deg short of %.1f. RISE_SLOW_POWER "
+                            + "may be too weak to lift it.", remaining, RISE_TO_DEG));
+            return;
+        }
+        deflector.jog(remaining > RISE_SLOW_DEG ? RISE_POWER : RISE_SLOW_POWER);
     }
 
     /**
@@ -281,9 +334,19 @@ public class DeflectorAutoHome extends LinearOpMode {
                             lastWindowMovement, STALL_DEG));
         }
 
+        if (phase == Phase.RISING) {
+            telemetry.addLine();
+            telemetry.addData("Climbing to", "%.1f deg -- %.2f to go", RISE_TO_DEG,
+                    RISE_TO_DEG - angle);
+            telemetry.addData("Jog power", "%.2f%s",
+                    Math.abs(RISE_TO_DEG - angle) > RISE_SLOW_DEG ? RISE_POWER : RISE_SLOW_POWER,
+                    Math.abs(RISE_TO_DEG - angle) > RISE_SLOW_DEG ? " (fast)" : " (slow approach)");
+        }
+
         if (phase == Phase.READY) {
             telemetry.addLine();
-            telemetry.addLine("Jog to true level and press X to re-check ZERO_ABOVE_HOME_DEG.");
+            telemetry.addLine("Done. It should be sitting at ZERO (level) now.");
+            telemetry.addLine("Only if it looks off: jog to true level and press X.");
             if (!Double.isNaN(levelError)) {
                 telemetry.addLine("==== ZERO_ABOVE_HOME_DEG ====");
                 telemetry.addData("Corrected", "%.1f   (is %.1f, off by %+.1f)",

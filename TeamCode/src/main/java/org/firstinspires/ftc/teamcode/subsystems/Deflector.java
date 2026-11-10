@@ -273,7 +273,12 @@ public class Deflector {
         zeroed = true;
         keptZeroed = true;
         keptZeroTotal = zeroTotal;
-        target = DeflectorLogic.clipToLimits(angleHere);
+        // HOLD STILL. Not clipToLimits(angleHere): angleHere is normally BELOW
+        // MIN_ANGLE (the hard stop is outside the soft limits by definition), so
+        // clipping turned -11.9 into -2.0 and the hold loop immediately started
+        // climbing 9.9 deg at MIN_POWER and stalling at random. Setting the
+        // reference must not command a move.
+        target = angleHere;
         index = DeflectorLogic.nearestIndex(target);
     }
 
