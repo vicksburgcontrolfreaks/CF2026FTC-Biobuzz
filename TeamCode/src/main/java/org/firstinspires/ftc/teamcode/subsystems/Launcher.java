@@ -33,8 +33,38 @@ import org.firstinspires.ftc.teamcode.shooting.ShooterLogic;
  */
 public class Launcher {
 
-    /** Fixed for now; ShotTable (distance -> RPM) comes with odometry aiming. */
+    /**
+     * Fixed for now; ShotTable (distance -> RPM) comes with odometry aiming.
+     * Per robot -- see loadRobotNumbers(). This bare value is 6494's / the fallback.
+     */
     public static double FLYWHEEL_RPM = 1300;
+
+    /**
+     * This robot's flywheel speed. Every op mode that shoots starts from this
+     * (DriveTeleOp and the autos through Launcher, Pollen Shot Tune and Shooter
+     * Test as their starting value), so there is one place to change it.
+     */
+    public static double defaultFlywheelRpm() {
+        loadRobotNumbers();
+        return FLYWHEEL_RPM;
+    }
+
+    private static void loadRobotNumbers() {
+        try {
+            switch (org.firstinspires.ftc.teamcode.WhichRobot.get()) {
+                case R5618:
+                    // 1300 -> 1100: Pollen Shot Tune, Shane, 2026-11-11, pollen-only
+                    // 5618 rebuild (indexer 150, pivot 0.846).
+                    FLYWHEEL_RPM = 1100;
+                    break;
+                case R6494:
+                    FLYWHEEL_RPM = 1300;
+                    break;
+            }
+        } catch (IllegalStateException e) {
+            // Unknown robot: keep the default (6494's).
+        }
+    }
 
     /** What the operator is holding this loop. */
     public static class Controls {
@@ -69,6 +99,7 @@ public class Launcher {
     private double indexerAmps = 0;
 
     public Launcher(RobotHardware hw, HardwareMap hardwareMap) {
+        loadRobotNumbers();
         collection = new CollectionSystem(hw.collector, hw.indexer, hw.colorSensor);
         shooter = new Shooter(hw.shooterLeft, hw.shooterRight, collection);
         pivot = new ShooterPivot(hw.shooterPivot);   // positions per robot (ShooterPivot.loadRobotNumbers)

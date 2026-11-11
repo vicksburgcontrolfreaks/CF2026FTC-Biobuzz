@@ -19,6 +19,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.shooting.ShooterLogic;
 import org.firstinspires.ftc.teamcode.subsystems.CollectionSystem;
 import org.firstinspires.ftc.teamcode.subsystems.Deflector;
+import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
@@ -94,7 +95,7 @@ public class PollenShotTune extends OpMode {
     private enum Knob {
         //        label        unit    step  fine   min  max   format
         COLLECTOR("Collector", "RPM",  25,   5,     0,   300,  "%.0f"),
-        INDEXER  ("Indexer",   "RPM",  10,   2,     10,  150,  "%.0f"),
+        INDEXER  ("Indexer",   "RPM",  10,   2,     10,  200,  "%.0f"),
         FLYWHEEL ("Flywheel",  "RPM",  50,   10,    500, 2500, "%.0f"),
         PIVOT    ("Pivot",     "pos",  0.01, 0.005, 0,   1,    "%.3f"),   // limits = ShooterPivot safe band
         DEFLECTOR("Deflector", "deg",  1,    0.5,   0,   90,   "%.1f");
@@ -108,7 +109,6 @@ public class PollenShotTune extends OpMode {
     }
 
     private static final double START_COLLECTOR_RPM = 200;
-    private static final double START_FLYWHEEL_RPM = 1300;
 
     private final double[] value = new double[Knob.values().length];
     private final double[] start = new double[Knob.values().length];
@@ -182,7 +182,7 @@ public class PollenShotTune extends OpMode {
 
         start[Knob.COLLECTOR.ordinal()] = START_COLLECTOR_RPM;
         start[Knob.INDEXER.ordinal()] = CollectionSystem.FEED_RPM;
-        start[Knob.FLYWHEEL.ordinal()] = START_FLYWHEEL_RPM;
+        start[Knob.FLYWHEEL.ordinal()] = Launcher.defaultFlywheelRpm();   // per robot
         start[Knob.PIVOT.ordinal()] = ShooterPivot.POLLEN_POSITION;
         start[Knob.DEFLECTOR.ordinal()] = Deflector.DEFAULT_SHOT_DEG;
         System.arraycopy(start, 0, value, 0, value.length);

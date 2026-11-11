@@ -97,12 +97,19 @@ public class CollectionSystem {
         try {
             switch (org.firstinspires.ftc.teamcode.WhichRobot.get()) {
                 case R5618:
-                    // 50 -> 75, 2026-11-11 (Shane): match 6494's pollen feed. NO_BALL_SEC
-                    // scaled with it; TRIP_AMPS set to 6494's 75 RPM value, which is
-                    // uncalibrated (see the R6494 note) -- fine while pollen-only.
-                    FEED_RPM = 75.0;
-                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = 2.72;
-                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 2.0;
+                    // 150, 2026-11-11 (Shane, Pollen Shot Tune on the pollen-only 5618
+                    // rebuild: indexer 150, flywheel 1100, pivot 0.846).
+                    FEED_RPM = 150.0;
+                    // Scaled with the feed rate: same indexer travel as 6.0 s at 25 RPM.
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 1.0;
+                    // NECTAR GUARD TRIP OFF ON 5618 while it is pollen-only. 2.72 A is
+                    // the 25 RPM calibration, and pollen already peaked at 1.65 A there;
+                    // at 6x the feed speed a pollen could cross it. A trip would swing
+                    // the pivot to NECTAR_POSITION, which on 5618 is an unmeasured
+                    // placeholder -- worse than staying at pollen. To turn it back on:
+                    // measure nectar in Pivot Jog Test, re-run Indexer Load Test at
+                    // 150, and put the new threshold here.
+                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = Double.POSITIVE_INFINITY;
                     break;
                 case R6494:
                     // 25 -> 75: Pollen Shot Tune, Jade, 2026-11-09, shooting real pollen.
