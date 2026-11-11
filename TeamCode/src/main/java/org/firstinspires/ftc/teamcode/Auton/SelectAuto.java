@@ -121,7 +121,16 @@ public class SelectAuto extends RouteAuto {
         BuildInfo.show(telemetry);
         menu.show(telemetry);
         telemetry.addLine("");
-        addRouteTelemetry();
-        telemetry.update();
+
+        // super LAST, on purpose. RouteAuto.init_loop() drives the camera and the
+        // deflector and then adds the route telemetry and calls update(), so
+        // calling it here puts the menu above the route lines and flushes once.
+        //
+        // IT HAS TO BE CALLED AT ALL: deflector homing only progresses inside
+        // deflector.update(), which lives in there. Overriding this method
+        // without it meant RouteAuto.init() started homing and nothing ever
+        // applied power -- so auto-homing never ran in the one auto anybody
+        // uses (Shane, 2026-11-10, found on the robot).
+        super.init_loop();
     }
 }

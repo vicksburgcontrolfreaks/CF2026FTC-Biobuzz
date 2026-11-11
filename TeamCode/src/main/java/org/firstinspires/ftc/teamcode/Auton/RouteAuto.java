@@ -428,7 +428,9 @@ public abstract class RouteAuto extends OpMode {
     @Override
     public void init_loop() {
         camera.update();
-        deflector.update(false);   // keep counting turns; nothing moves in INIT
+        // false = no hold-loop motion in INIT. Homing is exempt and DOES move here
+        // (G304.H is satisfied because it cuts power when it finishes).
+        deflector.update(false);
         addRouteTelemetry();
         telemetry.update();
     }

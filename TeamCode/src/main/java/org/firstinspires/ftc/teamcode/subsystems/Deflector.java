@@ -269,8 +269,12 @@ public class Deflector {
         if (remaining <= 0) {
             homeState = HomeState.DONE;
             homeNote = String.format("HOMED, stowed at %.1f deg", a);
-            target = DeflectorLogic.clipToLimits(a);   // hold here, do not snap
-            index = DeflectorLogic.nearestIndex(target);
+            // DO NOT touch target here. startHoming() already set it to the stow, so
+            // the hold loop keeps it there -- and if something called goTo()
+            // mid-homing (pressing Start before homing finished, which RouteAuto
+            // and DriveTeleOp both allow), that target has to survive. Setting it
+            // to the current angle here threw the requested shot angle away and
+            // parked at the stow instead.
             return 0;
         }
         if (homeTimer.seconds() > HOME_UP_MAX_SEC) {
