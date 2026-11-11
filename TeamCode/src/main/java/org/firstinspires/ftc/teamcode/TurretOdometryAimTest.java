@@ -66,6 +66,18 @@ public class TurretOdometryAimTest extends LinearOpMode {
 
     public static double DRIVE_SCALE = 0.5;
 
+    // ---- The turret speed-up comparison, without Panels ---------------------
+    // LEFT BUMPER swaps between the gains this robot loaded at init and the
+    // BASELINE pair below, so the "did the faster turret help?" test can be run
+    // from the gamepad. Aim error peak is the number to compare: during a steady
+    // spin it IS the tracking lag. RIGHT BUMPER zeroes the peak.
+    //
+    // Baseline = what 6494 ran before the 2026-11-10 speed-up. Not hard-coded as
+    // "the slow set" for both robots: the fast set is whatever Turret
+    // loadRobotNumbers() gave THIS robot, captured at init.
+    public static double BASELINE_KP = 0.010;
+    public static double BASELINE_MAX_POWER = 0.55;
+
     private final Turret turret = new Turret();
     private Follower follower;
     private TelemetryManager telemetryM;
@@ -75,12 +87,19 @@ public class TurretOdometryAimTest extends LinearOpMode {
     private Alliance alliance = Alliance.RED;
     private HiveGeometry.Tilt tilt = HiveGeometry.Tilt.AUDIENCE_UP;
 
-    private boolean xPrev, aPrev, bPrev, yPrev, upPrev, downPrev;
+    private boolean xPrev, aPrev, bPrev, yPrev, upPrev, downPrev, lbPrev, rbPrev;
+
+    private double loadedKp, loadedMaxPower;   // this robot's own gains, read at init
+    private boolean baselineGains = false;
+    private double peakAimError = 0;
 
     @Override
     public void runOpMode() {
         RobotProfile.install();   // this robot's turret geometry, before any aiming
         turret.init(hardwareMap);
+        // After init, so these are whatever loadRobotNumbers() gave THIS robot.
+        loadedKp = Turret.kP;
+        loadedMaxPower = Turret.MAX_POWER;
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startPose());
 
@@ -92,6 +111,7 @@ public class TurretOdometryAimTest extends LinearOpMode {
 
         telemetry.addLine("TURRET ODOMETRY AIM TEST");
         telemetry.addLine("X = home | A = aim on/off | B = reset pose | Y = mark/hive");
+        telemetry.addLine("LB = swap turret gains (speed-up test) | RB = reset the peak");
         telemetry.addLine("Robot must be on START_X/Y/HEADING when you press play.");
         telemetry.update();
 
@@ -162,12 +182,23 @@ public class TurretOdometryAimTest extends LinearOpMode {
         if (gamepad1.dpad_down && !downPrev) {
             tilt = tilt.afterTip();
         }
+        if (gamepad1.left_bumper && !lbPrev) {
+            baselineGains = !baselineGains;
+            Turret.kP = baselineGains ? BASELINE_KP : loadedKp;
+            Turret.MAX_POWER = baselineGains ? BASELINE_MAX_POWER : loadedMaxPower;
+            peakAimError = 0;   // each gain set gets its own peak
+        }
+        if (gamepad1.right_bumper && !rbPrev) {
+            peakAimError = 0;
+        }
         xPrev = gamepad1.x;
         aPrev = gamepad1.a;
         bPrev = gamepad1.b;
         yPrev = gamepad1.y;
         upPrev = gamepad1.dpad_up;
         downPrev = gamepad1.dpad_down;
+        lbPrev = gamepad1.left_bumper;
+        rbPrev = gamepad1.right_bumper;
     }
 
     private static Pose startPose() {
@@ -236,7 +267,14 @@ public class TurretOdometryAimTest extends LinearOpMode {
             telemetryM.addData("Table RPM", !shots.isConfigured() ? "table empty"
                     : fmt(shots.lookup(aim.distance))
                       + (shots.inRange(aim.distance) ? "" : " (OUTSIDE TABLE)"));
-            telemetryM.addData("Aim error (deg)", fmt(aim.desiredDeg - turret.getAngle()));
+            double aimError = aim.desiredDeg - turret.getAngle();
+            telemetryM.addData("Aim error (deg)", fmt(aimError));
+            // Only while aiming: off, the error is just "wherever the turret is parked".
+            if (aiming && Math.abs(aimError) > peakAimError) peakAimError = Math.abs(aimError);
+            telemetryM.addData("Aim error PEAK (deg)", fmt(peakAimError)
+                    + "  (LB swaps gains, RB resets)");
+            telemetryM.addData("Gains", (baselineGains ? "BASELINE" : "robot's own")
+                    + String.format("  kP %.3f  max %.2f", Turret.kP, Turret.MAX_POWER));
         }
         telemetryM.addData("Turret angle (deg)", fmt(turret.getAngle()));
         telemetryM.addData("Turret state", turret.getState() + " - " + turret.getStatusNote());
