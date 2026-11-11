@@ -128,6 +128,25 @@ public final class HiveTags {
     private static final int[] ROW_SIDE = {-1, -1, +1, +1};
     private static final boolean[] ROW_OUTER = {true, false, false, true};
 
+    /**
+     * Inches right of its cell's centerline for this tag, as the camera sees it
+     * looking up at the cluster from underneath. Negative = left. The four tags
+     * come out at -6.5, -2.75, +2.75, +6.5 (Fig. 9-15).
+     *
+     * This is what lets one tag stand in for the whole cell: a camera that can
+     * see any single tag knows how far off the cell's centre that tag sits, so
+     * it can aim at the CENTRE instead of at the tag. TurretAim uses it for
+     * exactly that -- without it, which tags happen to be in frame shifts the
+     * aim point by up to 6.5 in.
+     *
+     *  IllegalArgumentException if the id is not a hive tag
+     */
+    public static double rowOffsetOf(int id) {
+        Cell cell = Cell.forTag(id);
+        if (cell == null) throw new IllegalArgumentException("Tag " + id + " is not a hive tag");
+        return rowOffset(indexInCell(cell, id));
+    }
+
     /** Inches right of the sticker centerline for the tag at this index in Cell.tagIds. */
     static double rowOffset(int index) {
         double fromCenter = ROW_OUTER[index] ? TAG_OUTER_OFFSET : TAG_OUTER_OFFSET - TAG_SPACING;

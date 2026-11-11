@@ -116,4 +116,47 @@ public class HiveTagsTest {
         assertEquals("tilt from the tag's own span vs HIVE_SWING_DEG/2",
                 halfSwing, riseFromMeasurement, 3.0);
     }
+
+    /*
+     * rowOffsetOf is what lets TurretAim aim at a cell's centre from a single
+     * tag, so it has to mean the same thing tagPose() means. Slide each tag back
+     * along its own row by its offset and all four must land on ONE point -- the
+     * sticker centreline. If these ever disagree, TurretAim's correction pulls
+     * the aim somewhere that is not the centre of the cell.
+     */
+    @Test public void slidingEveryTagBackByItsRowOffsetLandsOnOnePoint() {
+        for (Cell cell : Cell.values()) {
+            for (Tilt tilt : Tilt.values()) {
+                Rigid3 first = null;
+                for (int id : cell.tagIds) {
+                    Rigid3 centre = HiveTags.tagPose(id, tilt)
+                            .times(Rigid3.translation(-HiveTags.rowOffsetOf(id), 0, 0));
+                    if (first == null) {
+                        first = centre;
+                        continue;
+                    }
+                    String what = cell + " " + tilt + " tag " + id;
+                    assertEquals(what + " x", first.x(), centre.x(), EPS);
+                    assertEquals(what + " y", first.y(), centre.y(), EPS);
+                    assertEquals(what + " z", first.z(), centre.z(), EPS);
+                }
+            }
+        }
+    }
+
+    /* The row from Figure 9-15, by tag id rather than by index. */
+    @Test public void rowOffsetsMatchTheManualFigure() {
+        double[] expected = {-6.5, -2.75, 2.75, 6.5};
+        for (Cell cell : Cell.values()) {
+            for (int i = 0; i < cell.tagIds.length; i++) {
+                assertEquals(cell + " tag " + cell.tagIds[i],
+                        expected[i], HiveTags.rowOffsetOf(cell.tagIds[i]), EPS);
+            }
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rowOffsetOfRejectsATagThatIsNotOnAHive() {
+        HiveTags.rowOffsetOf(7);
+    }
 }

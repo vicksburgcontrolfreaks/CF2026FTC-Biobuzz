@@ -4,6 +4,8 @@ import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
+import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
+import org.firstinspires.ftc.teamcode.field.HiveTags;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
 import java.util.Arrays;
@@ -111,6 +113,12 @@ public class TurretAim {
     // still worth doing; it is left out of the per-robot split because this class
     // is what DriveTeleOp aims with in matches.
     public static double CAMERA_PITCH_DEG = 30.0;  // installed by RobotProfile
+
+    // Aim at the CENTRE of the cell rather than at whichever tags are in frame, by
+    // sliding each tag back along its row to the centreline first. See bearingOf.
+    // False restores the pre-2026-11-11 behaviour of aiming at the tags, which
+    // shifts the aim point by up to 6.5 in. depending on how many are visible.
+    public static boolean CENTRE_ON_CELL = true;
 
     // Dial in the difference between where the CAMERA looks and where the thing
     // you are actually aiming points. Leave at 0 while bringing this up; if the
@@ -337,9 +345,12 @@ public class TurretAim {
         }
 
         sinceLastSeen.reset();
-        // Plain average is fine: the four tags on one cell are a few degrees
-        // apart at most, so there is no wrap-around to worry about. Averaging is
-        // the cheapest noise reduction available -- four tags roughly halves it.
+        // Plain average is fine, and with CENTRE_ON_CELL every tag has already been
+        // slid back to the cell's centreline, so they are all estimating the SAME
+        // angle and averaging is pure noise reduction -- four tags roughly halves
+        // it. No wrap-around to worry about either: one cell's tags are a few
+        // degrees apart at most. (Before that fix this average was also silently
+        // deciding WHERE to aim, since the tags in frame set the target point.)
         rawBearing = bearingSum / count;
         ageMs = (System.nanoTime() - newestFrame) / 1.0e6;
 
@@ -490,20 +501,57 @@ public class TurretAim {
     }
 
     /**
-     * Horizontal bearing to one tag, in degrees. Positive = the tag is to the
-     * CAMERA's left.
+     * Horizontal bearing to the CENTRE OF THE CELL, in degrees, worked out from
+     * one tag. Positive = the centre is to the CAMERA's left.
      *
      * Same math as AprilTagFollow.whereIsTheTag(). ftcPose.bearing is not used
      * on purpose: it is measured in the camera's own tilted frame, and with the
-     * camera pitched up 30 deg to see tags on the underside of a hive cell, that
-     * is not the angle a vertical-axis turret needs. Rotating the camera's
-     * forward axis back down to horizontal first is what makes the number mean
-     * "how far do I have to spin".
+     * camera pitched up to see tags on the underside of a hive cell, that is not
+     * the angle a vertical-axis turret needs. Rotating the camera's forward axis
+     * back down to horizontal first is what makes the number mean "how far do I
+     * have to spin".
+     *
+     * WHY THE ROW OFFSET MATTERS (fixed 2026-11-11, and it was a real bug)
+     *
+     * A cell's four tags are NOT at its centre. They are in a row at -6.5,
+     * -2.75, +2.75 and +6.5 in. from the centreline (HiveTags.rowOffsetOf).
+     * Averaging raw bearings only finds the centre when all four are in frame.
+     * See two and the aim sits 4.6 in. off; see one end tag and it sits 6.5 in.
+     * off, which is 6 deg at 60 in. -- BIGGER THAN DEADBAND_DEG, so the turret
+     * would re-aim a few degrees sideways as tags slid in and out of frame and
+     * report ON TARGET the whole time.
+     *
+     * The fix is to slide each tag's measured position back along the row to the
+     * centreline BEFORE taking the angle. Then every tag votes for the same
+     * point and one tag is as good as four.
+     *
+     * WHAT THIS ASSUMES, and what is left over
+     *
+     * That the row lies across the line of sight, so the offset subtracts
+     * straight off the camera's "right". The row runs along field x, so this is
+     * exact when the robot is square to the hive and softens as the view swings
+     * round: at 45 deg off it over-corrects by about 30% of the offset, so about
+     * 2 in. worst case instead of 6.5. Strictly it wants the tag's yaw to find
+     * the row's true direction, but ftcPose's angles for a tag seen steeply from
+     * below are exactly what this class already refuses to trust, so guessing at
+     * them would trade a known error for an unknown one. Measure it before
+     * reaching for yaw.
+     *
+     * Set CENTRE_ON_CELL false to go back to aiming at the tags themselves.
      */
     private static double bearingOf(AprilTagDetection tag) {
         double pitch = Math.toRadians(CAMERA_PITCH_DEG);
         double forward = tag.ftcPose.y * Math.cos(pitch) - tag.ftcPose.z * Math.sin(pitch);
         double right = tag.ftcPose.x;
+        // Guarded on the id being a hive tag. Every caller builds this class from a
+        // Cell's tagIds today, so the check never fires -- but rowOffsetOf throws on
+        // anything else, and this runs inside DriveTeleOp's loop during a match.
+        // Aiming at the tag is a far better failure than an op mode crash.
+        if (CENTRE_ON_CELL && FieldAprilTags.Cell.forTag(tag.id) != null) {
+            // rowOffsetOf is "inches right of the centreline as the camera sees
+            // it", so the centreline is that far to the tag's LEFT.
+            right -= HiveTags.rowOffsetOf(tag.id);
+        }
         return Math.toDegrees(Math.atan2(-right, forward));
     }
 
