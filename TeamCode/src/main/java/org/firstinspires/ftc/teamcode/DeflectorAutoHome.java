@@ -172,6 +172,12 @@ public class DeflectorAutoHome extends LinearOpMode {
     /** Captured with X: how far true level is from where we called ZERO. */
     private double levelError = Double.NaN;
 
+    // Loop timing, because Max step alone cannot say WHY it is near the limit:
+    // a slow loop or a fast servo produce the same number.
+    private final ElapsedTime loopTimer = new ElapsedTime();
+    private double lastLoopSec = 0;
+    private double maxLoopSec = 0;
+
     @Override
     public void runOpMode() {
         Deflector deflector = new Deflector(hardwareMap);
@@ -196,7 +202,12 @@ public class DeflectorAutoHome extends LinearOpMode {
         }
         if (!deflector.isPresent()) return;
 
+        loopTimer.reset();
         while (opModeIsActive()) {
+            lastLoopSec = loopTimer.seconds();
+            loopTimer.reset();
+            maxLoopSec = Math.max(maxLoopSec, lastLoopSec);
+
             if (gamepad1.bWasPressed()) {
                 abort(deflector, "stopped by B");
             }
@@ -330,6 +341,14 @@ public class DeflectorAutoHome extends LinearOpMode {
     }
 
     private void show(Deflector deflector) {
+        // A step past the unwrap limit silently adds or drops a whole turn -- 12.06
+        // deflector degrees -- and every angle after it is wrong with no other
+        // sign. Say so loudly rather than letting a bad reference look fine.
+        if (deflector.getMaxStepSeen() > 150) {
+            telemetry.addLine(">>> MAX STEP NEAR 180: the turn count may already be");
+            telemetry.addLine(">>> wrong by 12 deg. Do not trust this zero -- re-home");
+            telemetry.addLine(">>> after the loop time is sorted out.");
+        }
         telemetry.addData("Phase", "%s -- %s", phase, note);
         telemetry.addData("Zeroed", deflector.isZeroed() ? "yes" : "NO");
         telemetry.addLine();
@@ -352,6 +371,13 @@ public class DeflectorAutoHome extends LinearOpMode {
         telemetry.addData("Max step", "%.0f servo deg/loop%s", deflector.getMaxStepSeen(),
                 deflector.getMaxStepSeen() > 120 ? "   <-- NEAR THE 180 UNWRAP LIMIT"
                         : "   (unwrap safe under 180)");
+        // Which of the two causes is it? deg/loop = speed x loop time, so both
+        // numbers are needed to tell a stalling loop from a fast servo.
+        telemetry.addData("Loop", "now %.0f ms, worst %.0f ms", lastLoopSec * 1000, maxLoopSec * 1000);
+        if (maxLoopSec > 0) {
+            telemetry.addData("Implied speed", "%.0f servo deg/s at the worst loop",
+                    deflector.getMaxStepSeen() / maxLoopSec);
+        }
 
         // What the position loop would command to hold the stow from here. Under
         // about 0.06 it cannot lift the deflector, which is why it sags a few
