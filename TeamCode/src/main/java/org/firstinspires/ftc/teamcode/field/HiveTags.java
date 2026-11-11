@@ -93,9 +93,10 @@ public final class HiveTags {
     //
     // The cell, as Shane describes it (2026-11-11): a box 20 in. wide along x,
     // 14 in. tall perpendicular to the arm, 12 in. deep along the arm. Back face
-    // at the inner end, 9.4 in. from the pivot. OPENING ON THE OUTER END FACE,
-    // 21.4 in. out, facing along the arm -- so tipping the cell up 30 deg points
-    // it outward and 30 deg above horizontal. Tag cluster on the bottom face,
+    // at the inner end, 9.4 in. from the pivot. OPENING ON THE FRONT (OUTER END)
+    // FACE, 21.4 in. out, facing along the arm -- so tipping the cell up 30 deg
+    // points it outward and 30 deg above horizontal. NOT the top face; Shane
+    // confirmed the front face 2026-11-11. Tag cluster on the bottom face,
     // 4.75 in. out from the back edge, which is why it rides the LOWER half of
     // that face once the cell is tipped.
     //

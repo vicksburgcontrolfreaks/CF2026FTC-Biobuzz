@@ -91,7 +91,8 @@ public class HiveGeometry {
     //
     // It also makes the geometry close, though not for the reason an earlier
     // version of this comment gave. Working the cell's real shape out from the
-    // pivot -- back face 9.4 in. out, opening on the OUTER END face 21.4 in. out,
+    // pivot -- back face 9.4 in. out, opening on the FRONT (outer end) face 21.4
+    // in. out, which Shane confirmed 2026-11-11 is the front and not the top,
     // tag on the bottom face 4.75 in. out from the back edge -- predicts this
     // opening centre at y 56.2, z 59.4 against the y 55, z 59 measured here.
     // See the CELL_DROP cross-check in HiveTags for the working.
