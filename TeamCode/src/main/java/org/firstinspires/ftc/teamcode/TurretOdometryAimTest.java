@@ -78,11 +78,18 @@ public class TurretOdometryAimTest extends LinearOpMode {
     public static double BASELINE_KP = 0.010;
     public static double BASELINE_MAX_POWER = 0.55;
 
-    // Tracking errors bigger than this are not the turret lagging -- they are a
-    // commanded slew, most often the 180 deg jump when the target crosses the
-    // blind arc and the turret switches limits. Left out of the peak so one of
-    // those cannot swamp the whole run.
-    public static double PEAK_IGNORE_ABOVE_DEG = 45.0;
+    // What tells a commanded SLEW apart from the turret LAGGING, so the peak can
+    // ignore the first and measure the second.
+    //
+    // Judged by how fast the COMMAND moves, not by how big the error is. A magnitude
+    // ceiling was tried first (45 deg) and it just clipped the answer: Shane read a
+    // peak of "about 44" on 2026-11-11, which is the bound, not the lag. Real lag can
+    // legitimately be large -- that is the whole point of measuring it.
+    //
+    // A steady spin moves the command a few degrees per loop; the limit switch when
+    // the target crosses the blind arc moves it ~180 deg in ONE loop. Nothing in
+    // between, so this threshold is not delicate.
+    public static double COMMAND_JUMP_DEG = 20.0;
 
     private final Turret turret = new Turret();
     private Follower follower;
@@ -98,6 +105,10 @@ public class TurretOdometryAimTest extends LinearOpMode {
     private double loadedKp, loadedMaxPower;   // this robot's own gains, read at init
     private boolean baselineGains = false;
     private double peakAimError = 0;
+    private double lastCommandDeg = Double.NaN;
+    // True from a command jump until the turret has caught up again. The catch-up
+    // is a slew, not lag, so none of it belongs in the peak.
+    private boolean settlingAfterJump = false;
 
     @Override
     public void runOpMode() {
@@ -193,6 +204,8 @@ public class TurretOdometryAimTest extends LinearOpMode {
             Turret.kP = baselineGains ? BASELINE_KP : loadedKp;
             Turret.MAX_POWER = baselineGains ? BASELINE_MAX_POWER : loadedMaxPower;
             peakAimError = 0;   // each gain set gets its own peak
+            settlingAfterJump = false;
+            lastCommandDeg = Double.NaN;
         }
         if (gamepad1.right_bumper && !rbPrev) {
             peakAimError = 0;
@@ -292,11 +305,29 @@ public class TurretOdometryAimTest extends LinearOpMode {
             // in progress. A slew across the dead zone is a genuine 180 deg command
             // jump, not the turret falling behind, and one of those would swamp the
             // number for the rest of the run.
-            boolean counts = aiming && aim.reachable
-                    && Math.abs(trackingError) <= PEAK_IGNORE_ABOVE_DEG;
+            // A big one-loop jump in the COMMAND is a slew starting -- the limit switch
+            // across the blind arc moves it ~180 deg at once. Stop counting until the
+            // turret has caught up, because the catch-up is the slew, not lag.
+            if (!Double.isNaN(lastCommandDeg)
+                    && Math.abs(aim.commandDeg - lastCommandDeg) > COMMAND_JUMP_DEG) {
+                settlingAfterJump = true;
+            }
+            if (settlingAfterJump && Math.abs(trackingError) <= Turret.TOLERANCE_DEG) {
+                settlingAfterJump = false;   // caught up; back to measuring lag
+            }
+            lastCommandDeg = aim.commandDeg;
+
+            boolean counts = aiming && aim.reachable && !settlingAfterJump;
             if (counts && Math.abs(trackingError) > peakAimError) {
                 peakAimError = Math.abs(trackingError);
             }
+
+            // Above this the turret is already at MAX_POWER, so kP changes nothing and
+            // a gain comparison is really a MAX_POWER comparison. Worth saying on
+            // screen: Shane's first run peaked around 44 deg with saturation at 40.
+            double saturatesAtDeg = Turret.kP > 0 ? Turret.MAX_POWER / Turret.kP : 0;
+            telemetryM.addData("Power-saturated past (deg)", fmt(saturatesAtDeg)
+                    + (peakAimError > saturatesAtDeg ? "  <-- PEAK IS PAST THIS, kP is not the lever" : ""));
             telemetryM.addData("Aim error PEAK (deg)", fmt(peakAimError)
                     + (counts ? "" : "  [not counting now]")
                     + "  (LB swaps gains, RB resets)");
