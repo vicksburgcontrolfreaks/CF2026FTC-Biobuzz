@@ -51,9 +51,17 @@ public final class HiveTags {
     //
     // Must stay equal to HiveGeometry.RED_AUDIENCE_OPENING_X -- same physical spot.
     public static double RED_HIVE_X = 59.6;
-    // CONFIRMED ON THE HIVE, Shane 2026-11-11: the 18.8 in. cell spacing from the
-    // manual text checks out with a tape, so this half-spacing is real. Confirming
-    // it is what made CELL_DROP solvable below.
+    // CONFIRMED ON THE HIVE, Shane 2026-11-11, and it means what this model needs.
+    // The manual's "approximately 18.8 in. apart" (9.6.2) is BACK FACE TO BACK FACE
+    // -- Shane's clarification -- and the back face is the one carrying the
+    // AprilTag. So each back face is 9.4 in. from the pivot along the arm, which
+    // is exactly what CELL_ARM is defined as above. Confirming it is also what
+    // made CELL_DROP solvable below.
+    //
+    // NOT to be confused with the OPENING, which is the opposite face, 12 in. away
+    // through the cell. Deriving the opening from here needs that depth AND the
+    // tilt, and guessing both is how HiveGeometry's y estimate ended up 9 in. out.
+    // The opening is measured directly instead; see HiveGeometry.
     public static double CELL_ARM = 9.4;
     // SOLVED FROM A MEASUREMENT, Shane 2026-11-11. Was a made-up 10.0, which put
     // every tag 11 in. from where it really is.

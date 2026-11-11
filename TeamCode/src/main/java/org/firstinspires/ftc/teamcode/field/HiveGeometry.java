@@ -63,13 +63,17 @@ public class HiveGeometry {
     // Y = 55.0. MEASURED, Shane 2026-11-11: audience wall to the centre of the
     // opening's face, with the red audience cell raised.
     //
-    // This replaces a derived 63.9 that was wrong by about 9 in., and the reason
-    // is worth keeping. The AprilTags sit on the cell's BOTTOM face; the opening
-    // is the OPPOSITE face, 12 in. away through the cell (manual 9.6.2). The old
-    // estimate put the opening directly above the bottom face's centre, so it
-    // ignored that depth entirely. With the cell raised 30 deg the 12 in. runs
-    // along the face normal (0, -0.5, 0.866), which moves the opening 6 in.
-    // toward the audience and 10.4 in. up -- about what the measurement found.
+    // This replaces a derived 63.9 that was wrong by about 9 in., and the reason is
+    // worth keeping. The AprilTags sit on the cell's BACK face; the opening is the
+    // OPPOSITE face, 12 in. away through the cell (manual 9.6.2). The old estimate
+    // put the opening directly above the back face's centre, so it dropped that
+    // depth entirely.
+    //
+    // DON'T TRY TO DERIVE THIS FROM HiveTags. Crossing the 12 in. needs both the
+    // cell's internal layout and the tilt, and guessing them is what produced the
+    // 9 in. error. HiveTags is anchored to the tag measurement on the back face;
+    // this is anchored to a tape on the opening. Each half stands on its own
+    // measurement and neither is computed from the other.
     //
     // Shane's sanity check was the giveaway: 63.9 sits only 8 in. from the field
     // centre, and the hive does not reach that far in toward the middle.
