@@ -111,6 +111,7 @@ public class SelectAuto extends RouteAuto {
 
     @Override
     public void init_loop() {
+        boolean wasLocked = menu.isLocked();
         if (menu.update(gamepad1)) {
             if (autoRoute.get() != lastRoute) {
                 lastRoute = autoRoute.get();
@@ -118,6 +119,15 @@ public class SelectAuto extends RouteAuto {
             }
             applyMenu(); // something changed -- rebuild the paths and recheck them
         }
+        // LOCKING (A) IS WHAT STARTS HOMING. A deliberate press, long after all the
+        // construction in init(), so no settle window can be eaten by follower and
+        // path building -- and the mechanisms moving is what tells the drive team
+        // the lock actually took, which is the fix for forgetting to press A.
+        // Unlock (B) and lock again to retry a failed home.
+        if (!wasLocked && menu.isLocked()) {
+            startHomingIfNeeded();
+        }
+
         BuildInfo.show(telemetry);
         menu.show(telemetry);
         telemetry.addLine("");

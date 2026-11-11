@@ -439,7 +439,10 @@ public abstract class RouteAuto extends OpMode {
         deflector = new Deflector(hardwareMap);
         // Every auto, in INIT: down to the hard stop, up to the stow, power off
         // (Shane, 2026-11-08). Wait for HOMED before signaling ready.
-        if (AUTO_HOME_IN_INIT) deflector.startHoming();
+        // Homing is NOT started here any more -- locking the menu (A) triggers it,
+        // via startHomingIfNeeded(). Starting it in init() meant the settle timers
+        // burned through createFollower() and path building before update() ever
+        // ran, so it judged the seek before driving the servo once.
 
         // TURRET HOMES IN INIT TOO, as of 2026-11-10, to stop costing up to
         // HOMING_TIMEOUT_SEC (15 s) of auto -- aiming is gated on isHomed(), so a
@@ -456,7 +459,7 @@ public abstract class RouteAuto extends OpMode {
         // >>> Revisit when the turret is flipped to face away from the collector
         // >>> (planned rebuild): that is expected to keep the sweep inside the
         // >>> envelope and is the natural moment to settle this.
-        if (AUTO_HOME_IN_INIT && !turret.isHomed() && Turret.isMeasured()) turret.startHoming();
+
 
         follower = Constants.createFollower(hardwareMap);
         follower.setMaxPower(MAX_POWER);
@@ -466,6 +469,31 @@ public abstract class RouteAuto extends OpMode {
     }
 
     // Runs over and over after INIT is pressed, until Start
+    /**
+     * Start homing the deflector and the turret, if they need it. Idempotent:
+     * safe to call repeatedly, does nothing while homing is already running or
+     * already done, and retries after a FAILED attempt so the drive team can just
+     * unlock and lock again.
+     *
+     * Called when the menu is LOCKED, not from init(). Two reasons: the trigger
+     * then happens long after construction, so homing settle windows cannot be
+     * consumed by follower and path building; and the mechanisms visibly moving
+     * tells the drive team the lock took, which is the fix for forgetting to
+     * press A.
+     */
+    protected void startHomingIfNeeded() {
+        if (!AUTO_HOME_IN_INIT) return;
+
+        if (deflector.isPresent() && !deflector.isHoming()
+                && (!deflector.isZeroed() || deflector.getHomeState() == Deflector.HomeState.FAILED)) {
+            deflector.startHoming();
+        }
+        if (Turret.isMeasured() && !turret.isHomed()
+                && turret.getState() != Turret.State.HOMING) {
+            turret.startHoming();
+        }
+    }
+
     @Override
     public void init_loop() {
         camera.update();
@@ -494,10 +522,17 @@ public abstract class RouteAuto extends OpMode {
         }
         // Launch readiness -- only matters for routes that launch.
         if (route != null && routeLaunches()) {
-            if (!turret.isHomed() && Turret.isMeasured()) {
-                telemetry.addLine(AUTO_HOME_IN_INIT
-                        ? "Turret homing NOW (INIT) -- make sure it's roughly forward."
-                        : "Turret will HOME at Start -- make sure it's roughly forward.");
+            // The turret.s ACTUAL state and note. This used to be a canned line that
+            // said homing was happening whether or not it was, which is why "it did
+            // not move" took three guesses to diagnose.
+            if (!Turret.isMeasured()) {
+                telemetry.addLine(">>> Turret NOT MEASURED -- it will not home. Turret Range Test.");
+            } else {
+                telemetry.addData("Turret", "%s%s -- %s", turret.getState(),
+                        turret.isHomed() ? " (homed)" : "", turret.getStatusNote());
+                if (!turret.isHomed() && turret.getState() != Turret.State.HOMING) {
+                    telemetry.addLine("    LOCK the menu (A) to home it. Face it roughly forward first.");
+                }
             }
             if (deflector.isPresent()) {
                 if (!deflector.isZeroed() && !deflector.isHoming()) {
