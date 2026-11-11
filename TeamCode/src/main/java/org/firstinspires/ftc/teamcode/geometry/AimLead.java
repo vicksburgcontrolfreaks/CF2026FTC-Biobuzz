@@ -57,7 +57,7 @@ public class AimLead {
      * robot rather than trusting that: too little leaves lag, too much overshoots
      * ahead of the target and will look like the aim leading into turns.
      */
-    public static double LEAD_SEC = 0.0;
+    public static double LEAD_SEC = 0.0;   // installed per robot by RobotProfile
 
     /** Low-pass on the rate estimate, per update. 1.0 = no smoothing at all. */
     public static double SMOOTHING = 0.30;

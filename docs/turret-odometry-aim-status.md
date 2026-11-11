@@ -234,3 +234,50 @@ degrees. Real, but not the thing to spend time on. Earlier today this was ranked
 third behind the tag-centring fix and the pose; that ranking was right, and the
 mid-day reversal of it -- "tightening the tolerance would make it worse" -- was
 based on the theory this test just killed.
+
+## Turret lead (feedforward): TUNED on 6494, and it works
+
+Shane, 2026-11-11, stepping `AimLead.LEAD_SEC` with the D-pad in
+`Turret Odometry Aim Test` and watching `Aim error PEAK`:
+
+> **"somewhere between 0.1 and 0.15 were the best results. Anything over that
+> and it starts to lead."**
+
+Stored as **0.12** in `RobotProfile` for 6494. Per robot, because the right
+value is `1 / (servo deg per sec * Turret.kP)` and both differ. 5618 is 0, i.e.
+off, until someone tunes it the same way -- another robot's lead would aim ahead
+of the target.
+
+### What that number tells us about the servo
+
+Rearranged: servo speed = `1 / (LEAD_SEC * kP)` = `1 / (0.12 * 0.020)` =
+**about 420 deg/sec at full power**, so roughly **330 deg/sec at MAX_POWER
+0.80**.
+
+That closes the loop on the saturation Shane measured. A fast FTC chassis spins
+somewhere around 180-360 deg/sec, which is right at or past that ceiling -- so
+"the turret cannot track a full-speed spin" is now a measured number rather than
+an inference, and no amount of kP or lead changes it. The levers are MAX_POWER
+(0.80 -> 1.0 buys about 80 deg/sec, against the overrun risk on a robot with no
+hard stops) or not spinning that fast while holding aim.
+
+Also worth noting it means the earlier guess of ~200 deg/sec was low by half,
+which is why theory said 0.25 and the robot said 0.12.
+
+## NOT YET IN THE OP MODES THE DRIVERS USE
+
+**`DriveTeleOp`, `RouteAuto` and `PollenShotTune` aim by CAMERA (`TurretAim`),
+not by odometry.** They never call `OdometryAim`, so there is no desired angle
+to lead and the tuned lead above reaches none of them. It cannot be switched on
+there with a flag.
+
+Getting it to the drivers means the "After the spin test passes" job above:
+wiring odometry aiming into `DriveTeleOp`. Which rests on the POSE -- so it
+wants to wait until after the current mechanical changes and the odometry
+retune, or it gets tuned against a pose that is about to move.
+
+**What the drivers CAN usefully test today:** the cell-centring fix in
+`TurretAim.bearingOf()` is already in `DriveTeleOp` and is a real change to how
+camera aiming behaves -- before it, the aim point moved up to 6.5 in. depending
+on which tags were in frame, and 1-2 tags is the normal case. `CENTRE_ON_CELL`
+turns it off if it misbehaves.

@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import org.firstinspires.ftc.teamcode.geometry.AimLead;
 import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
 import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
@@ -90,6 +91,13 @@ public final class RobotProfile {
         CAMERA_PITCH_DEG = 35.0; // MEASURED (approx), Shane 2026-11-11. Was 30 by hand, 2026-10-22.
         CAMERA_YAW_DEG = 0.0;    // NOT MEASURED -- assumed square to the turret
         applyCamera();
+
+        // TUNED ON THE ROBOT, Shane 2026-11-11. He stepped it with the D-pad in
+        // Turret Odometry Aim Test and watched Aim error PEAK: 0.10 to 0.15 gave
+        // the best results, and past 0.15 the aim visibly LEADS into turns. 0.12 is
+        // the middle of that. Per robot because the right value is
+        // 1 / (servo deg/sec * Turret.kP), and both differ between robots.
+        AimLead.LEAD_SEC = 0.12;
     }
 
     // ---- 5618 ---------------------------------------------------------------
@@ -117,6 +125,12 @@ public final class RobotProfile {
         CAMERA_PITCH_DEG = 30.0;
         CAMERA_YAW_DEG = 0.0;
         applyCamera();
+
+        // NOT TUNED on 5618. 0 is the lead switched off, which is the safe default --
+        // a lead meant for another robot's servo and kP would aim ahead of the
+        // target. Tune it the same way 6494's was: D-pad in Turret Odometry Aim
+        // Test, watch Aim error PEAK, stop when it stops improving.
+        AimLead.LEAD_SEC = 0.0;
     }
 
     // ---- plumbing -----------------------------------------------------------
