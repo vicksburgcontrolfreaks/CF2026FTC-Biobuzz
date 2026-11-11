@@ -345,9 +345,10 @@ public class DeflectorAutoHome extends LinearOpMode {
         // deflector degrees -- and every angle after it is wrong with no other
         // sign. Say so loudly rather than letting a bad reference look fine.
         if (deflector.getMaxStepSeen() > 150) {
-            telemetry.addLine(">>> MAX STEP NEAR 180: the turn count may already be");
-            telemetry.addLine(">>> wrong by 12 deg. Do not trust this zero -- re-home");
-            telemetry.addLine(">>> after the loop time is sorted out.");
+            telemetry.addLine(">>> MAX STEP NEAR 180: the turn count may be wrong by");
+            telemetry.addLine(">>> 12 deg. Usual cause is the deflector being moved BY");
+            telemetry.addLine(">>> HAND -- 180 servo deg is only 6 deflector deg. Press");
+            telemetry.addLine(">>> A to re-home; do not trust the angle until you do.");
         }
         telemetry.addData("Phase", "%s -- %s", phase, note);
         telemetry.addData("Zeroed", deflector.isZeroed() ? "yes" : "NO");
