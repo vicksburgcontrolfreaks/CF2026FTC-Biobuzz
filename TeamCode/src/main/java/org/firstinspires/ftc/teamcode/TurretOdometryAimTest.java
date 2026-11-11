@@ -88,6 +88,7 @@ public class TurretOdometryAimTest extends LinearOpMode {
         PanelsConfigurables.refreshClass(TurretOdometryAimTest.class);
         PanelsConfigurables.refreshClass(Turret.class);
         PanelsConfigurables.refreshClass(TurretGeometry.class);
+        PanelsConfigurables.refreshClass(HiveGeometry.class);   // type hive opening estimates live
 
         telemetry.addLine("TURRET ODOMETRY AIM TEST");
         telemetry.addLine("X = home | A = aim on/off | B = reset pose | Y = mark/hive");
@@ -185,8 +186,10 @@ public class TurretOdometryAimTest extends LinearOpMode {
         if (!geometry.isConfigured()) {
             return "TurretGeometry not configured: set TURRET_OFFSET_X/Y in Panels";
         }
-        if (useHive && !HiveGeometry.isMeasured()) {
-            return "hive opening not measured yet: press Y to use the tape mark";
+        // isAimMeasured, not isMeasured: aiming reads x and y only, and insisting on
+        // the opening HEIGHT blocked the hive target on a number aiming never uses.
+        if (useHive && !HiveGeometry.isAimMeasured()) {
+            return "hive opening x/y not set: press Y to use the tape mark";
         }
         if (Double.isNaN(target[0]) || Double.isNaN(target[1])) {
             return "target is NaN";
@@ -206,6 +209,10 @@ public class TurretOdometryAimTest extends LinearOpMode {
         telemetryM.addData("Target", useHive
                 ? "hive " + alliance + " " + tilt
                 : "tape mark");
+        if (useHive && !HiveGeometry.OPENING_MEASURED) {
+            // So an aim that lands off the opening is not blamed on the turret.
+            telemetryM.addLine("Hive opening is an ESTIMATE, not measured -- see HiveGeometry");
+        }
         telemetryM.addData("Target x, y", fmt(target[0]) + ", " + fmt(target[1]));
         if (blocked != null) {
             telemetryM.addLine("CAN'T AIM: " + blocked);

@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.field;
 
+import com.bylazar.configurables.annotations.Configurable;
+
 import org.firstinspires.ftc.teamcode.field.FieldAprilTags.Cell;
 
 /*
@@ -23,7 +25,8 @@ import org.firstinspires.ftc.teamcode.field.FieldAprilTags.Cell;
  *
  * Coordinates are Pedro field inches, same as FieldConstants.
  */
-public final class HiveGeometry {
+@Configurable   // so the opening estimates can be typed into Panels on the field
+public class HiveGeometry {
 
     private HiveGeometry() {}
 
@@ -37,20 +40,62 @@ public final class HiveGeometry {
         }
     }
 
-    // ---- Measured: the RED AUDIENCE cell's opening, while it is the UP cell ----
-    // TODO(measure in CAD): the center of the opening we launch into, in field
-    // inches. The FIRST field CAD (Playing Field Resources page) has the hive in
-    // one resting position -- if it shows the other cell up, measure that cell
-    // and mirror it (y -> 144 - y) to get this one. NaN = not measured yet.
-    public static double RED_AUDIENCE_OPENING_X = Double.NaN;
-    public static double RED_AUDIENCE_OPENING_Y = Double.NaN;
-    public static double RED_AUDIENCE_OPENING_Z = Double.NaN;   // height above the tiles
+    // ---- The RED AUDIENCE cell's opening, while it is the UP cell -------------
+    // ESTIMATES, NOT MEASUREMENTS. Every number here is derived from the manual
+    // plus Shane's 2026-11-11 hive measurements, and each rests on an assumption
+    // that has not been checked on a field. They are here, rather than NaN, so
+    // the turret can aim at the hive AT ALL and we can see how close it lands.
+    // Replace them with the plumb-line measurement in docs/hive-opening-measure.md
+    // and set OPENING_MEASURED = true.
+    //
+    // @Configurable: type better values straight into Panels on the field instead
+    // of redeploying once per guess.
 
-    /** False until the opening is measured. */
-    public static boolean isMeasured() {
+    // X = 59.6. The manual's hive frame is 49.46 in. wide, centred on the field,
+    // so it spans x 47.27 to 96.73 with the two hives side by side. If each hive
+    // sits centred in its half, red (the low-x side -- FieldConstants puts the
+    // red wall at x = 0) lands at 47.27 + 49.46/4. THE ASSUMPTION is "centred in
+    // its half", which is exactly what Figures 9-8..9-11 would settle.
+    // Worth knowing: this should equal HiveTags.RED_HIVE_X, a made-up 60.0 that
+    // happens to sit right next to this -- so it may be where 60.0 came from.
+    public static double RED_AUDIENCE_OPENING_X = 59.6;
+
+    // Y = 63.9. Pivot at y = 72, cells 18.8 in. apart ALONG THE ARM so 9.4 from
+    // the pivot, and the arm is tilted 30 deg (Shane, 2026-11-11), which shrinks
+    // the horizontal reach to 9.4 * cos(30) = 8.14. Audience cell is toward -y.
+    // This replaces the old 62.6 estimate, which ignored the tilt because the
+    // tilt was not known yet. THE ASSUMPTION is that the opening's centre sits
+    // over the cell's centre; the cell is 12 in. deep, so there is room to be off.
+    public static double RED_AUDIENCE_OPENING_Y = 63.9;
+
+    // Z = 57.5, and Z DOES NOT AFFECT AIMING -- aimAngle() and distanceTo() are
+    // flat x/y. It feeds LaunchReach. Shane measured the bottom of the opening at
+    // just under 54 in.; the opening is 14 in. tall per the manual, lying in a
+    // face tilted 30 deg, so its centre is about 14/2 * sin(30) = 3.5 in. above
+    // the bottom edge. THE ASSUMPTION is which of the opening's dimensions runs
+    // up the tilted face. This is the softest number of the three.
+    public static double RED_AUDIENCE_OPENING_Z = 57.5;
+
+    /**
+     * Flip to true when the three numbers above are real measurements rather than
+     * the derived estimates they are today. Op modes show this so an aim that
+     * lands off the opening is not mistaken for a turret-geometry bug.
+     */
+    public static boolean OPENING_MEASURED = false;
+
+    /**
+     * Enough to AIM at the hive: x and y only, which is all TurretGeometry
+     * .aimAngle() and distanceTo() read. Separate from isMeasured() because
+     * requiring z blocked aiming on a number that aiming never uses.
+     */
+    public static boolean isAimMeasured() {
         return !Double.isNaN(RED_AUDIENCE_OPENING_X)
-                && !Double.isNaN(RED_AUDIENCE_OPENING_Y)
-                && !Double.isNaN(RED_AUDIENCE_OPENING_Z);
+                && !Double.isNaN(RED_AUDIENCE_OPENING_Y);
+    }
+
+    /** All three, including the height LaunchReach needs. */
+    public static boolean isMeasured() {
+        return isAimMeasured() && !Double.isNaN(RED_AUDIENCE_OPENING_Z);
     }
 
     /** Which cell an alliance launches into, given how its hive is tipped. */

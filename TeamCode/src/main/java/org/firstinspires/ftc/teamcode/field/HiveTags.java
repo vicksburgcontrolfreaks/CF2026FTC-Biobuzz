@@ -40,8 +40,16 @@ public final class HiveTags {
     public static double PIVOT_Y = 72.0;          // Fig. 9-8 (Evan 10/27): pivot is mid-frame, frame is centered on the field
     public static double RED_HIVE_X = 60.0;       // MADE-UP: red hive center along x; blue is mirrored
     public static double CELL_ARM = 9.4;          // MADE-UP: half of the manual's ~18.8 in. cell spacing
+    // MADE-UP, AND KNOWN TO BE WRONG. Shane measured the tag centres at about 50 in.
+    // off the floor with the red audience cell raised. Running that back through
+    // tagPose() with the pivot at 43.95 and CELL_ARM 9.4 puts the drop near ZERO,
+    // not 10 -- i.e. the sticker sits about at pivot height. Not solved here on
+    // purpose: that is one measurement against two unknowns (CELL_ARM moves it
+    // too), so a number written here would look measured without being measured.
     public static double CELL_DROP = 10.0;        // MADE-UP: bottom face, inches below the pivot (hive level)
-    public static double HIVE_SWING_DEG = 40.0;   // MADE-UP: degrees between the two resting positions
+    // MEASURED, Shane 2026-11-11: a raised cell sits 30 deg up from parallel to
+    // the floor, so the two resting positions are 60 deg apart (+/-30 from level).
+    public static double HIVE_SWING_DEG = 60.0;
     // Manual Fig. 9-15 (read by Evan 10/27). 3.25 in. tags; layout along the row:
     //   [38]      [39]   |   [40]      [41]
     //   -6.5     -2.75   0   +2.75     +6.5     in. from the sticker centerline
