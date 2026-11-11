@@ -204,6 +204,8 @@ public class Turret {
     public static double PARK_ANGLE = 0.0;
 
     // ---- Closed loop --------------------------------------------------------
+    // Per robot -- kP and MAX_POWER are overwritten by loadRobotNumbers().
+    // MAX_POWER also caps JOG (hand turret on gamepad2), so raising it speeds that up too.
     public static double kP = 0.010;          // power per degree of error
     public static double MAX_POWER = 0.55;
     public static double MIN_POWER = 0.12;    // deadband: below this the servo just buzzes
@@ -360,6 +362,9 @@ public class Turret {
                 HOMING_DIRECTION = -1.0;   // toward the slack (clockwise)
                 // Finds the magnet from any start between it and +66.9 (-83.1 + 150).
                 HOMING_SEARCH_MAX_DEG = 150.0;
+                // Original speed, unchanged.
+                kP = 0.010;
+                MAX_POWER = 0.55;
                 break;
             case R6494:
             default:
@@ -380,6 +385,13 @@ public class Turret {
                 // Finds the magnet from any start between it and +64.5 (-85.5 + 150),
                 // i.e. anywhere roughly forward. Beyond that: FAILED, turn it by hand.
                 HOMING_SEARCH_MAX_DEG = 150.0;
+                // 2026-11-10, NOT YET ROBOT-TESTED: faster turret trial (was kP 0.010,
+                // MAX_POWER 0.55). kP doubled so small corrections push harder; cap at
+                // 0.8, not 1.0, because 6494 has NO hard stops and a faster turret
+                // coasts further past the +90 soft limit toward the tight cable end.
+                // If it oscillates around the target, lower kP before touching MAX_POWER.
+                kP = 0.020;
+                MAX_POWER = 0.80;
                 break;
         }
     }
