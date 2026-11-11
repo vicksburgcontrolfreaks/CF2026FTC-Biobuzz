@@ -89,10 +89,12 @@ public class HiveGeometry {
     // face, and guessing the cell's internal layout is exactly what went wrong
     // with the y estimate. 59 is the number from the person holding the tape.
     //
-    // It also makes the geometry close: the tag centre sits at (y 59.9, z 49.7)
-    // with the cell raised, so (55, 59) is 10.5 in. away at 28 deg from vertical,
-    // against a cell the manual calls 12 in. deep tilted 30 deg. See the
-    // CELL_DROP cross-check in HiveTags.
+    // It also makes the geometry close, though not for the reason an earlier
+    // version of this comment gave. Working the cell's real shape out from the
+    // pivot -- back face 9.4 in. out, opening on the OUTER END face 21.4 in. out,
+    // tag on the bottom face 4.75 in. out from the back edge -- predicts this
+    // opening centre at y 56.2, z 59.4 against the y 55, z 59 measured here.
+    // See the CELL_DROP cross-check in HiveTags for the working.
     public static double RED_AUDIENCE_OPENING_Z = 59.0;
 
     /**

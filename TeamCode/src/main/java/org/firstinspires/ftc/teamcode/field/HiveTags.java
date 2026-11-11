@@ -56,11 +56,16 @@ public final class HiveTags {
     // constant is -- tagPose() puts a tag's y at PIVOT_Y +/- CELL_ARM, because the
     // row offset only moves tags along x.
     //
-    // THE MANUAL'S "approximately 18.8 in. apart" (9.6.2) IS NOT THIS NUMBER and
-    // is no longer used as a source. Read as centre-to-centre it gave 9.4; read as
-    // back-face-to-back-face it also gave 9.4; the tags are really 28 in. apart.
-    // Whatever that sentence spans, it is not the tag row, so stop deriving from
-    // it -- it was wrong here twice in two different readings.
+    // THE MANUAL'S 18.8 IN. AGREES, once you know what each number measures.
+    // "Approximately 18.8 in. apart" (9.6.2) spans the two cells' BACK FACES, so
+    // each back face is 9.4 in. from the pivot. The tag cluster is not at the
+    // centre of the bottom face: Shane measured its centre 4.75 in. out from the
+    // back edge. 9.4 + 4.75 = 14.15, against the 14 he measured directly. Two
+    // independent routes to the same number, 0.15 in. apart.
+    //
+    // (An earlier pass read 18.8 as the tag spacing, got CELL_ARM = 9.4, and then
+    // wrongly declared the manual's number useless when the 14 turned up. It is
+    // not useless -- it measures the back faces, which is a different point.)
     public static double CELL_ARM = 14.0;
     // SOLVED FROM A MEASUREMENT, Shane 2026-11-11. Was a made-up 10.0.
     //
@@ -83,13 +88,28 @@ public final class HiveTags {
     // solves to 0.81 instead. HiveTagsTest pins the 5.75 so a change to CELL_ARM
     // or HIVE_SWING_DEG has to bring this with it.
     //
-    // CROSS-CHECK, and it is the reason to trust the pair. The tag centre lands at
-    // (y 59.9, z 49.7) with the cell raised; Shane's tape puts the OPENING centre
-    // at (y 55, z 59). Those are 10.5 in. apart at 28 deg from vertical, against a
-    // cell the manual says is 12 in. deep with the opening on the opposite face,
-    // tilted 30 deg. Two measurements taken off different references, neither
-    // derived from the other, agreeing to 1.5 in. and 2 deg. With CELL_ARM at 9.4
-    // the same check was 5 in. out.
+    // CROSS-CHECK against the OPENING, which is measured separately in
+    // HiveGeometry. This is worth re-running after touching anything here.
+    //
+    // The cell, as Shane describes it (2026-11-11): a box 20 in. wide along x,
+    // 14 in. tall perpendicular to the arm, 12 in. deep along the arm. Back face
+    // at the inner end, 9.4 in. from the pivot. OPENING ON THE OUTER END FACE,
+    // 21.4 in. out, facing along the arm -- so tipping the cell up 30 deg points
+    // it outward and 30 deg above horizontal. Tag cluster on the bottom face,
+    // 4.75 in. out from the back edge, which is why it rides the LOWER half of
+    // that face once the cell is tipped.
+    //
+    // So tag -> opening is NOT a face normal. It is 7.25 in. further out along
+    // the arm (21.4 - 14.15) and 7 in. perpendicular to it (bottom face up to the
+    // opening's mid-height): 10.1 in. at 46 deg to the arm. Rotate that through
+    // the 30 deg tilt and the opening centre lands at y 56.2, z 59.4, against the
+    // y 55, z 59 Shane taped. 1.2 in. and 0.4 in. -- from the manual's box
+    // dimensions and his tape readings, with nothing fitted.
+    //
+    // AN EARLIER VERSION OF THIS COMMENT WAS WRONG and claimed the check was
+    // "12 in. at 30 deg". That assumed the tag sat at the CENTRE of the bottom
+    // face and the opening directly opposite through the cell, on the TOP face.
+    // Both are false. It appeared to agree to 1.5 in. by luck.
     public static double CELL_DROP = 1.44;        // bottom face, inches below the pivot (hive level)
     // MEASURED, Shane 2026-11-11: a raised cell sits 30 deg up from parallel to
     // the floor, so the two resting positions are 60 deg apart (+/-30 from level).
