@@ -51,41 +51,46 @@ public final class HiveTags {
     //
     // Must stay equal to HiveGeometry.RED_AUDIENCE_OPENING_X -- same physical spot.
     public static double RED_HIVE_X = 59.6;
-    // CONFIRMED ON THE HIVE, Shane 2026-11-11, and it means what this model needs.
-    // The manual's "approximately 18.8 in. apart" (9.6.2) is BACK FACE TO BACK FACE
-    // -- Shane's clarification -- and the back face is the one carrying the
-    // AprilTag. So each back face is 9.4 in. from the pivot along the arm, which
-    // is exactly what CELL_ARM is defined as above. Confirming it is also what
-    // made CELL_DROP solvable below.
+    // MEASURED ON THE HIVE, Shane 2026-11-11: with the hives LEVEL, the AprilTag
+    // centres sit 14 in. from the pivot along y. That is exactly what this
+    // constant is -- tagPose() puts a tag's y at PIVOT_Y +/- CELL_ARM, because the
+    // row offset only moves tags along x.
     //
-    // NOT to be confused with the OPENING, which is the opposite face, 12 in. away
-    // through the cell. Deriving the opening from here needs that depth AND the
-    // tilt, and guessing both is how HiveGeometry's y estimate ended up 9 in. out.
-    // The opening is measured directly instead; see HiveGeometry.
-    public static double CELL_ARM = 9.4;
-    // SOLVED FROM A MEASUREMENT, Shane 2026-11-11. Was a made-up 10.0, which put
-    // every tag 11 in. from where it really is.
+    // THE MANUAL'S "approximately 18.8 in. apart" (9.6.2) IS NOT THIS NUMBER and
+    // is no longer used as a source. Read as centre-to-centre it gave 9.4; read as
+    // back-face-to-back-face it also gave 9.4; the tags are really 28 in. apart.
+    // Whatever that sentence spans, it is not the tag row, so stop deriving from
+    // it -- it was wrong here twice in two different readings.
+    public static double CELL_ARM = 14.0;
+    // SOLVED FROM A MEASUREMENT, Shane 2026-11-11. Was a made-up 10.0.
     //
     // He levelled off the pivot axis itself (just under 44 in., matching
-    // HIVE_PIVOT_HEIGHT) and measured the tag relative to that level, with the
-    // RED AUDIENCE cell raised: bottom edge +5.0, centre +5.75, top edge +6.5 in.
+    // HIVE_PIVOT_HEIGHT) and measured the tag against that level with the RED
+    // AUDIENCE cell raised: bottom edge +5.0, centre +5.75, top edge +6.5 in.
     //
     // With the audience cell up, tagPose() puts the sticker centre this far above
     // the pivot:  CELL_ARM * sin(tilt) - CELL_DROP * cos(tilt)
-    //           = 9.4 * sin(30) - CELL_DROP * cos(30)
-    //           = 4.7 - 0.866 * CELL_DROP
-    // Setting that to 5.75 gives CELL_DROP = -1.21. Negative: with the hive LEVEL
-    // the sticker sits about 1.2 in. ABOVE the pivot plane, not 10 in. below it.
+    //           = 14 * sin(30) - CELL_DROP * cos(30)
+    //           = 7 - 0.866 * CELL_DROP
+    // Setting that to 5.75 gives CELL_DROP = 1.44: with the hive LEVEL the sticker
+    // sits about 1.4 in. BELOW the pivot plane. (An earlier pass had CELL_ARM at
+    // 9.4 and solved this to -1.2, which put the sticker ABOVE the pivot -- a
+    // worse shape, and a sign the arm was wrong.)
     //
-    // This is one equation in one unknown only because CELL_ARM is now confirmed
-    // (Shane measured the 18.8 in. cell spacing on the hive, 2026-11-11). Before
-    // that it was one measurement against two unknowns and deliberately unsolved.
+    // UNCERTAINTY about +/-0.6, which is the tilt's. The same tape numbers date
+    // the tilt independently -- a 3.25 in. tag rising 1.5 in. (6.5 - 5.0) means
+    // asin(1.5/3.25) = 27.5 deg against the 30 we use -- and at 27.5 deg this
+    // solves to 0.81 instead. HiveTagsTest pins the 5.75 so a change to CELL_ARM
+    // or HIVE_SWING_DEG has to bring this with it.
     //
-    // UNCERTAINTY about +/-0.4. The same tape numbers also date the tilt
-    // independently -- a 3.25 in. tag rising 1.5 in. (6.5 - 5.0) means
-    // asin(1.5/3.25) = 27.5 deg, not 30 -- and at 27.5 deg the drop solves to
-    // -1.59 instead. HiveTagsTest pins the 5.75 so a change here has to keep it.
-    public static double CELL_DROP = -1.2;        // bottom face, inches below the pivot (hive level)
+    // CROSS-CHECK, and it is the reason to trust the pair. The tag centre lands at
+    // (y 59.9, z 49.7) with the cell raised; Shane's tape puts the OPENING centre
+    // at (y 55, z 59). Those are 10.5 in. apart at 28 deg from vertical, against a
+    // cell the manual says is 12 in. deep with the opening on the opposite face,
+    // tilted 30 deg. Two measurements taken off different references, neither
+    // derived from the other, agreeing to 1.5 in. and 2 deg. With CELL_ARM at 9.4
+    // the same check was 5 in. out.
+    public static double CELL_DROP = 1.44;        // bottom face, inches below the pivot (hive level)
     // MEASURED, Shane 2026-11-11: a raised cell sits 30 deg up from parallel to
     // the floor, so the two resting positions are 60 deg apart (+/-30 from level).
     public static double HIVE_SWING_DEG = 60.0;

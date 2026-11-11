@@ -79,13 +79,21 @@ public class HiveGeometry {
     // centre, and the hive does not reach that far in toward the middle.
     public static double RED_AUDIENCE_OPENING_Y = 55.0;
 
-    // Z = 57.5, and Z DOES NOT AFFECT AIMING -- aimAngle() and distanceTo() are
-    // flat x/y. It feeds LaunchReach. Shane measured the bottom of the opening at
-    // just under 54 in.; the opening is 14 in. tall per the manual, lying in a
-    // face tilted 30 deg, so its centre is about 14/2 * sin(30) = 3.5 in. above
-    // the bottom edge. THE ASSUMPTION is which of the opening's dimensions runs
-    // up the tilted face. This is the softest number of the three.
-    public static double RED_AUDIENCE_OPENING_Z = 57.5;
+    // Z = 59.0, Shane's call 2026-11-11, refining his own earlier reading. Z DOES
+    // NOT AFFECT AIMING -- aimAngle() and distanceTo() are flat x/y. It feeds
+    // LaunchReach, and eventually the ballistics.
+    //
+    // Replaces a derived 57.5 (bottom of the opening at just under 54, plus half
+    // the manual's 14 in. opening height through a 30 deg face). That derivation
+    // needed a guess about which of the opening's dimensions runs up the tilted
+    // face, and guessing the cell's internal layout is exactly what went wrong
+    // with the y estimate. 59 is the number from the person holding the tape.
+    //
+    // It also makes the geometry close: the tag centre sits at (y 59.9, z 49.7)
+    // with the cell raised, so (55, 59) is 10.5 in. away at 28 deg from vertical,
+    // against a cell the manual calls 12 in. deep tilted 30 deg. See the
+    // CELL_DROP cross-check in HiveTags.
+    public static double RED_AUDIENCE_OPENING_Z = 59.0;
 
     /**
      * Flip to true when the three numbers above are real measurements rather than
