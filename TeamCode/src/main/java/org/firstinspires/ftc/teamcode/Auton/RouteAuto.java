@@ -78,20 +78,26 @@ public abstract class RouteAuto extends OpMode {
     /**
      * Home the deflector and turret during INIT instead of at Start.
      *
-     * OFF (2026-11-10). It was on for one test and the deflector ended up
-     * pointing the wrong way twice: a stall with no travel was read as "on the
-     * stop", the zero was set at the stow, and it climbed 46.9 deg from there --
-     * twice, cumulatively. Deflector.HOME_MIN_TRAVEL_SERVO_DEG now refuses that,
-     * but the guard has not been proved on the robot, and the failure mode
-     * mis-points a mechanism rather than just not working.
+     * BACK ON (2026-11-10), after a clean standalone run: Deflector Auto Home
+     * found HOME, anchored the zero to it and climbed to the 35 stow, resting at
+     * 35.45.
      *
-     * Prove it in Deflector Auto Home first (it refuses the same way), then turn
-     * this back on. Homing still happens at Start meanwhile, as it always did.
+     * It was off briefly because it mis-pointed the deflector twice: a stall with
+     * NO TRAVEL was read as "on the stop", the zero was set at the stow, and it
+     * climbed 46.9 deg from there -- cumulatively, across two runs.
+     * Deflector.HOME_MIN_TRAVEL_SERVO_DEG now refuses that, and the clean run
+     * showed it does not block a real seek.
+     *
+     * Worth knowing why that was the only hazard: the seek sets the zero from
+     * total AT THE STOP, so a turn count corrupted beforehand (by someone moving
+     * the deflector by hand, say) is simply overwritten by a physical reference.
+     * The seek is self-correcting for anything except believing it has arrived
+     * when it never moved.
      *
      * Also still unconfirmed: whether the turret.s 150 deg sweep stays inside
      * the 18 in. starting cube during INIT. See the note in init().
      */
-    public static boolean AUTO_HOME_IN_INIT = false;
+    public static boolean AUTO_HOME_IN_INIT = true;
 
     // The shot arc lives in Deflector.DEFAULT_SHOT_DEG now -- one number shared by
     // auto, TeleOp and the tuner, so the three cannot drift apart. Was AUTO_ARC_DEG
