@@ -78,6 +78,12 @@ public class TurretOdometryAimTest extends LinearOpMode {
     public static double BASELINE_KP = 0.010;
     public static double BASELINE_MAX_POWER = 0.55;
 
+    // Tracking errors bigger than this are not the turret lagging -- they are a
+    // commanded slew, most often the 180 deg jump when the target crosses the
+    // blind arc and the turret switches limits. Left out of the peak so one of
+    // those cannot swamp the whole run.
+    public static double PEAK_IGNORE_ABOVE_DEG = 45.0;
+
     private final Turret turret = new Turret();
     private Follower follower;
     private TelemetryManager telemetryM;
@@ -262,16 +268,37 @@ public class TurretOdometryAimTest extends LinearOpMode {
             telemetryM.addData("Reach", aim.reachable
                     ? "OK"
                     : "OUT OF REACH by " + fmt(aim.outOfReachDeg) + " deg - turn the robot");
+            // The WHOLE miss, lag plus anything the travel limits will not let the
+            // turret reach. Read this one to answer "is it pointing at the target";
+            // read Aim error to answer "is the turret keeping up". They are the same
+            // number only while Reach says OK. Showing just the total is what made a
+            // parked turret report 9.6 deg of "error" on 2026-11-11 when nothing was
+            // lagging -- the target was simply past the limit.
+            telemetryM.addData("Total off target (deg)", fmt(aim.desiredDeg - turret.getAngle()));
             telemetryM.addData("Distance (in)", fmt(aim.distance));
             ShotTable shots = ShotTable.forRobot();
             telemetryM.addData("Table RPM", !shots.isConfigured() ? "table empty"
                     : fmt(shots.lookup(aim.distance))
                       + (shots.inRange(aim.distance) ? "" : " (OUTSIDE TABLE)"));
-            double aimError = aim.desiredDeg - turret.getAngle();
-            telemetryM.addData("Aim error (deg)", fmt(aimError));
-            // Only while aiming: off, the error is just "wherever the turret is parked".
-            if (aiming && Math.abs(aimError) > peakAimError) peakAimError = Math.abs(aimError);
+            // TRACKING error: commandDeg is what the turret was actually TOLD to do, so
+            // this is purely how far behind it is. NOT desiredDeg -- that one "may be
+            // unreachable" (see OdometryAim.Solution), and when the target swings into
+            // the blind arc it runs right outside the turret's +/-90 travel. Using it
+            // made the peak read 245 deg on 2026-11-11: the blind arc, not lag.
+            double trackingError = aim.commandDeg - turret.getAngle();
+            telemetryM.addData("Aim error (deg)", fmt(trackingError));
+            // The peak is for comparing gains, so it only counts samples where that
+            // comparison means something: aiming on, target reachable, and no big slew
+            // in progress. A slew across the dead zone is a genuine 180 deg command
+            // jump, not the turret falling behind, and one of those would swamp the
+            // number for the rest of the run.
+            boolean counts = aiming && aim.reachable
+                    && Math.abs(trackingError) <= PEAK_IGNORE_ABOVE_DEG;
+            if (counts && Math.abs(trackingError) > peakAimError) {
+                peakAimError = Math.abs(trackingError);
+            }
             telemetryM.addData("Aim error PEAK (deg)", fmt(peakAimError)
+                    + (counts ? "" : "  [not counting now]")
                     + "  (LB swaps gains, RB resets)");
             telemetryM.addData("Gains", (baselineGains ? "BASELINE" : "robot's own")
                     + String.format("  kP %.3f  max %.2f", Turret.kP, Turret.MAX_POWER));

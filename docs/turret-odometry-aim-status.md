@@ -104,3 +104,59 @@ Note for that work: with the turret facing forward (`TURRET_ZERO_DEG = 0`) and
 limits of -90/+90, the hive is UNREACHABLE whenever the robot's back is to it.
 Driving so the hive stays in the front half is a real constraint. Flipping the
 turret to face away from the collector moves the blind arc to the front.
+
+---
+
+# On-robot results, 2026-11-11 (Shane)
+
+## Spin test: PASSED
+
+"Looked pretty good." `TURRET_OFFSET_X/Y = -4.5, 0` stands. No numbers recorded,
+so if the aim is ever suspected again, re-run it and write them down this time.
+
+## Hive aiming: unblocked
+
+`Target x, y` now reads real numbers instead of NaN. Every hive number used for
+aiming is measured or is a manual value whose assumption Shane checked. See
+`HiveTags` and `HiveGeometry` -- each constant carries its own provenance.
+
+## Tag detection range: NOT a limit
+
+Driven around their small field, the camera sees **one to four tags whenever the
+hive is in view, and there is nowhere "too far"**. This kills an earlier worry
+that detection would only work within 2-10 ft. Two consequences:
+
+- Camera pose correction is more viable than assumed -- tags are nearly always
+  available, not an occasional lucky fix.
+- **Seeing only 1-2 tags is the NORMAL case, not an edge case.** That is what
+  made the cell-centring fix in `TurretAim.bearingOf()` worth doing: before it,
+  the aim point moved up to 6.5 in. depending on which tags happened to be in
+  frame. Measure the residual before trusting it to the degree.
+
+## Turret gain comparison: NOT YET VALID, re-run needed
+
+Peak read **245 deg both before and after pressing LB**, i.e. the measurement
+was broken, not the gains identical. The peak was built on
+`Solution.desiredDeg`, which is documented as "may be unreachable": when the
+target swings into the 180 deg blind arc, desiredDeg leaves the turret's +/-90
+travel entirely and the difference saturates. Both runs just hit the same
+geometric ceiling.
+
+Fixed to use `commandDeg - getAngle()` -- what the turret was actually told
+versus where it is, which is pure lag -- and to only count samples while aiming,
+reachable, and under `PEAK_IGNORE_ABOVE_DEG` (45) so a commanded slew across the
+dead zone cannot swamp the run. **Re-run the comparison after redeploying.**
+Expect peaks of a few degrees, not hundreds. A peak still in the tens means the
+spin is outrunning the turret, which is itself the answer.
+
+## An aim error of -9.6 deg while parked
+
+Reported at a standstill on the tape mark, and it resolved as the robot moved.
+Almost certainly the target sitting past a travel limit rather than anything
+lagging: the old `Aim error` was `desiredDeg - getAngle()`, so it included the
+part the turret is not allowed to reach. The `Reach` line said so but was easy
+to miss next to a big number.
+
+Now split in telemetry: **`Aim error`** is the tracking lag (command vs actual)
+and **`Total off target`** is the whole miss including anything out of reach.
+They agree only while `Reach` says OK.
