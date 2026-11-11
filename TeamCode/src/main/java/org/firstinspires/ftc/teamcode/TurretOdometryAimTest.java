@@ -109,6 +109,7 @@ public class TurretOdometryAimTest extends LinearOpMode {
     // True from a command jump until the turret has caught up again. The catch-up
     // is a slew, not lag, so none of it belongs in the peak.
     private boolean settlingAfterJump = false;
+    private boolean wasReachable = false;
 
     @Override
     public void runOpMode() {
@@ -206,6 +207,7 @@ public class TurretOdometryAimTest extends LinearOpMode {
             peakAimError = 0;   // each gain set gets its own peak
             settlingAfterJump = false;
             lastCommandDeg = Double.NaN;
+            wasReachable = false;
         }
         if (gamepad1.right_bumper && !rbPrev) {
             peakAimError = 0;
@@ -312,6 +314,17 @@ public class TurretOdometryAimTest extends LinearOpMode {
                     && Math.abs(aim.commandDeg - lastCommandDeg) > COMMAND_JUMP_DEG) {
                 settlingAfterJump = true;
             }
+            // The other discontinuity, and the one that was still leaking in: the target
+            // coming BACK out of the blind arc. The turret is parked at a travel limit
+            // and the target re-enters reach already sweeping at the robot's spin rate,
+            // so the turret has to accelerate from a standstill to match something
+            // already moving. Tens of degrees, every time, and it is a slew-rate story
+            // rather than a gain one -- it would swamp a kP comparison. Shane hit this
+            // on 2026-11-11 spinning all the way around at a moderate rate.
+            if (aim.reachable && !wasReachable) {
+                settlingAfterJump = true;
+            }
+            wasReachable = aim.reachable;
             if (settlingAfterJump && Math.abs(trackingError) <= Turret.TOLERANCE_DEG) {
                 settlingAfterJump = false;   // caught up; back to measuring lag
             }
@@ -328,8 +341,13 @@ public class TurretOdometryAimTest extends LinearOpMode {
             double saturatesAtDeg = Turret.kP > 0 ? Turret.MAX_POWER / Turret.kP : 0;
             telemetryM.addData("Power-saturated past (deg)", fmt(saturatesAtDeg)
                     + (peakAimError > saturatesAtDeg ? "  <-- PEAK IS PAST THIS, kP is not the lever" : ""));
-            telemetryM.addData("Aim error PEAK (deg)", fmt(peakAimError)
-                    + (counts ? "" : "  [not counting now]")
+            // Say WHY it is not counting. A frozen peak with no explanation looks
+            // exactly like a turret that has stopped falling behind.
+            String why = counts ? ""
+                    : !aiming ? "  [paused: aiming off]"
+                    : !aim.reachable ? "  [paused: target out of reach]"
+                    : "  [paused: catching up after a slew]";
+            telemetryM.addData("Aim error PEAK (deg)", fmt(peakAimError) + why
                     + "  (LB swaps gains, RB resets)");
             telemetryM.addData("Gains", (baselineGains ? "BASELINE" : "robot's own")
                     + String.format("  kP %.3f  max %.2f", Turret.kP, Turret.MAX_POWER));
