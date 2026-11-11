@@ -249,6 +249,9 @@ public class Turret {
     private double homingSearchDir = HOMING_DIRECTION;
     private int searchLegStartTicks = 0;       // reading when this search leg began
     private HomingPhase homingPhase = HomingPhase.SEARCH;
+
+    // True between startHoming() and the first update() that drives. See startHoming().
+    private boolean homePending = false;
     private boolean backoffReleased = false;   // has the switch let go yet?
     private int backoffStartTicks = 0;         // reading when it let go
 
@@ -416,8 +419,12 @@ public class Turret {
         searchLegStartTicks = readRawTicks();
         homingPhase = HomingPhase.SEARCH;
         backoffReleased = false;
-        homingTimer.reset();
-        resetStallWatch();
+        // Timers start on the FIRST driving update, not here. RouteAuto.init() asks
+        // for homing and then spends over a second building the Pedro follower and
+        // the route paths, so a stall window started here has already expired by
+        // the time update() first runs -- the turret then "stalls" without ever
+        // having been driven (2026-11-10, same bug as the deflector).
+        homePending = true;
         statusNote = "homing: searching " + (homingSearchDir < 0 ? "-" : "+");
     }
 
@@ -505,6 +512,13 @@ public class Turret {
     // ---- Internals ----------------------------------------------------------
 
     private double updateHoming() {
+        if (homePending) {
+            // Driving starts now, so the timeout and stall windows start now.
+            homingTimer.reset();
+            resetStallWatch();
+            searchLegStartTicks = readRawTicks();
+            homePending = false;
+        }
         switch (homingPhase) {
             case SEARCH:   return homingSearch();
             case BACKOFF:  return homingBackoff();

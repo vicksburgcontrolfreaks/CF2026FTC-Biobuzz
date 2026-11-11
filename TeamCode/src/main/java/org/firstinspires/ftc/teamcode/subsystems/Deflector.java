@@ -119,6 +119,13 @@ public class Deflector {
     private double stallRefTotal = 0;
     private double seekStartTotal = 0;
 
+    // True between startHoming() and the first update() that actually drives.
+    // The timers MUST start when driving starts, not when homing is requested:
+    // RouteAuto.init() asks for homing and then spends over a second building the
+    // Pedro follower and the route paths, so a settle window started at the
+    // request has already expired by the first update (2026-11-10).
+    private boolean homePending = false;
+
     // Kept across op modes (statics survive until a redeploy or power cycle).
     private static boolean keptZeroed = false;
     private static double keptZeroTotal = 0;
@@ -243,14 +250,22 @@ public class Deflector {
         jogging = false;
         target = STOW_ANGLE_DEG;   // park stowed unless something asks otherwise mid-run
         index = 0;
-        homeTimer.reset();
-        stallTimer.reset();
-        stallRefTotal = total;
-        seekStartTotal = total;
+        // Timers and reference totals are set on the FIRST driving update, not
+        // here -- see homePending.
+        homePending = true;
         homeNote = "homing: down to the stop";
     }
 
     private double homingPower() {
+        if (homePending) {
+            // Driving starts NOW, so the settle and stall windows start now too.
+            homeTimer.reset();
+            stallTimer.reset();
+            stallRefTotal = total;
+            seekStartTotal = total;
+            homePending = false;
+        }
+
         if (homeState == HomeState.DOWN) {
             if (homeTimer.seconds() > HOME_DOWN_MAX_SEC) {
                 homeState = HomeState.FAILED;
