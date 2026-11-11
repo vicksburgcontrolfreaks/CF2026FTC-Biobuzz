@@ -120,34 +120,62 @@ so if the aim is ever suspected again, re-run it and write them down this time.
 aiming is measured or is a manual value whose assumption Shane checked. See
 `HiveTags` and `HiveGeometry` -- each constant carries its own provenance.
 
-## Tag detection range: NOT a limit
+## Tag detection range: fine WHERE WE SHOOT FROM, not field-wide
 
-Driven around their small field, the camera sees **one to four tags whenever the
-hive is in view, and there is nowhere "too far"**. This kills an earlier worry
-that detection would only work within 2-10 ft. Two consequences:
+Shane, clarified 2026-11-11: from the **shooting positions** the camera sees
+**one to four tags whenever the hive is in view, and nothing is ever too far**.
+Range is not a limit inside shooting range.
 
-- Camera pose correction is more viable than assumed -- tags are nearly always
-  available, not an occasional lucky fix.
+But NOT everywhere. With the hive facing up, the tags cannot be seen from the
+far side of the field, or from much of the blue side outside our shooting range.
+An earlier version of this note said "there is nowhere too far", which
+overstated it -- that was only ever true of the places we shoot from.
+
+Two consequences, and the distinction matters:
+
+- **Tag correction is available where it counts.** Any scheme that corrects the
+  aim or the pose while lining up a shot can expect tags.
+- **It is NOT a continuous field-wide service.** Do not design anything that
+  assumes tags during a full-field traverse -- an auto path crossing to the far
+  side will lose them. Pose correction has to degrade gracefully into
+  odometry-only, not depend on a fix always being there.
 - **Seeing only 1-2 tags is the NORMAL case, not an edge case.** That is what
-  made the cell-centring fix in `TurretAim.bearingOf()` worth doing: before it,
-  the aim point moved up to 6.5 in. depending on which tags happened to be in
-  frame. Measure the residual before trusting it to the degree.
+  made the cell-centring fix in `TurretAim.bearingOf()` load bearing: before it,
+  the aim point moved up to 6.5 in. depending on which tags were in frame.
 
-## Turret gain comparison: NOT YET VALID, re-run needed
+## Turret gain comparison: ANSWERED. kP is not the lever, MAX_POWER is.
 
-Peak read **245 deg both before and after pressing LB**, i.e. the measurement
-was broken, not the gains identical. The peak was built on
-`Solution.desiredDeg`, which is documented as "may be unreachable": when the
-target swings into the 180 deg blind arc, desiredDeg leaves the turret's +/-90
-travel entirely and the difference saturates. Both runs just hit the same
-geometric ceiling.
+Took three tries, because the measurement kept reporting its own limits:
 
-Fixed to use `commandDeg - getAngle()` -- what the turret was actually told
-versus where it is, which is pure lag -- and to only count samples while aiming,
-reachable, and under `PEAK_IGNORE_ABOVE_DEG` (45) so a commanded slew across the
-dead zone cannot swamp the run. **Re-run the comparison after redeploying.**
-Expect peaks of a few degrees, not hundreds. A peak still in the tens means the
-spin is outrunning the turret, which is itself the answer.
+1. Peak 245 both runs -- built on `Solution.desiredDeg`, which "may be
+   unreachable", so it saturated on the 180 deg blind arc.
+2. Peak "about 44" -- against a 45 deg magnitude cap. Read the cap.
+3. Peak in the 40s even on a moderate spin -- the recovery coming OUT of the
+   blind arc, where the turret restarts from a travel limit against a target
+   already sweeping.
+
+Each one is excluded now (see `TurretOdometryAimTest`: command-jump detection,
+re-entering-reach detection, and a settling period that ends when the turret
+first gets back inside `TOLERANCE_DEG`). The peak also says WHY it is paused.
+
+**With all that excluded, steady-state tracking lag still exceeds 40 deg during
+a spin, and the op mode's saturation line fires.** The turret is at full power
+once the error passes `MAX_POWER / kP` = 0.80 / 0.020 = 40 deg, so past that kP
+does nothing. The 2026-11-10 speed-up is NOT the thing to tune further.
+
+So: **the turret cannot track a spinning robot at MAX_POWER 0.80.** Three ways
+out, in increasing order of how much they actually fix it:
+
+- **Raise MAX_POWER** (0.80 -> up to 1.0). Cheap, but 0.80 was chosen because
+  6494 has NO hard stops and a faster turret coasts further past the +90 soft
+  limit toward the tight cable end. Trades aim tracking for overrun risk.
+- **Don't spin fast while holding aim.** A real driving constraint, free.
+- **FEEDFORWARD -- the actual fix, and not yet built.** A pure P loop always
+  lags a moving target; it only ever reacts to error that has already happened.
+  But the target's motion is PREDICTABLE: most of it is just the robot rotating,
+  and the pose already knows the robot's angular rate. Lead the turret's target
+  by (angular rate x latency) and most of the lag cancels with no extra power.
+  This is why more MAX_POWER is treating the symptom.
 
 ## An aim error of -9.6 deg while parked
 
@@ -160,3 +188,33 @@ to miss next to a big number.
 Now split in telemetry: **`Aim error`** is the tracking lag (command vs actual)
 and **`Total off target`** is the whole miss including anything out of reach.
 They agree only while `Reach` says OK.
+
+## Hive aiming on the robot: WORKS, with a small random wander
+
+Shane, 2026-11-11: "the targetting is fairly good. Sometimes it seems like it is
+slightly right or left but it seems sort of random. When moving around it still
+sort of comes back to a decent spot."
+
+So the geometry is right -- a systematic error would lean one way, and this does
+not. What is left is a few degrees of scatter, and the prime suspect is NOT the
+geometry and NOT the pose:
+
+**`Turret.MIN_POWER / Turret.kP` = 0.12 / 0.020 = 6 deg.**
+
+The closed loop returns 0 inside `TOLERANCE_DEG` (2 deg), and outside it boosts
+anything under `MIN_POWER` up to `MIN_POWER`. So the smallest correction the
+turret can command is worth 6 deg of error, against a 2 deg band it is trying to
+land in. It cannot settle finely -- it gets a kick sized for 6 deg when it is
+2.1 deg out, overshoots, and comes back from the other side. Random left/right
+scatter of a few degrees is exactly what that produces.
+
+**THIS IS WHY TIGHTENING `TOLERANCE_DEG` WOULD MAKE IT WORSE, NOT BETTER.** The
+band is not the binding constraint; the minimum power step is. Narrow the band
+under a 6 deg kick and it hunts harder.
+
+Not yet measured, and it is the next thing to measure: **how far does the turret
+actually travel in one loop at `MIN_POWER`?** 0.12 was chosen because a CR servo
+below roughly 0.1 just hums without turning, so there may be very little room --
+but if it moves less than a degree per loop, the overshoot theory is wrong and
+the scatter is pose noise instead. Test: HOLD mode, nudge the target 3 deg, and
+watch whether it settles in one move or crosses back and forth.
