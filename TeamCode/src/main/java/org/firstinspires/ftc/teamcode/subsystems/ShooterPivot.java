@@ -243,15 +243,16 @@ public class ShooterPivot {
     private static void loadRobotNumbers() {
         switch (WhichRobot.get()) {
             case R5618:
-                // Pivot Jog Test on 5618, Shane, 2026-11-06: hard stops 0.1268 (open)
-                // and 0.65 (tight); pollen 0.568, nectar 0.17.
-                MIN_SAFE_POSITION = 0.1268;   // widest
-                MAX_SAFE_POSITION = 0.65;     // tightest
-                // CHOSEN, not measured (same idea as 6494's): off the open stop so
-                // the servo isn't held against it, 0.035 wider than the nectar grip.
-                OPEN_POSITION = 0.135;
-                POLLEN_POSITION = 0.568;
-                NECTAR_POSITION = 0.17;
+                // RE-MEASURED 2026-11-11, Pivot Jog Test on 5618 (pollen-only
+                // rebuild): open 0.486, closed 0.896, pollen 0.846.
+                // (Was 2026-11-06: stops 0.1268 / 0.65, pollen 0.568, nectar 0.17.)
+                MIN_SAFE_POSITION = 0.486;    // widest (open end)
+                MAX_SAFE_POSITION = 0.896;    // tightest (closed end)
+                OPEN_POSITION = 0.486;
+                POLLEN_POSITION = 0.846;
+                // NOT MEASURED: robot is pollen-only for now. 0.6 is a placeholder
+                // (Pivot Jog Test's 5618 start spot) -- re-measure before shooting nectar.
+                NECTAR_POSITION = 0.6;
                 break;
             case R6494:
             default:

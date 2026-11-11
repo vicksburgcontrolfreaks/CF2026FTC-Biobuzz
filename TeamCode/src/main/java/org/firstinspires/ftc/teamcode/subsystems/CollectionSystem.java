@@ -97,9 +97,12 @@ public class CollectionSystem {
         try {
             switch (org.firstinspires.ftc.teamcode.WhichRobot.get()) {
                 case R5618:
-                    FEED_RPM = 50.0;
-                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = 1.51;
-                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 3.0;
+                    // 50 -> 75, 2026-11-11 (Shane): match 6494's pollen feed. NO_BALL_SEC
+                    // scaled with it; TRIP_AMPS set to 6494's 75 RPM value, which is
+                    // uncalibrated (see the R6494 note) -- fine while pollen-only.
+                    FEED_RPM = 75.0;
+                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = 2.72;
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 2.0;
                     break;
                 case R6494:
                     // 25 -> 75: Pollen Shot Tune, Jade, 2026-11-09, shooting real pollen.
