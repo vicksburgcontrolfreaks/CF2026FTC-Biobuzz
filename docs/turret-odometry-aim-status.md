@@ -199,22 +199,38 @@ So the geometry is right -- a systematic error would lean one way, and this does
 not. What is left is a few degrees of scatter, and the prime suspect is NOT the
 geometry and NOT the pose:
 
-**`Turret.MIN_POWER / Turret.kP` = 0.12 / 0.020 = 6 deg.**
+**MEASURED 2026-11-11, AND IT IS NOT THE TURRET.** The theory was that
+`Turret.MIN_POWER / Turret.kP` = 0.12 / 0.020 = 6 deg -- the smallest correction
+the loop can command -- was too coarse for the 2 deg `TOLERANCE_DEG` band, so
+the turret could never sit still. Shane ran the settle test in `Turret Test`
+(HOLD, 2 deg bumper nudge, repeated both directions):
 
-The closed loop returns 0 inside `TOLERANCE_DEG` (2 deg), and outside it boosts
-anything under `MIN_POWER` up to `MIN_POWER`. So the smallest correction the
-turret can command is worth 6 deg of error, against a 2 deg band it is trying to
-land in. It cannot settle finely -- it gets a kick sized for 6 deg when it is
-2.1 deg out, overshoots, and comes back from the other side. Random left/right
-scatter of a few degrees is exactly what that produces.
+> **Overshoots were 0 or 1 every time. Worst distance past the target was
+> 1.29 deg, and often very close to 0.**
 
-**THIS IS WHY TIGHTENING `TOLERANCE_DEG` WOULD MAKE IT WORSE, NOT BETTER.** The
-band is not the binding constraint; the minimum power step is. Narrow the band
-under a 6 deg kick and it hunts harder.
+So the turret settles cleanly in one move or one small ring. The theory is dead,
+and with it the warning that tightening `TOLERANCE_DEG` would backfire.
 
-Not yet measured, and it is the next thing to measure: **how far does the turret
-actually travel in one loop at `MIN_POWER`?** 0.12 was chosen because a CR servo
-below roughly 0.1 just hums without turning, so there may be very little room --
-but if it moves less than a degree per loop, the overshoot theory is wrong and
-the scatter is pose noise instead. Test: HOLD mode, nudge the target 3 deg, and
-watch whether it settles in one move or crosses back and forth.
+**THEREFORE THE WANDER IS THE POSE.** Odometry hive aiming uses no camera at
+all, so the only two contributors are the turret and the pose. The turret is now
+measured and exonerated, which leaves 6494's odometry -- and the phantom
+sideways drift in `docs/TODO.md` section 0 is already an open bug with exactly
+the right shape: a few degrees, wandering, not leaning one way, and recovering
+as the robot moves. **That is the next real job, and it is a bigger one than
+anything in the turret.**
+
+### What the measurement says about TOLERANCE_DEG
+
+It CAN come down, but not far, and it is not worth much.
+
+The worst overshoot was 1.29 deg. The turret stops once it is inside
+`TOLERANCE_DEG`, so a band narrower than the overshoot means it lands outside,
+corrects again, and starts hunting -- the failure that was feared, just at a
+different threshold. **1.5 deg is defensible** (above 1.29 with a little room).
+**1.0 is not.**
+
+That buys 0.5 deg, about half an inch at 60 in., against a pose error of several
+degrees. Real, but not the thing to spend time on. Earlier today this was ranked
+third behind the tag-centring fix and the pose; that ranking was right, and the
+mid-day reversal of it -- "tightening the tolerance would make it worse" -- was
+based on the theory this test just killed.
