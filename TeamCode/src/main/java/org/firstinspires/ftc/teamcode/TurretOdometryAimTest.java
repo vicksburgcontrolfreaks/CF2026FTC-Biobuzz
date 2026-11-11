@@ -95,6 +95,17 @@ public class TurretOdometryAimTest extends LinearOpMode {
 
         waitForStart();
         follower.startTeleopDrive();
+        // PRIME THE FOLLOWER BEFORE EVER CALLING setTeleOpDrive.
+        // Pedro 2.0.2 keeps its OWN copy of the pose inside VectorCalculator, and
+        // the only thing that fills it in is follower.update() --
+        // startTeleopDrive() does not. setTeleOpDrive() then reads that copy's
+        // heading unconditionally, so calling it first threw
+        //   NullPointerException: Pose.getHeading() on a null object reference
+        // at VectorCalculator.setTeleOpMovementVectors(VectorCalculator.java:328)
+        // on the very first loop, the instant you pressed play (2026-11-10).
+        // Every stock Pedro tuner in pedroPathing/Tuning.java does this same
+        // startTeleopDrive() -> update() -> setTeleOpDrive() order; we skipped it.
+        follower.update();
 
         while (opModeIsActive()) {
             handleButtons();
