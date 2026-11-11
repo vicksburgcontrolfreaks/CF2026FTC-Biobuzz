@@ -427,6 +427,7 @@ public abstract class RouteAuto extends OpMode {
 
     @Override
     public void init() {
+        org.firstinspires.ftc.teamcode.RobotProfile.install();   // this robot's turret and camera numbers
         pathTimer = new Timer();
         launchTimer = new Timer();
         runTimer = new Timer();

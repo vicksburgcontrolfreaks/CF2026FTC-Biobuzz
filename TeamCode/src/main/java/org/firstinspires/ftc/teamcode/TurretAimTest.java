@@ -168,6 +168,7 @@ public class TurretAimTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        RobotProfile.install();   // this robot's camera pitch, before any bearing math
         turret.init(hardwareMap);
         aim = new TurretAim(cell.tagIds);
 

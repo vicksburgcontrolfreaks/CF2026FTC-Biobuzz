@@ -79,6 +79,7 @@ public class TurretOdometryAimTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        RobotProfile.install();   // this robot's turret geometry, before any aiming
         turret.init(hardwareMap);
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startPose());
@@ -199,6 +200,9 @@ public class TurretOdometryAimTest extends LinearOpMode {
     private void showTelemetry(Pose robot, TurretGeometry geometry, double[] target,
                                OdometryAim.Solution aim, String blocked) {
         telemetryM.addData("Aiming", aiming ? "ON" : "off");
+        // Which robot's numbers are loaded. If this does not say 6494 or 5618, the
+        // geometry below is whatever was compiled in, not this robot's.
+        telemetryM.addData("Profile", RobotProfile.installedFor());
         telemetryM.addData("Target", useHive
                 ? "hive " + alliance + " " + tilt
                 : "tape mark");

@@ -51,18 +51,33 @@ import java.util.List;
  * check: that the camera numbers below match the real robot. Phase 3's gate
  * (park on tape-measured spots, compare) is where that gets proven.
  *
- * !!!! The CAMERA_* numbers and everything in HiveTags are MADE-UP (2026-10-24). !!!!
+ * CAMERA NUMBERS: per robot, installed by RobotProfile. On 6494, FORWARD, UP and
+ * PITCH are measured; LEFT and YAW are still assumed 0. On 5618 all five are
+ * inherited guesses.
+ *
+ * !!!! HiveTags is still mostly MADE-UP: RED_HIVE_X, CELL_ARM and CELL_DROP.  !!!!
+ * !!!! HIVE_SWING_DEG was measured 2026-11-11. A tag fix is only as good as    !!!!
+ * !!!! those, so check TurretFix.believable before trusting one.               !!!!
  */
 public class TagLocalizer {
 
     // ---- Camera on the turret, with the turret at 0 deg ---------------------
-    // Relative to the turret axis at FLOOR level. CAMERA_FORWARD is measured;
-    // CAMERA_LEFT / UP / PITCH / YAW are still MADE-UP.
-    public static double CAMERA_FORWARD = 4.5;   // in, along the turret pointing direction. MEASURED, Shane 2026-11-10.
-    public static double CAMERA_LEFT = 0.0;      // in
-    public static double CAMERA_UP = 12.0;       // in, lens height above the tiles
-    public static double CAMERA_PITCH_DEG = 30;  // tipped UP from level, to see the downward tags
-    public static double CAMERA_YAW_DEG = 0;     // turned left of the turret's pointing direction
+    // Relative to the turret axis at FLOOR level.
+    //
+    // PER ROBOT: RobotProfile.install() fills all five of these in at op-mode
+    // init, so a KEEPER value goes in RobotProfile, not here. The values below
+    // are 6494's, left as real numbers rather than NaN (the way
+    // TurretGeometry's offsets are) because TagLocalizerTest builds a camera
+    // pose on a laptop, where WhichRobot cannot run and install() never happens.
+    //
+    // Measured on 6494: FORWARD (Shane 2026-11-10), UP and PITCH (Shane
+    // 2026-11-11, approximate). LEFT and YAW are still assumptions -- the camera
+    // is taken to be centred on the turret axis and square to where it points.
+    public static double CAMERA_FORWARD = 4.5;    // in, along the turret's pointing direction
+    public static double CAMERA_LEFT = 0.0;       // in. ASSUMED 0, not measured
+    public static double CAMERA_UP = 14.5;        // in, lens height above the tiles
+    public static double CAMERA_PITCH_DEG = 35;   // tipped UP from level, to see the hive tags
+    public static double CAMERA_YAW_DEG = 0;      // left of the pointing direction. ASSUMED 0
 
     // How far from level (deg) and off the floor (in) the turret base may come
     // out and still be believed. The wrong hive tilt misses by ~HIVE_SWING_DEG.

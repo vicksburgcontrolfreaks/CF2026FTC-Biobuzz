@@ -99,9 +99,18 @@ public class TurretAim {
     // ---- Where the camera is ------------------------------------------------
     // How far the camera is tipped UP from level, in degrees. This matters: the
     // BIOBUZZ tags are on the BOTTOM of the hive cells facing DOWN, so the camera
-    // has to look up at them. Measured by hand at about 30 deg on 2026-10-22 --
-    // re-measure if the mount is touched.
-    public static double CAMERA_PITCH_DEG = 30.0;
+    // has to look up at them, and bearingOf() uses this angle to rotate the
+    // camera frame back down to horizontal. Get it wrong and every bearing this
+    // class produces is biased.
+    //
+    // PER ROBOT, AND A DUPLICATE: TagLocalizer.CAMERA_PITCH_DEG is the same
+    // physical angle. RobotProfile.install() sets BOTH from one stored number so
+    // they cannot drift apart -- which they already had, both sitting at 30.0
+    // (by hand, 2026-10-22) while 6494 actually measured about 35 on 2026-11-11.
+    // Keeper values go in RobotProfile. Collapsing these two fields into one is
+    // still worth doing; it is left out of the per-robot split because this class
+    // is what DriveTeleOp aims with in matches.
+    public static double CAMERA_PITCH_DEG = 30.0;  // installed by RobotProfile
 
     // Dial in the difference between where the CAMERA looks and where the thing
     // you are actually aiming points. Leave at 0 while bringing this up; if the

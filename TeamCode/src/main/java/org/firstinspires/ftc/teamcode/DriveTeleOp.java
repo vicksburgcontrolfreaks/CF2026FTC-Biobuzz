@@ -146,6 +146,10 @@ public class DriveTeleOp extends OpMode {
 
     @Override
     public void init() {
+        // This robot's turret and camera numbers, before anything aims. Throws if
+        // the config name does not say which robot this is -- see RobotProfile.
+        RobotProfile.install();
+
         hardware = new RobotHardware();
         hardware.init(hardwareMap, false);   // TurretCamera owns the webcam
         follower = Constants.createFollower(hardwareMap);

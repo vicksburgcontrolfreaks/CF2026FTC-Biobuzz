@@ -42,8 +42,17 @@ import com.pedropathing.geometry.Pose;
 public class TurretGeometry {
 
     // ---- Robot measurements -------------------------------------------------
-    // Measured by Shane with a tape measure, 2026-11-10. NaN means "not measured
-    // yet" -- isConfigured() is false until all four are real, and nothing aims.
+    // THESE FOUR ARE PER ROBOT. RobotProfile.install() fills them in from the
+    // numbers stored for 5618 / 6494, so a KEEPER value belongs in RobotProfile,
+    // not here -- a value typed here is overwritten at the next init.
+    //
+    // Panels edits DO stick: install() runs once at init, not every loop, and
+    // forRobot() re-reads these fields every loop. Re-INIT restores the stored
+    // numbers, so a bad live edit cannot strand you.
+    //
+    // The two offsets start as NaN so an op mode that forgets to call install()
+    // refuses to aim (isConfigured() is false) instead of quietly aiming with
+    // whichever robot happened to be measured last.
     //
     // CAUTION: "center" here has to mean the POSE ORIGIN -- the point Pedro
     // reports as the robot's x,y, which is normally the centre of the odometry
@@ -54,20 +63,20 @@ public class TurretGeometry {
     // whereas an offset that is wrong in Y shifts the whole spin one direction.
 
     /** Turret axis, inches FORWARD of the robot's center (negative = behind). */
-    public static double TURRET_OFFSET_X = -4.5;  // Shane, 2026-11-10, tape measure: 4.5 in REAR of center.
+    public static double TURRET_OFFSET_X = Double.NaN;  // installed by RobotProfile
     /** Turret axis, inches LEFT of the robot's center (negative = right). */
-    public static double TURRET_OFFSET_Y = 0.0;   // Shane, 2026-11-10: laterally centered.
+    public static double TURRET_OFFSET_Y = Double.NaN;  // installed by RobotProfile
     /**
      * Which way turret 0 deg points, in degrees counter-clockwise from the
      * robot's front. Turret on the back, facing backward at 0 deg = 180.
      */
-    public static double TURRET_ZERO_DEG = 0.0;  // Evan: faces front, per the build team.
+    public static double TURRET_ZERO_DEG = 0.0;  // installed by RobotProfile
     /**
      * +1 if a BIGGER turret angle turns the turret counter-clockwise (seen from
      * above), -1 if clockwise. Check it on the robot: jog the turret, watch
      * Turret.getAngle() and which way it turns.
      */
-    public static double TURRET_CCW_SIGN = 1.0;  // turret-bringup.md range test: ticks rise CCW, ENCODER_DIRECTION = 1.0
+    public static double TURRET_CCW_SIGN = 1.0;  // installed by RobotProfile
 
     /** The geometry of OUR robot, from the constants above. */
     public static TurretGeometry forRobot() {

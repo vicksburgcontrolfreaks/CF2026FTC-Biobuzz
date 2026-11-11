@@ -164,6 +164,7 @@ public class PollenShotTune extends OpMode {
 
     @Override
     public void init() {
+        RobotProfile.install();   // this robot's turret and camera numbers
         hw = new RobotHardware();
         hw.init(hardwareMap, false);   // TurretCamera owns the webcam
         follower = Constants.createFollower(hardwareMap);
