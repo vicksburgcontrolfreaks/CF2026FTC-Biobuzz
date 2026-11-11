@@ -75,6 +75,24 @@ public abstract class RouteAuto extends OpMode {
      */
     public static boolean LAUNCH_FULL_TIME = true;
 
+    /**
+     * Home the deflector and turret during INIT instead of at Start.
+     *
+     * OFF (2026-11-10). It was on for one test and the deflector ended up
+     * pointing the wrong way twice: a stall with no travel was read as "on the
+     * stop", the zero was set at the stow, and it climbed 46.9 deg from there --
+     * twice, cumulatively. Deflector.HOME_MIN_TRAVEL_SERVO_DEG now refuses that,
+     * but the guard has not been proved on the robot, and the failure mode
+     * mis-points a mechanism rather than just not working.
+     *
+     * Prove it in Deflector Auto Home first (it refuses the same way), then turn
+     * this back on. Homing still happens at Start meanwhile, as it always did.
+     *
+     * Also still unconfirmed: whether the turret.s 150 deg sweep stays inside
+     * the 18 in. starting cube during INIT. See the note in init().
+     */
+    public static boolean AUTO_HOME_IN_INIT = false;
+
     // The shot arc lives in Deflector.DEFAULT_SHOT_DEG now -- one number shared by
     // auto, TeleOp and the tuner, so the three cannot drift apart. Was AUTO_ARC_DEG
     // here at 70 (67.5 came up short, Shane 2026-11-06); 67 is the current value,
@@ -415,7 +433,7 @@ public abstract class RouteAuto extends OpMode {
         deflector = new Deflector(hardwareMap);
         // Every auto, in INIT: down to the hard stop, up to the stow, power off
         // (Shane, 2026-11-08). Wait for HOMED before signaling ready.
-        deflector.startHoming();
+        if (AUTO_HOME_IN_INIT) deflector.startHoming();
 
         // TURRET HOMES IN INIT TOO, as of 2026-11-10, to stop costing up to
         // HOMING_TIMEOUT_SEC (15 s) of auto -- aiming is gated on isHomed(), so a
@@ -432,7 +450,7 @@ public abstract class RouteAuto extends OpMode {
         // >>> Revisit when the turret is flipped to face away from the collector
         // >>> (planned rebuild): that is expected to keep the sweep inside the
         // >>> envelope and is the natural moment to settle this.
-        if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
+        if (AUTO_HOME_IN_INIT && !turret.isHomed() && Turret.isMeasured()) turret.startHoming();
 
         follower = Constants.createFollower(hardwareMap);
         follower.setMaxPower(MAX_POWER);
@@ -471,7 +489,9 @@ public abstract class RouteAuto extends OpMode {
         // Launch readiness -- only matters for routes that launch.
         if (route != null && routeLaunches()) {
             if (!turret.isHomed() && Turret.isMeasured()) {
-                telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
+                telemetry.addLine(AUTO_HOME_IN_INIT
+                        ? "Turret homing NOW (INIT) -- make sure it's roughly forward."
+                        : "Turret will HOME at Start -- make sure it's roughly forward.");
             }
             if (deflector.isPresent()) {
                 if (!deflector.isZeroed() && !deflector.isHoming()) {

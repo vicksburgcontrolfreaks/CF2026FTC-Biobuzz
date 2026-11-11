@@ -70,6 +70,19 @@ public class Deflector {
     public static double HOME_SETTLE_SEC = 0.4;      // ignore stall checks while it starts moving
     public static double STALL_WINDOW_SEC = 0.25;    // check movement over this long...
     public static double STALL_SERVO_DEG = 3.0;      // ...less than this = sitting on the stop (~0.1 deflector deg)
+
+    /**
+     * A stall only counts as HOME if the seek has travelled at least this far
+     * first, in SERVO degrees. 60 is about a sixth of a turn.
+     *
+     * WITHOUT THIS, "not moving" was read as "on the stop" wherever it happened
+     * to be sitting. On 2026-11-10 that set the zero at the stow, climbed 46.9
+     * deg from there to about 82, and on the next run climbed another 46.9 to
+     * about 129 -- the deflector ended up pointing the wrong way entirely. If it
+     * has not moved, it is blocked or not being driven; that is a failure, not a
+     * reference.
+     */
+    public static double HOME_MIN_TRAVEL_SERVO_DEG = 60.0;
     public static double HOME_DOWN_MAX_SEC = 12.0;   // no stop found by then = give up
     // ---- The climb from HOME up to the stow ----------------------------------
     // Done on JOG POWER, not DeflectorLogic.power(). The position loop commands
@@ -104,6 +117,7 @@ public class Deflector {
     private final ElapsedTime homeTimer = new ElapsedTime();
     private final ElapsedTime stallTimer = new ElapsedTime();
     private double stallRefTotal = 0;
+    private double seekStartTotal = 0;
 
     // Kept across op modes (statics survive until a redeploy or power cycle).
     private static boolean keptZeroed = false;
@@ -232,6 +246,7 @@ public class Deflector {
         homeTimer.reset();
         stallTimer.reset();
         stallRefTotal = total;
+        seekStartTotal = total;
         homeNote = "homing: down to the stop";
     }
 
@@ -244,11 +259,25 @@ public class Deflector {
                 return 0;
             }
             if (stallTimer.seconds() >= STALL_WINDOW_SEC) {
-                boolean stalled = homeTimer.seconds() >= HOME_SETTLE_SEC
+                double travelled = Math.abs(total - seekStartTotal);
+                boolean notMoving = homeTimer.seconds() >= HOME_SETTLE_SEC
                         && Math.abs(total - stallRefTotal) < STALL_SERVO_DEG;
                 stallRefTotal = total;
                 stallTimer.reset();
-                if (stalled) {
+
+                // Not moving AND never moved = blocked or not being driven. Do
+                // NOT call that the stop: setting the zero there is what pointed
+                // the deflector the wrong way twice on 2026-11-10.
+                if (notMoving && travelled < HOME_MIN_TRAVEL_SERVO_DEG) {
+                    homeState = HomeState.FAILED;
+                    homeNote = String.format(
+                            "HOMING FAILED: never moved (%.0f of %.0f servo deg). Blocked, or "
+                                    + "the servo is not driving. Zero NOT set.",
+                            travelled, HOME_MIN_TRAVEL_SERVO_DEG);
+                    return 0;
+                }
+
+                if (notMoving) {
                     // On the stop, which is LEVEL_ABOVE_STOP_DEG below level.
                     zeroTotal = total + LEVEL_ABOVE_STOP_DEG * DeflectorLogic.SERVO_DEG_PER_DEFLECTOR_DEG;
                     zeroed = true;

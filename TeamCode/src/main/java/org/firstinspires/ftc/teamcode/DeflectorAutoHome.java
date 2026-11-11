@@ -112,6 +112,9 @@ public class DeflectorAutoHome extends LinearOpMode {
     /** In DEFLECTOR degrees. 0.1 deg is about 3 servo degrees. */
     public static double STALL_DEG = 0.1;
 
+    /** A stall only means HOME if the seek travelled at least this far first. */
+    public static double MIN_TRAVEL_DEG = 2.0;
+
     /** No HOME found by now = give up, and leave no zero behind. */
     public static double SEEK_TIMEOUT_SEC = 12.0;
 
@@ -256,6 +259,18 @@ public class DeflectorAutoHome extends LinearOpMode {
             boolean settled = phaseTimer.seconds() >= SETTLE_SEC;
             stallRefAngle = angle;
             stallTimer.reset();
+
+            // Not moving AND never moved = blocked or not driven, NOT the stop.
+            // Calling that HOME is what mis-pointed the deflector in auto on
+            // 2026-11-10: the zero got set at the stow and the climb went 46.9
+            // deg past it, twice.
+            double travelled = Math.abs(angle - seekStartAngle);
+            if (settled && moved < STALL_DEG && travelled < MIN_TRAVEL_DEG) {
+                abort(deflector, String.format(
+                        "FAILED: never moved (%.2f of %.2f deg). Blocked, or the servo "
+                                + "is not driving. Zero NOT set.", travelled, MIN_TRAVEL_DEG));
+                return;
+            }
 
             if (settled && moved < STALL_DEG) {
                 // On HOME. ZERO is set by arithmetic -- see the class comment for
