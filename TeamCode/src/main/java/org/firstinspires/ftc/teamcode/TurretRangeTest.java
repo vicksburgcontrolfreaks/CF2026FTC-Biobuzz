@@ -41,8 +41,6 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *   "turret"     - optional. Only fetched so it can be explicitly stopped.
  */
 @Configurable
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
-@Disabled
 @TeleOp(name = "Turret Range Test", group = "Test")
 public class TurretRangeTest extends LinearOpMode {
 

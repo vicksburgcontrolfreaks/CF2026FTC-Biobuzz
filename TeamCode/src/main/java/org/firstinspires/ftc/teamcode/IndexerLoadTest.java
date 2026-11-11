@@ -86,8 +86,6 @@ import java.util.List;
  */
 // Back on the Driver Station 2026-11-06: recalibrating NectarGuard at FEED_RPM 25
 // (hidden 11-05 when the 50 RPM calibration was thought final).
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
-@Disabled
 @TeleOp(name = "Indexer Load Test", group = "Test")
 public class IndexerLoadTest extends LinearOpMode {
 

@@ -88,8 +88,6 @@ import com.qualcomm.robotcore.util.Range;
  * what look like untested placeholders. You jog, you look, you label it.
  */
 @Configurable
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
-@Disabled
 @TeleOp(name = "Pivot Jog Test", group = "Test")
 public class PivotJogTest extends LinearOpMode {
 

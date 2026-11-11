@@ -76,8 +76,6 @@ import org.firstinspires.ftc.teamcode.subsystems.LoadRecovery;
  * linkage or the ramp changed, not code.
  */
 @Configurable
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
-@Disabled
 @TeleOp(name = "Load Recovery Test", group = "Test")
 public class LoadRecoveryTest extends LinearOpMode {
 
