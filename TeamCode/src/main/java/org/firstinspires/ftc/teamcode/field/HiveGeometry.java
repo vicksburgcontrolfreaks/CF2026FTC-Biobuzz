@@ -60,13 +60,20 @@ public class HiveGeometry {
     // happens to sit right next to this -- so it may be where 60.0 came from.
     public static double RED_AUDIENCE_OPENING_X = 59.6;
 
-    // Y = 63.9. Pivot at y = 72, cells 18.8 in. apart ALONG THE ARM so 9.4 from
-    // the pivot, and the arm is tilted 30 deg (Shane, 2026-11-11), which shrinks
-    // the horizontal reach to 9.4 * cos(30) = 8.14. Audience cell is toward -y.
-    // This replaces the old 62.6 estimate, which ignored the tilt because the
-    // tilt was not known yet. THE ASSUMPTION is that the opening's centre sits
-    // over the cell's centre; the cell is 12 in. deep, so there is room to be off.
-    public static double RED_AUDIENCE_OPENING_Y = 63.9;
+    // Y = 55.0. MEASURED, Shane 2026-11-11: audience wall to the centre of the
+    // opening's face, with the red audience cell raised.
+    //
+    // This replaces a derived 63.9 that was wrong by about 9 in., and the reason
+    // is worth keeping. The AprilTags sit on the cell's BOTTOM face; the opening
+    // is the OPPOSITE face, 12 in. away through the cell (manual 9.6.2). The old
+    // estimate put the opening directly above the bottom face's centre, so it
+    // ignored that depth entirely. With the cell raised 30 deg the 12 in. runs
+    // along the face normal (0, -0.5, 0.866), which moves the opening 6 in.
+    // toward the audience and 10.4 in. up -- about what the measurement found.
+    //
+    // Shane's sanity check was the giveaway: 63.9 sits only 8 in. from the field
+    // centre, and the hive does not reach that far in toward the middle.
+    public static double RED_AUDIENCE_OPENING_Y = 55.0;
 
     // Z = 57.5, and Z DOES NOT AFFECT AIMING -- aimAngle() and distanceTo() are
     // flat x/y. It feeds LaunchReach. Shane measured the bottom of the opening at
