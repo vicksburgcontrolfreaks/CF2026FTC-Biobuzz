@@ -56,8 +56,9 @@ import java.util.List;
 public class TagLocalizer {
 
     // ---- Camera on the turret, with the turret at 0 deg ---------------------
-    // MADE-UP until measured from CAD. Relative to the turret axis at FLOOR level.
-    public static double CAMERA_FORWARD = 4.0;   // in, along the turret's pointing direction
+    // Relative to the turret axis at FLOOR level. CAMERA_FORWARD is measured;
+    // CAMERA_LEFT / UP / PITCH / YAW are still MADE-UP.
+    public static double CAMERA_FORWARD = 4.5;   // in, along the turret pointing direction. MEASURED, Shane 2026-11-10.
     public static double CAMERA_LEFT = 0.0;      // in
     public static double CAMERA_UP = 12.0;       // in, lens height above the tiles
     public static double CAMERA_PITCH_DEG = 30;  // tipped UP from level, to see the downward tags

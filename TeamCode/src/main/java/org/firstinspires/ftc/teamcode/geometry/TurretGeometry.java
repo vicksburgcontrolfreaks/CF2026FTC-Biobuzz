@@ -42,13 +42,21 @@ import com.pedropathing.geometry.Pose;
 public class TurretGeometry {
 
     // ---- Robot measurements -------------------------------------------------
-    // TODO(measure): from CAD, then check with a tape measure. NaN means
-    // "not measured yet" -- isConfigured() is false until all four are real.
+    // Measured by Shane with a tape measure, 2026-11-10. NaN means "not measured
+    // yet" -- isConfigured() is false until all four are real, and nothing aims.
+    //
+    // CAUTION: "center" here has to mean the POSE ORIGIN -- the point Pedro
+    // reports as the robot's x,y, which is normally the centre of the odometry
+    // pods, not the centre of the chassis. If those two are not the same spot on
+    // this robot, these numbers are off by the gap between them. The spin test
+    // finds that out: an offset that is wrong in X makes the aim drift one way
+    // through the first half of a spin and the other way through the second half,
+    // whereas an offset that is wrong in Y shifts the whole spin one direction.
 
     /** Turret axis, inches FORWARD of the robot's center (negative = behind). */
-    public static double TURRET_OFFSET_X = Double.NaN;
+    public static double TURRET_OFFSET_X = -4.5;  // Shane, 2026-11-10, tape measure: 4.5 in REAR of center.
     /** Turret axis, inches LEFT of the robot's center (negative = right). */
-    public static double TURRET_OFFSET_Y = Double.NaN;
+    public static double TURRET_OFFSET_Y = 0.0;   // Shane, 2026-11-10: laterally centered.
     /**
      * Which way turret 0 deg points, in degrees counter-clockwise from the
      * robot's front. Turret on the back, facing backward at 0 deg = 180.
