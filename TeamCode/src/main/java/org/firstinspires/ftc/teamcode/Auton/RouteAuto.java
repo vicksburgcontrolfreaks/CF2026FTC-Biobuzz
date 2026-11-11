@@ -413,9 +413,26 @@ public abstract class RouteAuto extends OpMode {
         turret = hw.turret;
         camera = new TurretCamera(hardwareMap);
         deflector = new Deflector(hardwareMap);
-        // Every auto, in INIT: down to the hard stop, up to level, power off
-        // (Shane, 2026-11-08). Wait for "HOMED, level" before signaling ready.
+        // Every auto, in INIT: down to the hard stop, up to the stow, power off
+        // (Shane, 2026-11-08). Wait for HOMED before signaling ready.
         deflector.startHoming();
+
+        // TURRET HOMES IN INIT TOO, as of 2026-11-10, to stop costing up to
+        // HOMING_TIMEOUT_SEC (15 s) of auto -- aiming is gated on isHomed(), so a
+        // slow home delays the first shot.
+        //
+        // >>> NOT CONFIRMED LEGAL. Movement during an auto INIT is fine by
+        // >>> G304.H as long as the robot ends motionless, which is what the
+        // >>> deflector already relies on. The open question is the SWEEP:
+        // >>> homing hunts up to HOMING_SEARCH_MAX_DEG (150 deg) and the camera
+        // >>> rides on the turret, so the robot may leave the 18 in. starting
+        // >>> cube part-way through even though it ends inside it. A mentor needs
+        // >>> to confirm against G304 before this runs at a competition.
+        // >>>
+        // >>> Revisit when the turret is flipped to face away from the collector
+        // >>> (planned rebuild): that is expected to keep the sweep inside the
+        // >>> envelope and is the natural moment to settle this.
+        if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
 
         follower = Constants.createFollower(hardwareMap);
         follower.setMaxPower(MAX_POWER);
@@ -431,6 +448,10 @@ public abstract class RouteAuto extends OpMode {
         // false = no hold-loop motion in INIT. Homing is exempt and DOES move here
         // (G304.H is satisfied because it cuts power when it finishes).
         deflector.update(false);
+        // Turret homing also only progresses inside update(), same as the
+        // deflector. Without this, startHoming() in init() would set the state and
+        // nothing would ever apply power -- the SelectAuto bug, again.
+        turret.update();
         addRouteTelemetry();
         telemetry.update();
     }
@@ -476,6 +497,8 @@ public abstract class RouteAuto extends OpMode {
         pathTimer.resetTimer();
         runTimer.resetTimer();
 
+        // Fallback only: INIT normally homes it now. A no-op when already homed,
+        // and the retry that covers an INIT too short to finish the sweep.
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
         aimCell = HiveGeometry.sideCell(alliance, startPose.getY(), null);
         aim = new TurretAim(aimCell.tagIds);
