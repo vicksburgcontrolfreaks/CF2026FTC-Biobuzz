@@ -22,7 +22,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
-import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
+import org.firstinspires.ftc.teamcode.subsystems.TurretDirector;
 import org.firstinspires.ftc.teamcode.vision.TurretCamera;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
@@ -130,7 +130,8 @@ public class PollenShotTune extends OpMode {
     private Deflector deflector;
     private Turret turret;
     private TurretCamera camera;
-    private TurretAim aim;
+    // Camera-only until TurretDirector.USE_ODOMETRY_AIM is turned on; see that class.
+    private TurretDirector aim;
     private FieldAprilTags.Cell targetCell;
     private boolean turretParked = false;
     private boolean turretManual = false;
@@ -228,7 +229,7 @@ public class PollenShotTune extends OpMode {
         follower.setStartingPose(new Pose(FieldConstants.CENTER, FieldConstants.CENTER,
                 alliance.get().awayFromDriversHeading()));
         targetCell = cellFor(true);
-        aim = new TurretAim(targetCell.tagIds);
+        aim = new TurretDirector(targetCell.tagIds);
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
         pivot.setPosition(value[Knob.PIVOT.ordinal()]);           // servos move at Start, not INIT
         if (deflector.isZeroed()) deflector.goTo(value[Knob.DEFLECTOR.ordinal()]);
@@ -391,7 +392,9 @@ public class PollenShotTune extends OpMode {
         }
         turretManual = manual;
 
-        aim.update(detections, turret, !turretParked && !manual && turret.isHomed());
+        double[] opening = HiveGeometry.aimPointFor(targetCell);
+        aim.update(detections, turret, follower.getPose(), opening[0], opening[1],
+                !turretParked && !manual && turret.isHomed(), getRuntime());
         turret.update();
     }
 

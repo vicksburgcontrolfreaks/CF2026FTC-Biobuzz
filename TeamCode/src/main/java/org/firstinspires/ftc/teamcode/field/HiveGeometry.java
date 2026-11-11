@@ -180,6 +180,18 @@ public class HiveGeometry {
         return seenAudience > seenScoring ? audience : scoring;
     }
 
+    /**
+     * {x, y, z}: where to aim for THIS CELL, whichever it is. All NaN until the
+     * opening is measured.
+     *
+     * For callers that have already decided which cell they are shooting at --
+     * DriveTeleOp picks by side or by camera, not by tilt -- rather than making
+     * them work backwards to an alliance and a tilt to ask aimPoint().
+     */
+    public static double[] aimPointFor(Cell cell) {
+        return openingOf(cell, RED_AUDIENCE_OPENING_X, RED_AUDIENCE_OPENING_Y, RED_AUDIENCE_OPENING_Z);
+    }
+
     /** {x, y, z}: where to aim for this alliance's up cell. Feed x, y to TurretGeometry.aimAngle(). */
     public static double[] aimPoint(Alliance alliance, Tilt tilt) {
         return openingOf(upCell(alliance, tilt),

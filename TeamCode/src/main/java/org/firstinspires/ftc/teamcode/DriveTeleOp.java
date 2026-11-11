@@ -19,6 +19,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
 import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
+import org.firstinspires.ftc.teamcode.subsystems.TurretDirector;
 import org.firstinspires.ftc.teamcode.vision.TurretCamera;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
@@ -118,7 +119,8 @@ public class DriveTeleOp extends OpMode {
     private Launcher launcher;
     private Turret turret;
     private TurretCamera camera;
-    private TurretAim aim;
+    // Camera-only until TurretDirector.USE_ODOMETRY_AIM is turned on; see that class.
+    private TurretDirector aim;
     private Deflector deflector;
     private boolean deflectorStickArmed = true;
 
@@ -231,7 +233,7 @@ public class DriveTeleOp extends OpMode {
             cameraPicks = aimCell.get() == AimCell.CAMERA || aimCell.get() == AimCell.BY_SIDE;
             targetCell = cellFor(aimCell.get() == AimCell.AUDIENCE ? AimCell.AUDIENCE : AimCell.SCORING);
         }
-        aim = new TurretAim(targetCell.tagIds);   // default: search for THAT cell only
+        aim = new TurretDirector(targetCell.tagIds);   // default: search for THAT cell only
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
         // Normally auto's zero carries over and nothing happens here.
         if (!deflector.isZeroed()) deflector.startHoming();
@@ -343,7 +345,12 @@ public class DriveTeleOp extends OpMode {
         turretManual = manual;
 
         boolean aimAllowed = !turretParked && !manual && turret.isHomed();
-        aim.update(detections, turret, aimAllowed);
+        // The pose and the cell's opening let the director aim from odometry; it falls
+        // back to the camera on its own if either is missing or the hive is
+        // unmeasured, so passing them is safe whatever the flags say.
+        double[] opening = HiveGeometry.aimPointFor(targetCell);
+        aim.update(detections, turret, follower.getPose(), opening[0], opening[1],
+                aimAllowed, getRuntime());
         turret.update();
     }
 
@@ -432,6 +439,11 @@ public class DriveTeleOp extends OpMode {
                 guard.getState(), guard.getNote());
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
+        // Which path is aiming, and the distance odometry gives that the camera never
+        // could. "camera" here means odometry aiming is off or could not run.
+        telemetry.addData("Aim by", "%s%s%s", aim.getSource(),
+                aim.isUsingOdometry() ? String.format("  |  %.1f in", aim.getDistance()) : "",
+                aim.hasCameraFix() ? String.format("  |  trim %+.1f deg", aim.getTrimDeg()) : "");
         telemetry.addData("Aim at", "%s%s", targetCell.displayName,
                 cameraPicks ? "  (camera picks)"
                         : !bySide ? "" : targetCell == lastSideCell ? "  (our side)" : "  (picked - until we cross the middle)");

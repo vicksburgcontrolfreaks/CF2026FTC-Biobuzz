@@ -621,10 +621,22 @@ public class TurretAim {
         return outOfReach;
     }
 
+    /**
+     * True when getSmoothBearing() is a settled, usable measurement -- enough
+     * frames averaged and not thrown away by forgetMeasurement() because the
+     * turret was moving or the tag went out of view.
+     *
+     * Separate from isOnTarget(), which is this AND being inside the deadband.
+     * TurretDirector needs the validity on its own: it uses the bearing as a
+     * MEASUREMENT to correct odometry with, and a bearing well outside the
+     * deadband is the most useful kind to have.
+     */
+    public boolean hasFreshBearing() {
+        return smoothReady && framesAveraged >= FRAMES_BEFORE_COMMIT;
+    }
+
     public boolean isOnTarget() {
-        return smoothReady
-                && framesAveraged >= FRAMES_BEFORE_COMMIT
-                && Math.abs(smoothBearing) <= DEADBAND_DEG;
+        return hasFreshBearing() && Math.abs(smoothBearing) <= DEADBAND_DEG;
     }
 
     public double getSecondsSinceSeen() {

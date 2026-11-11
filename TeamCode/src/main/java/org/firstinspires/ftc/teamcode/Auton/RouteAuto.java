@@ -19,7 +19,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.Deflector;
 import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
-import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
+import org.firstinspires.ftc.teamcode.subsystems.TurretDirector;
 import org.firstinspires.ftc.teamcode.vision.TurretCamera;
 
 import java.util.ArrayList;
@@ -134,7 +134,8 @@ public abstract class RouteAuto extends OpMode {
     private final Launcher.Controls controls = new Launcher.Controls();
     private Turret turret;
     private TurretCamera camera;
-    private TurretAim aim;
+    // Camera-only until TurretDirector.USE_ODOMETRY_AIM is turned on; see that class.
+    private TurretDirector aim;
     private FieldAprilTags.Cell aimCell;
     private Deflector deflector;
 
@@ -563,7 +564,7 @@ public abstract class RouteAuto extends OpMode {
         // and the retry that covers an INIT too short to finish the sweep.
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
         aimCell = HiveGeometry.sideCell(alliance, startPose.getY(), null);
-        aim = new TurretAim(aimCell.tagIds);
+        aim = new TurretDirector(aimCell.tagIds);
         launcher.start();
         // Still homing at Start? goTo just sets the target; it goes there once homed.
         if (deflector.isZeroed() || deflector.isHoming()) deflector.goTo(Deflector.DEFAULT_SHOT_DEG);
@@ -585,7 +586,11 @@ public abstract class RouteAuto extends OpMode {
             aim.setTargetTagIds(aimCell.tagIds);
         }
         if (finishedSeconds < 0) {
-            aim.update(camera.getDetections(), turret, turret.isHomed());
+            // Auto always has a pose, so odometry aiming can reach a cell the camera
+            // cannot see yet -- the turret is already pointed when the shot comes up.
+            double[] opening = HiveGeometry.aimPointFor(aimCell);
+            aim.update(camera.getDetections(), turret, follower.getPose(),
+                    opening[0], opening[1], turret.isHomed(), runTimer.getElapsedTimeSeconds());
             turret.update();
         } else {
             stowTurret();

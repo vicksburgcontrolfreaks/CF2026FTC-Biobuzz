@@ -4,6 +4,7 @@ import org.firstinspires.ftc.teamcode.geometry.AimLead;
 import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
 import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
+import org.firstinspires.ftc.teamcode.subsystems.TurretDirector;
 
 /**
  * The turret and camera measurements that DIFFER BETWEEN 5618 AND 6494.
@@ -98,6 +99,13 @@ public final class RobotProfile {
         // the middle of that. Per robot because the right value is
         // 1 / (servo deg/sec * Turret.kP), and both differ between robots.
         AimLead.LEAD_SEC = 0.12;
+
+        // THE SWITCH. false = camera-only aiming, which is what has been driven in
+        // matches. Odometry aiming is only as good as the pose, and 6494's is due a
+        // retune after the current mechanical changes -- so flip this to true once
+        // the pose is trustworthy again, and check the Aim line on the Driver
+        // Station says "odometry" rather than "camera". See TurretDirector.
+        TurretDirector.USE_ODOMETRY_AIM = false;
     }
 
     // ---- 5618 ---------------------------------------------------------------
@@ -131,6 +139,11 @@ public final class RobotProfile {
         // target. Tune it the same way 6494's was: D-pad in Turret Odometry Aim
         // Test, watch Aim error PEAK, stop when it stops improving.
         AimLead.LEAD_SEC = 0.0;
+
+        // Same switch. 5618 also needs TURRET_OFFSET_X/Y measured before this can do
+        // anything -- TurretDirector falls back to the camera while the geometry is
+        // NaN and says so, so turning it on early is harmless but pointless.
+        TurretDirector.USE_ODOMETRY_AIM = false;
     }
 
     // ---- plumbing -----------------------------------------------------------
