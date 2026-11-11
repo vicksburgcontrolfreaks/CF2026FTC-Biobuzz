@@ -78,10 +78,14 @@ public class RobotHardware {
      *
      * collector FORWARD = pulls pieces IN. indexer FORWARD = feeds UP to the shooter.
      * Checked on 6494; not yet checked on 5618.
+     *
+     * 2026-11-11: indexer motor flipped to REVERSE on BOTH robots (it was running
+     * backwards). "Forward" in code still means feed UP; only the raw motor
+     * direction changed. NOT robot-tested yet.
      */
     public static void applyCollectionDirections(DcMotorSimple collector, DcMotorSimple indexer) {
         if (collector != null) collector.setDirection(DcMotorSimple.Direction.FORWARD);
-        if (indexer != null) indexer.setDirection(DcMotorSimple.Direction.FORWARD);
+        if (indexer != null) indexer.setDirection(DcMotorSimple.Direction.REVERSE);
     }
 
     public void init(HardwareMap hardwareMap) {
