@@ -109,7 +109,6 @@ public class PollenShotTune extends OpMode {
 
     private static final double START_COLLECTOR_RPM = 200;
     private static final double START_FLYWHEEL_RPM = 1300;
-    private static final double START_DEFLECTOR_DEG = 66;
 
     private final double[] value = new double[Knob.values().length];
     private final double[] start = new double[Knob.values().length];
@@ -183,15 +182,22 @@ public class PollenShotTune extends OpMode {
         start[Knob.INDEXER.ordinal()] = CollectionSystem.FEED_RPM;
         start[Knob.FLYWHEEL.ordinal()] = START_FLYWHEEL_RPM;
         start[Knob.PIVOT.ordinal()] = ShooterPivot.POLLEN_POSITION;
-        start[Knob.DEFLECTOR.ordinal()] = START_DEFLECTOR_DEG;
+        start[Knob.DEFLECTOR.ordinal()] = Deflector.DEFAULT_SHOT_DEG;
         System.arraycopy(start, 0, value, 0, value.length);
+
+        // Home in INIT so the deflector is stowed and ready with nobody pressing
+        // anything. Safe HERE and nowhere near a match: DriveTeleOp homes at Start
+        // because G403 forbids movement during the auto-to-TeleOp INIT, and
+        // RouteAuto's INIT homing ends with power cut for G304.H. This is a bench
+        // tuner in the Tune group that never runs in a match.
+        if (deflector.isPresent() && !deflector.isZeroed()) deflector.startHoming();
     }
 
     @Override
     public void init_loop() {
         menu.update(gamepad1);
         camera.update();
-        deflector.update(false);   // keep counting turns; nothing moves in INIT
+        deflector.update(true);    // allowed to move in INIT: homing to the stow
 
         telemetry.addLine("POLLEN SHOT TUNE -- pollen only, NO nectar guard");
         menu.show(telemetry);
@@ -199,11 +205,15 @@ public class PollenShotTune extends OpMode {
         telemetry.addData("Camera", camera.getNote());
         if (!deflector.isPresent()) {
             telemetry.addLine(">>> No deflector found -- arc can't be tuned.");
+        } else if (deflector.isHoming()) {
+            telemetry.addData("Deflector", "HOMING -- %s", deflector.getHomeNote());
+            telemetry.addLine("Finding the hard stop, then stowing. A few seconds.");
         } else if (!deflector.isZeroed()) {
-            telemetry.addLine(">>> Deflector NOT zeroed. Run Deflector Zero first, or it won't move.");
+            telemetry.addLine(">>> Deflector NOT zeroed and homing did not take.");
+            telemetry.addLine("    Run Deflector Auto Home, or it won't move.");
         } else {
-            telemetry.addData("Deflector", "zeroed, now %.1f deg -> goes to %.0f at Start",
-                    deflector.getAngle(), START_DEFLECTOR_DEG);
+            telemetry.addData("Deflector", "%.1f deg, stowed -> %.0f at Start",
+                    deflector.getAngle(), Deflector.DEFAULT_SHOT_DEG);
         }
         if (!turret.isHomed() && Turret.isMeasured()) {
             telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");

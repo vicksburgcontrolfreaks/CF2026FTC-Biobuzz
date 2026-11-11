@@ -23,7 +23,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  *
  * Using HOME as the reference would be easier and wrong: the stop is not level,
  * so every angle would stop meaning an arc and none of the existing numbers
- * (DeflectorLogic.POSITIONS, RouteAuto.AUTO_ARC_DEG) would mean what they say.
+ * (DeflectorLogic.POSITIONS, Deflector.DEFAULT_SHOT_DEG) would mean what they say.
  * HOME is how we FIND the mechanism; ZERO is what we MEASURE FROM.
  *
  * ZERO IS SET BY ARITHMETIC; THE CLIMB IS SEPARATE
@@ -41,7 +41,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  * creeping uphill is the wrong design. Arithmetic cannot stall.
  *
  * THAT WEAKNESS IS STILL THERE FOR EVERY OTHER UPWARD MOVE, including auto's
- * goTo(AUTO_ARC_DEG) -- expect it to land ~0.7 deg low and sit there. Fixing it
+ * goTo(DEFAULT_SHOT_DEG) -- expect it to land ~0.7 deg low and sit there. Fixing it
  * means raising DeflectorLogic.MIN_POWER or adding gravity feedforward, which
  * touches every deflector move on both robots, so it is a separate decision.
  * The "Loop authority" readout below is the measurement for it.

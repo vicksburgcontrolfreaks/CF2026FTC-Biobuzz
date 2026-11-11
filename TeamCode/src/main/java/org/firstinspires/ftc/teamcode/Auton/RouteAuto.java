@@ -74,8 +74,11 @@ public abstract class RouteAuto extends OpMode {
      * isn't trusted yet). false = stop early at LAUNCH_SHOTS or "no ball".
      */
     public static boolean LAUNCH_FULL_TIME = true;
-    /** Deflector (shot arc) for auto, if it was zeroed pre-match. 67.5 (Shane, 2026-11-06); 75 looked great on 6494. */
-    public static double AUTO_ARC_DEG = 70;   // 67.5 came up short (Shane, 2026-11-06)
+
+    // The shot arc lives in Deflector.DEFAULT_SHOT_DEG now -- one number shared by
+    // auto, TeleOp and the tuner, so the three cannot drift apart. Was AUTO_ARC_DEG
+    // here at 70 (67.5 came up short, Shane 2026-11-06); 67 is the current value,
+    // re-found against the 11.9 hard-stop zero.
 
     // ---- TIP_LAUNCH (Far Wall Tip Shoot + Park, 2026-11-08) -------------------
     /**
@@ -476,7 +479,7 @@ public abstract class RouteAuto extends OpMode {
         aim = new TurretAim(aimCell.tagIds);
         launcher.start();
         // Still homing at Start? goTo just sets the target; it goes there once homed.
-        if (deflector.isZeroed() || deflector.isHoming()) deflector.goTo(AUTO_ARC_DEG);
+        if (deflector.isZeroed() || deflector.isHoming()) deflector.goTo(Deflector.DEFAULT_SHOT_DEG);
         // Pre-spin, so the first launch spot doesn't wait 1-2 s for spin-up.
         if (routeLaunches()) launcher.setFlywheel(true);
     }

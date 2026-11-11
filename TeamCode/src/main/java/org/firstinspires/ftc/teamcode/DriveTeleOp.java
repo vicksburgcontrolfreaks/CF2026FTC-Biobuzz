@@ -122,6 +122,14 @@ public class DriveTeleOp extends OpMode {
     private Deflector deflector;
     private boolean deflectorStickArmed = true;
 
+    // ---- Driver arc adjustment ----------------------------------------------
+    // 1 deg a flick between 65 and 70 (Shane, 2026-11-10). Deliberately NOT
+    // DeflectorLogic.POSITIONS: that list is the shared arc presets and 5618
+    // still reads it, so a TeleOp-only range belongs here.
+    public static double ARC_STEP_DEG = 1.0;
+    public static double ARC_MIN_DEG = 65.0;
+    public static double ARC_MAX_DEG = 70.0;
+
     private final Launcher.Controls controls = new Launcher.Controls();
     private final ElapsedTime loopTimer = new ElapsedTime();
     private FieldAprilTags.Cell targetCell;
@@ -191,7 +199,8 @@ public class DriveTeleOp extends OpMode {
         if (deflector.isPresent() && !deflector.isZeroed()) {
             // Homes at START, not here: INIT during the auto->TeleOp transition
             // must not move anything (G403).
-            telemetry.addLine(">>> Deflector not zeroed - it will AUTO-HOME at Start (down to the stop, up to level).");
+            telemetry.addLine(">>> Deflector not zeroed - it will AUTO-HOME at Start:");
+            telemetry.addLine("    down to the hard stop, then up to the stow, then to the shot.");
         }
         telemetry.update();
     }
@@ -222,6 +231,12 @@ public class DriveTeleOp extends OpMode {
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
         // Normally auto's zero carries over and nothing happens here.
         if (!deflector.isZeroed()) deflector.startHoming();
+        // Then go to the shot. goTo only sets a target, so if homing is still
+        // running this is where it ends up once it finishes -- no waiting, and no
+        // driver having to dial it up from the stow every match.
+        if (deflector.isZeroed() || deflector.isHoming()) {
+            deflector.goTo(Deflector.DEFAULT_SHOT_DEG);
+        }
         launcher.start();
         loopTimer.reset();
     }
@@ -334,7 +349,11 @@ public class DriveTeleOp extends OpMode {
         // A flick, not a dial: one step per push, re-armed back near center.
         double y = -gamepad2.left_stick_y;   // up = +
         if (deflectorStickArmed && Math.abs(y) > 0.6) {
-            if (y > 0) deflector.stepUp(); else deflector.stepDown();
+            // One degree a flick, clamped to the TeleOp range. stepUp/stepDown walk
+            // DeflectorLogic.POSITIONS, which is 2.5 deg apart and shared with the
+            // other robot -- too coarse for a driver correcting a shot.
+            double want = deflector.getTarget() + (y > 0 ? ARC_STEP_DEG : -ARC_STEP_DEG);
+            deflector.goTo(Math.max(ARC_MIN_DEG, Math.min(ARC_MAX_DEG, want)));
             deflectorStickArmed = false;
         } else if (Math.abs(y) < 0.3) {
             deflectorStickArmed = true;
@@ -387,6 +406,20 @@ public class DriveTeleOp extends OpMode {
         NectarGuard guard = launcher.getGuard();
         if (guard.isFault()) telemetry.addLine(">>> " + guard.getNote());
 
+        // ARC FIRST. The drivers adjust this between shots, so it goes at the top
+        // of the screen rather than fourth down -- it used to be below Flywheel,
+        // Gap and Turret, where nobody found it mid-match.
+        if (deflector.isPresent()) {
+            if (deflector.isHoming() || !deflector.isZeroed()) {
+                telemetry.addData("ARC", ">>> %s", deflector.getHomeNote());
+            } else {
+                telemetry.addData("ARC", "%.1f deg   -> %.1f%s   (%.0f-%.0f, flick = %.0f deg)",
+                        deflector.getAngle(), deflector.getTarget(),
+                        deflector.isOnTarget() ? "" : "  MOVING",
+                        ARC_MIN_DEG, ARC_MAX_DEG, ARC_STEP_DEG);
+            }
+        }
+
         telemetry.addData("Flywheel", "%s  %s  L %.0f / R %.0f (target %.0f)",
                 launcher.isFlywheelOn() ? "ON" : "off", launcher.getShooter().getNote(),
                 launcher.getShooter().getLeftRpm(), launcher.getShooter().getRightRpm(),
@@ -395,14 +428,6 @@ public class DriveTeleOp extends OpMode {
                 guard.getState(), guard.getNote());
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
-        if (deflector.isPresent()) {
-            telemetry.addData("Arc", deflector.isHoming() || !deflector.isZeroed()
-                    ? deflector.getHomeNote()
-                    : String.format("%.1f deg (target %.1f%s)  power %+.2f  max step %.0f/180",
-                            deflector.getAngle(), deflector.getTarget(),
-                            deflector.isOnTarget() ? "" : ", moving",
-                            deflector.getPower(), deflector.getMaxStepSeen()));
-        }
         telemetry.addData("Aim at", "%s%s", targetCell.displayName,
                 cameraPicks ? "  (camera picks)"
                         : !bySide ? "" : targetCell == lastSideCell ? "  (our side)" : "  (picked - until we cross the middle)");

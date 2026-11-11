@@ -45,19 +45,44 @@ public class Deflector {
     // ---- Auto-homing (Shane, 2026-11-08) --------------------------------------
     // Both drive teams forgot Deflector Zero, so nothing shot. Now every auto
     // homes in INIT (and TeleOp at Start, if it isn't zeroed): jog DOWN slowly
-    // until it stalls on the hard stop, call that -LEVEL_ABOVE_STOP_DEG, drive up
-    // to level (0), then CUT POWER -- G304.H: motionless once INIT is done.
+    // until it stalls on the hard stop, call that -LEVEL_ABOVE_STOP_DEG, climb
+    // to STOW_ANGLE_DEG, then CUT POWER -- G304.H: motionless once INIT is done.
     //
     // LEVEL_ABOVE_STOP_DEG is PER ROBOT (loadRobotNumbers). Measure it: Deflector
     // Zero, jog LEVEL, A, then jog DOWN onto the stop and read "Angle" -- e.g.
     // -4.3 means 4.3. NaN = not measured: homing refuses and you zero by hand.
     public static double LEVEL_ABOVE_STOP_DEG = Double.NaN;
+    /**
+     * Where homing parks, in degrees above ZERO. The pre-match stow: close to the
+     * shooting angles so the first move in a match is short, while still inside
+     * the 18 in. starting cube. 35 on 6494 (Shane, 2026-11-10).
+     */
+    public static double STOW_ANGLE_DEG = 35.0;
+
+    /**
+     * The arc auto, TeleOp and the tuner all go to at Start. ONE number on
+     * purpose -- it was nearly kept in three places, which is how the deflector
+     * angles got inconsistent before. 67 (Shane, 2026-11-10).
+     */
+    public static double DEFAULT_SHOT_DEG = 67.0;
+
     public static double HOME_POWER = 0.25;          // down toward the stop; slow on purpose
     public static double HOME_SETTLE_SEC = 0.4;      // ignore stall checks while it starts moving
     public static double STALL_WINDOW_SEC = 0.25;    // check movement over this long...
     public static double STALL_SERVO_DEG = 3.0;      // ...less than this = sitting on the stop (~0.1 deflector deg)
     public static double HOME_DOWN_MAX_SEC = 12.0;   // no stop found by then = give up
-    public static double HOME_UP_MAX_SEC = 5.0;      // stop -> level
+    // ---- The climb from HOME up to the stow ----------------------------------
+    // Done on JOG POWER, not DeflectorLogic.power(). The position loop commands
+    // kP * error floored at MIN_POWER = 0.05, and 5% will not lift this deflector
+    // through its ~30:1 -- it stalls short and in a different place every run.
+    // Proved in Deflector Auto Home (Shane, 2026-11-10) before being moved here.
+    public static double HOME_RISE_POWER = 0.25;      // fast part
+    public static double HOME_RISE_SLOW_DEG = 2.0;    // ease off inside this
+    public static double HOME_RISE_SLOW_POWER = 0.12; // still enough to lift it
+
+    // HOME to a 35 deg stow is 46.9 deg, about FOUR servo turns. The old 5.0 was
+    // sized for climbing to level (one turn) and would time out mid-climb.
+    public static double HOME_UP_MAX_SEC = 20.0;
 
     public enum HomeState { NOT_STARTED, DOWN, UP, DONE, FAILED }
 
@@ -65,7 +90,9 @@ public class Deflector {
         try {
             switch (WhichRobot.get()) {
                 case R5618: LEVEL_ABOVE_STOP_DEG = Double.NaN; break;   // TODO measure (Deflector Zero)
-                case R6494: LEVEL_ABOVE_STOP_DEG = Double.NaN; break;   // TODO measure (Deflector Zero)
+                // 11.9 measured and confirmed repeatable with Deflector Auto Home
+                // (Shane, 2026-11-10). This is what switches auto-homing ON.
+                case R6494: LEVEL_ABOVE_STOP_DEG = 11.9; break;
             }
         } catch (IllegalStateException e) {
             LEVEL_ABOVE_STOP_DEG = Double.NaN;   // unknown robot: don't guess
@@ -200,7 +227,7 @@ public class Deflector {
         }
         homeState = HomeState.DOWN;
         jogging = false;
-        target = 0;   // end at level unless someone asks for another angle meanwhile
+        target = STOW_ANGLE_DEG;   // park stowed unless something asks otherwise mid-run
         index = 0;
         homeTimer.reset();
         stallTimer.reset();
@@ -229,21 +256,32 @@ public class Deflector {
                     keptZeroTotal = zeroTotal;
                     homeState = HomeState.UP;
                     homeTimer.reset();
-                    homeNote = "homing: on the stop, up to level";
+                    homeNote = String.format("homing: on the stop, climbing to the %.0f stow", STOW_ANGLE_DEG);
                     return 0;
                 }
             }
             return -HOME_POWER * DeflectorLogic.POWER_SIGN;
         }
-        // UP: to level, then power off.
+        // UP: climb to the stow on jog power, then cut power. See the constants.
         double a = getAngle();
-        boolean level = Math.abs(a) <= DeflectorLogic.TOLERANCE_DEG;
-        if (level || homeTimer.seconds() > HOME_UP_MAX_SEC) {
+        double remaining = STOW_ANGLE_DEG - a;
+
+        if (remaining <= 0) {
             homeState = HomeState.DONE;
-            homeNote = level ? "HOMED, level" : String.format("homed, stopped at %.1f deg (not quite level)", a);
+            homeNote = String.format("HOMED, stowed at %.1f deg", a);
+            target = DeflectorLogic.clipToLimits(a);   // hold here, do not snap
+            index = DeflectorLogic.nearestIndex(target);
             return 0;
         }
-        return DeflectorLogic.power(a, 0);
+        if (homeTimer.seconds() > HOME_UP_MAX_SEC) {
+            homeState = HomeState.FAILED;
+            homeNote = String.format(
+                    "HOMING FAILED: stopped %.1f deg short of the %.1f stow -- "
+                            + "HOME_RISE_SLOW_POWER may be too weak", remaining, STOW_ANGLE_DEG);
+            return 0;
+        }
+        return DeflectorLogic.POWER_SIGN * (remaining > HOME_RISE_SLOW_DEG
+                ? HOME_RISE_POWER : HOME_RISE_SLOW_POWER);
     }
 
     public boolean isHoming() { return homeState == HomeState.DOWN || homeState == HomeState.UP; }
