@@ -45,7 +45,84 @@ public class TurretTest extends LinearOpMode {
 
     private boolean yPrev, xPrev, bPrev, aPrev, dpadLeftPrev, dpadRightPrev, lbPrev, rbPrev;
 
+    // ---- Settle measurement (added 2026-11-11) ------------------------------
+    // Answers one question: can this turret settle finely, or does the minimum
+    // power step throw it past the target?
+    //
+    // MIN_POWER / kP = 0.12 / 0.020 = 6 deg on 6494. The loop returns zero inside
+    // TOLERANCE_DEG (2 deg) and otherwise boosts anything below MIN_POWER UP to
+    // MIN_POWER, so the smallest correction it can command is sized for 6 deg of
+    // error while it is trying to land in a 2 deg band. If that overshoots, the
+    // turret cannot sit still and the aim wanders a few degrees at random --
+    // which is what Shane saw aiming at the hive on 2026-11-11.
+    //
+    // All three reset on every target change, so each nudge is its own clean test.
+    private double lastAngle = Double.NaN;
+    private double lastTarget = Double.NaN;
+    private double minPowerStepDeg = 0;   // furthest it moved in ONE loop at MIN_POWER
+    private int crossings = 0;            // times the error changed sign = overshoots
+    private double maxOvershootDeg = 0;   // furthest past the target it got
+    private double startErrorSign = 0;
+    private double lastSign = 0;
+
     private TelemetryManager telemetryM;
+
+    /**
+     * Watches one nudge settle. Everything resets when the target moves, so each
+     * bumper press is a fresh measurement.
+     *
+     * READING IT: nudge 2 deg with a bumper, wait for it to stop, then
+     *   Overshoots 0        -> it CAN settle finely. MIN_POWER is not the problem,
+     *                          and the random aim wander is pose noise instead.
+     *   Overshoots 1 or 2   -> rings once and stops. Liveable.
+     *   Overshoots climbing -> it cannot sit still. The minimum power step is
+     *                          throwing it past the band every time, and
+     *                          LOWERING TOLERANCE_DEG WOULD MAKE IT WORSE.
+     *                          Lower MIN_POWER instead, as far as the servo will
+     *                          still reliably turn.
+     *
+     * Min step says the same thing in travel terms: under about 1 deg per loop and
+     * fine settling is physically possible; several degrees and it is not.
+     */
+    private void measureSettle() {
+        double angle = turret.getAngle();
+        double target = turret.getTargetAngle();
+        double error = target - angle;
+
+        if (target != lastTarget) {
+            minPowerStepDeg = 0;
+            crossings = 0;
+            maxOvershootDeg = 0;
+            startErrorSign = Math.signum(error);
+            lastSign = startErrorSign;
+            lastTarget = target;
+            lastAngle = angle;
+            return;   // nothing has travelled yet on the press itself
+        }
+
+        // Closed loop only, and only while the boost is what is actually being
+        // applied -- jog power is whatever the trigger says and means nothing here.
+        if (turret.getControlMode() == Turret.ControlMode.HOLD && !Double.isNaN(lastAngle)
+                && Math.abs(Math.abs(turret.getAppliedPower()) - Turret.MIN_POWER) < 0.005) {
+            minPowerStepDeg = Math.max(minPowerStepDeg, Math.abs(angle - lastAngle));
+        }
+
+        // Past the target means the error flipped against the way it started.
+        double sign = Math.signum(error);
+        if (startErrorSign != 0 && sign != 0 && sign != startErrorSign) {
+            maxOvershootDeg = Math.max(maxOvershootDeg, Math.abs(error));
+        }
+        if (sign != 0 && lastSign != 0 && sign != lastSign) {
+            crossings++;
+        }
+        if (sign != 0) lastSign = sign;
+
+        lastAngle = angle;
+    }
+
+    private static String fmtOrDash(double v) {
+        return v <= 0 ? "--" : String.format("%.2f", v);
+    }
 
     @Override
     public void runOpMode() {
@@ -59,6 +136,7 @@ public class TurretTest extends LinearOpMode {
 
         telemetry.addLine("TURRET TEST");
         telemetry.addLine("Triggers = jog (L = left, R = right) | Y = jog/hold | D-pad 10, bumpers 2 deg | X = home | B = call this 0");
+        telemetry.addLine("MIN_POWER settle test: Y to HOLD, then a BUMPER for a 2 deg nudge. Read Overshoots.");
         telemetry.addLine("Gear ratio (servo revs per turret rev): " + Turret.gearRatio());
         telemetry.addLine("");
         telemetry.addLine(turret.wasHomingKept()
@@ -124,6 +202,7 @@ public class TurretTest extends LinearOpMode {
             turret.setRawPower(jog);
 
             turret.update();
+            measureSettle();
 
             telemetryM.addData("State", turret.getState());
             telemetryM.addData("Mode", turret.getControlMode());
@@ -137,6 +216,13 @@ public class TurretTest extends LinearOpMode {
             telemetryM.addData("Raw ticks", turret.getRawTicks());
             telemetryM.addData("Ticks since ref", turret.getTicksSinceReference());
             telemetryM.addData("Commanded power", turret.getAppliedPower());
+            telemetryM.addLine("");
+            // The MIN_POWER settle test. Nudge 2 deg with a bumper and read these.
+            telemetryM.addData("Min step (deg/loop at MIN_POWER)", fmtOrDash(minPowerStepDeg));
+            telemetryM.addData("Overshoots since nudge", crossings
+                    + (crossings == 0 ? "  (settled clean)" : "  worst " + String.format("%.2f", maxOvershootDeg) + " deg past"));
+            telemetryM.addData("Min step is worth (deg of error)",
+                    Turret.kP > 0 ? String.format("%.1f", Turret.MIN_POWER / Turret.kP) : "?");
             telemetryM.addData("Jog request", jog);
 
             if (!turret.isHomed()) {
