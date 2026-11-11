@@ -80,4 +80,40 @@ public class HiveTagsTest {
     private static double dot(double[] a, double[] b) {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     }
+
+    /*
+     * Unlike the rest of this file, this one DOES pin a measurement: Shane
+     * levelled off the pivot axis on 2026-11-11 and read the raised audience
+     * cell's tag centre at +5.75 in., bottom edge +5.0, top edge +6.5.
+     *
+     * CELL_DROP was solved from that number, so it is the thing keeping the tag
+     * model honest. If a later CAD figure moves CELL_ARM or HIVE_SWING_DEG,
+     * CELL_DROP has to move with it or this fails -- which is the point.
+     */
+    @Test public void audienceTagSitsWhereShaneMeasuredIt() {
+        double aboveSticker = HiveTags.tagPose(Cell.RED_AUDIENCE.tagIds[0], Tilt.AUDIENCE_UP).z()
+                - FieldConstants.HIVE_PIVOT_HEIGHT;
+        assertEquals("tag centre above the pivot level", 5.75, aboveSticker, 0.05);
+
+        // Every tag on a cell is on one sticker in a row along field x, so they
+        // all sit at the same height. A row built along the wrong axis would
+        // show up here as tags at different heights.
+        for (int id : Cell.RED_AUDIENCE.tagIds) {
+            assertEquals("tag " + id + " height", HiveTags.tagPose(Cell.RED_AUDIENCE.tagIds[0], Tilt.AUDIENCE_UP).z(),
+                    HiveTags.tagPose(id, Tilt.AUDIENCE_UP).z(), EPS);
+        }
+    }
+
+    /*
+     * The tag's own vertical span dates the tilt independently of anyone's
+     * protractor: a 3.25 in. tag whose edges read +5.0 and +6.5 rises 1.5 in.,
+     * so asin(1.5 / 3.25) = 27.5 deg. That is within tape error of the 30 deg
+     * HIVE_SWING_DEG is built on, so this allows a couple of degrees either way.
+     */
+    @Test public void tagRiseAgreesWithTheSwingAngle() {
+        double halfSwing = HiveTags.HIVE_SWING_DEG / 2;
+        double riseFromMeasurement = Math.toDegrees(Math.asin(1.5 / FieldAprilTags.TAG_SIZE));
+        assertEquals("tilt from the tag's own span vs HIVE_SWING_DEG/2",
+                halfSwing, riseFromMeasurement, 3.0);
+    }
 }

@@ -38,15 +38,46 @@ public final class HiveTags {
     private HiveTags() {}
 
     public static double PIVOT_Y = 72.0;          // Fig. 9-8 (Evan 10/27): pivot is mid-frame, frame is centered on the field
-    public static double RED_HIVE_X = 60.0;       // MADE-UP: red hive center along x; blue is mirrored
-    public static double CELL_ARM = 9.4;          // MADE-UP: half of the manual's ~18.8 in. cell spacing
-    // MADE-UP, AND KNOWN TO BE WRONG. Shane measured the tag centres at about 50 in.
-    // off the floor with the red audience cell raised. Running that back through
-    // tagPose() with the pivot at 43.95 and CELL_ARM 9.4 puts the drop near ZERO,
-    // not 10 -- i.e. the sticker sits about at pivot height. Not solved here on
-    // purpose: that is one measurement against two unknowns (CELL_ARM moves it
-    // too), so a number written here would look measured without being measured.
-    public static double CELL_DROP = 10.0;        // MADE-UP: bottom face, inches below the pivot (hive level)
+    // FROM THE MANUAL, cross-checked on a field. The frame is 49.46 in. wide and
+    // centred, spanning x 47.27-96.73, with the two hives side by side and red on
+    // the low-x side; centred in its half gives 47.27 + 49.46/4 = 59.6.
+    //
+    // Shane taped our field 2026-11-11: red wall to red hive 58 in., blue wall to
+    // blue hive 60 in. Those two should be EQUAL, so the 2 in. spread is our
+    // field's own build tolerance and the truth is near the 59 in. average. That
+    // confirms the "centred in its half" assumption, which was the shaky part.
+    // Keeping the manual-derived number on purpose: a competition field is built
+    // to CAD, and feeding in our field's error would aim wrong everywhere else.
+    //
+    // Must stay equal to HiveGeometry.RED_AUDIENCE_OPENING_X -- same physical spot.
+    public static double RED_HIVE_X = 59.6;
+    // CONFIRMED ON THE HIVE, Shane 2026-11-11: the 18.8 in. cell spacing from the
+    // manual text checks out with a tape, so this half-spacing is real. Confirming
+    // it is what made CELL_DROP solvable below.
+    public static double CELL_ARM = 9.4;
+    // SOLVED FROM A MEASUREMENT, Shane 2026-11-11. Was a made-up 10.0, which put
+    // every tag 11 in. from where it really is.
+    //
+    // He levelled off the pivot axis itself (just under 44 in., matching
+    // HIVE_PIVOT_HEIGHT) and measured the tag relative to that level, with the
+    // RED AUDIENCE cell raised: bottom edge +5.0, centre +5.75, top edge +6.5 in.
+    //
+    // With the audience cell up, tagPose() puts the sticker centre this far above
+    // the pivot:  CELL_ARM * sin(tilt) - CELL_DROP * cos(tilt)
+    //           = 9.4 * sin(30) - CELL_DROP * cos(30)
+    //           = 4.7 - 0.866 * CELL_DROP
+    // Setting that to 5.75 gives CELL_DROP = -1.21. Negative: with the hive LEVEL
+    // the sticker sits about 1.2 in. ABOVE the pivot plane, not 10 in. below it.
+    //
+    // This is one equation in one unknown only because CELL_ARM is now confirmed
+    // (Shane measured the 18.8 in. cell spacing on the hive, 2026-11-11). Before
+    // that it was one measurement against two unknowns and deliberately unsolved.
+    //
+    // UNCERTAINTY about +/-0.4. The same tape numbers also date the tilt
+    // independently -- a 3.25 in. tag rising 1.5 in. (6.5 - 5.0) means
+    // asin(1.5/3.25) = 27.5 deg, not 30 -- and at 27.5 deg the drop solves to
+    // -1.59 instead. HiveTagsTest pins the 5.75 so a change here has to keep it.
+    public static double CELL_DROP = -1.2;        // bottom face, inches below the pivot (hive level)
     // MEASURED, Shane 2026-11-11: a raised cell sits 30 deg up from parallel to
     // the floor, so the two resting positions are 60 deg apart (+/-30 from level).
     public static double HIVE_SWING_DEG = 60.0;
