@@ -11,6 +11,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.field.Alliance;
 import org.firstinspires.ftc.teamcode.field.HiveGeometry;
+import org.firstinspires.ftc.teamcode.geometry.AimLead;
 import org.firstinspires.ftc.teamcode.geometry.OdometryAim;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -91,7 +92,16 @@ public class TurretOdometryAimTest extends LinearOpMode {
     // between, so this threshold is not delicate.
     public static double COMMAND_JUMP_DEG = 20.0;
 
+    // D-pad left/right steps AimLead.LEAD_SEC by this, so the lead can be tuned and
+    // A/B-ed from the gamepad without Panels. LEAD_SEC 0 is the lead switched off,
+    // so stepping down to zero IS the comparison.
+    public static double LEAD_STEP_SEC = 0.05;
+    public static double LEAD_MAX_SEC = 1.0;
+
     private final Turret turret = new Turret();
+    // Aims where the target is GOING, to cancel the P loop's standing lag. Off
+    // until AimLead.LEAD_SEC is stepped up with the D-pad; see AimLead.
+    private final AimLead lead = new AimLead();
     private Follower follower;
     private TelemetryManager telemetryM;
 
@@ -101,6 +111,7 @@ public class TurretOdometryAimTest extends LinearOpMode {
     private HiveGeometry.Tilt tilt = HiveGeometry.Tilt.AUDIENCE_UP;
 
     private boolean xPrev, aPrev, bPrev, yPrev, upPrev, downPrev, lbPrev, rbPrev;
+    private boolean dpadLeftPrev, dpadRightPrev;
 
     private double loadedKp, loadedMaxPower;   // this robot's own gains, read at init
     private boolean baselineGains = false;
@@ -126,10 +137,12 @@ public class TurretOdometryAimTest extends LinearOpMode {
         PanelsConfigurables.refreshClass(Turret.class);
         PanelsConfigurables.refreshClass(TurretGeometry.class);
         PanelsConfigurables.refreshClass(HiveGeometry.class);   // type hive opening estimates live
+        PanelsConfigurables.refreshClass(AimLead.class);        // LEAD_SEC, also on the D-pad
 
         telemetry.addLine("TURRET ODOMETRY AIM TEST");
         telemetry.addLine("X = home | A = aim on/off | B = reset pose | Y = mark/hive");
         telemetry.addLine("LB = swap turret gains (speed-up test) | RB = reset the peak");
+        telemetry.addLine("D-pad L/R = turret LEAD seconds (0 = off). Spin, note the peak, change it, same spin.");
         telemetry.addLine("Robot must be on START_X/Y/HEADING when you press play.");
         telemetry.update();
 
@@ -166,8 +179,14 @@ public class TurretOdometryAimTest extends LinearOpMode {
             if (blocked == null) {
                 aim = OdometryAim.solve(geometry, robot, target[0], target[1],
                         turret.getAngle(), Turret.MIN_ANGLE, Turret.MAX_ANGLE, HYSTERESIS_DEG);
+                // Rate comes from desiredDeg, not commandDeg: commandDeg is pinned at a
+                // travel limit while the target is out of reach, so its rate reads zero
+                // exactly when the target is moving fastest.
+                lead.update(aim.desiredDeg, getRuntime());
                 if (aiming) {
-                    turret.setTargetAngle(aim.commandDeg);
+                    // Turret.setTargetAngle already clips to MIN/MAX_ANGLE, so the lead
+                    // cannot push the command outside the travel.
+                    turret.setTargetAngle(aim.commandDeg + lead.leadDeg());
                 }
             }
 
@@ -185,6 +204,8 @@ public class TurretOdometryAimTest extends LinearOpMode {
         }
         if (gamepad1.a && !aPrev) {
             aiming = !aiming;
+            lead.reset();        // stale rate from before would fling the turret
+            peakAimError = 0;
             // HOLD either way: aiming feeds it targets; off, it holds where it is.
             turret.setControlMode(Turret.ControlMode.HOLD);
         }
@@ -212,6 +233,16 @@ public class TurretOdometryAimTest extends LinearOpMode {
         if (gamepad1.right_bumper && !rbPrev) {
             peakAimError = 0;
         }
+        // Step the lead. Each value gets its own clean peak, which is the whole point
+        // -- step to 0 and back up and compare the two peaks at the same spin rate.
+        if (gamepad1.dpad_left && !dpadLeftPrev) {
+            AimLead.LEAD_SEC = Math.max(0, AimLead.LEAD_SEC - LEAD_STEP_SEC);
+            peakAimError = 0;
+        }
+        if (gamepad1.dpad_right && !dpadRightPrev) {
+            AimLead.LEAD_SEC = Math.min(LEAD_MAX_SEC, AimLead.LEAD_SEC + LEAD_STEP_SEC);
+            peakAimError = 0;
+        }
         xPrev = gamepad1.x;
         aPrev = gamepad1.a;
         bPrev = gamepad1.b;
@@ -220,6 +251,8 @@ public class TurretOdometryAimTest extends LinearOpMode {
         downPrev = gamepad1.dpad_down;
         lbPrev = gamepad1.left_bumper;
         rbPrev = gamepad1.right_bumper;
+        dpadLeftPrev = gamepad1.dpad_left;
+        dpadRightPrev = gamepad1.dpad_right;
     }
 
     private static Pose startPose() {
@@ -339,6 +372,14 @@ public class TurretOdometryAimTest extends LinearOpMode {
             // a gain comparison is really a MAX_POWER comparison. Worth saying on
             // screen: Shane's first run peaked around 44 deg with saturation at 40.
             double saturatesAtDeg = Turret.kP > 0 ? Turret.MAX_POWER / Turret.kP : 0;
+            telemetryM.addLine("");
+            telemetryM.addData("Lead (sec)", String.format("%.2f", AimLead.LEAD_SEC)
+                    + (AimLead.LEAD_SEC == 0 ? "  OFF" : "")
+                    + "   (D-pad L/R steps it, peak resets each step)");
+            telemetryM.addData("Target rate (deg/s)", fmt(lead.rateDegPerSec())
+                    + (lead.droppedLastSample() ? "  [sample dropped]" : ""));
+            telemetryM.addData("Leading by (deg)", fmt(lead.leadDeg()));
+            telemetryM.addLine("");
             telemetryM.addData("Power-saturated past (deg)", fmt(saturatesAtDeg)
                     + (peakAimError > saturatesAtDeg ? "  <-- PEAK IS PAST THIS, kP is not the lever" : ""));
             // Say WHY it is not counting. A frozen peak with no explanation looks
