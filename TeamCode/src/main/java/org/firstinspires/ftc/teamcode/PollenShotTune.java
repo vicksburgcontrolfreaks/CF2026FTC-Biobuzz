@@ -60,9 +60,15 @@ import java.util.List;
  *   Y              reset the picked knob to its starting value
  *   B              clear the shot log
  *
+ * TUNING SOLO? Hold A and tap RT on gamepad 2 and everything forward LATCHES
+ * on -- flywheel, indexer and collector keep running with nothing held, so your
+ * hands are free for the knobs on gamepad 1. Y or LT stops it, as does holding A
+ * and tapping RT again. The screen says so in capitals while it is latched.
+ *
  * GAMEPAD 2 (operator) -- same buttons as DriveTeleOp, but direct, no gating:
  *   B  (hold)      flywheel on + indexer forward
  *   RT (hold)      flywheel on + indexer + collector forward
+ *   A + RT         LATCH that on (see above). Y or LT drops it.
  *   LT (hold)      indexer + collector backward
  *   A / X (hold)   collector in / out
  *   Y              flywheel on / off
@@ -141,6 +147,11 @@ public class PollenShotTune extends OpMode {
 
     // ---- Launcher state (direct, no state machine) ---------------------------
     private boolean flywheelOn = false;
+
+    // RT LATCH: everything forward stays on with nothing held, for tuning solo.
+    // Hold A and tap RT to latch; Y or LT drops it. See operate().
+    private boolean latched = false;
+    private boolean rtWasHeld = false;
     private double leftRpm, rightRpm;
     private boolean wasAtSpeed = false;
 
@@ -304,10 +315,24 @@ public class PollenShotTune extends OpMode {
 
     private void operate() {
         boolean fire = gamepad2.b;
-        boolean allForward = gamepad2.right_trigger > TRIGGER_HELD;
+        boolean rtNow = gamepad2.right_trigger > TRIGGER_HELD;
         boolean allBack = gamepad2.left_trigger > TRIGGER_HELD;
+        // Read ONCE. yWasPressed() clears itself, so a second call in the same loop
+        // returns false and one of the two uses below would silently never fire.
+        boolean yPressed = gamepad2.yWasPressed();
 
-        if (gamepad2.yWasPressed()) flywheelOn = !flywheelOn;
+        // RT LATCH -- for tuning solo. You cannot hold RT on gamepad 2 and reach the
+        // knobs on gamepad 1 at the same time, so: HOLD A AND TAP RT and everything
+        // forward latches on, staying on with nothing held.
+        if (gamepad2.a && rtNow && !rtWasHeld) latched = !latched;
+        // Anything that means "stop" drops the latch: Y, which is already flywheel
+        // off, or LT, which is reverse and would fight a latched forward feed.
+        if (yPressed || allBack) latched = false;
+        rtWasHeld = rtNow;
+
+        boolean allForward = rtNow || latched;
+
+        if (yPressed) flywheelOn = !flywheelOn;
         if (fire || allForward) flywheelOn = true;
 
         // Flywheels
@@ -457,6 +482,12 @@ public class PollenShotTune extends OpMode {
     private void showTelemetry(double dt) {
         double target = flywheelOn ? value[Knob.FLYWHEEL.ordinal()] : 0;
         telemetry.addLine("POLLEN ONLY -- nectar guard OFF");
+        // Loud, because a latched shooter keeps running with nothing held and that
+        // is exactly the thing you do not want to be unsure about.
+        if (latched) {
+            telemetry.addLine(">>> RT LATCHED - flywheel, indexer and collector are RUNNING");
+            telemetry.addLine("    Y or LT to stop (or hold A and tap RT again)");
+        }
         telemetry.addData("Flywheel", "%s  L %.0f / R %.0f  (target %.0f)%s",
                 flywheelOn ? (isAtSpeed() ? "AT SPEED" : "spinning") : "off",
                 leftRpm, rightRpm, target,
