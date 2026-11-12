@@ -105,7 +105,7 @@ public final class RobotProfile {
         // retune after the current mechanical changes -- so flip this to true once
         // the pose is trustworthy again, and check the Aim line on the Driver
         // Station says "odometry" rather than "camera". See TurretDirector.
-        TurretDirector.USE_ODOMETRY_AIM = false;
+        TurretDirector.USE_ODOMETRY_AIM = true;
     }
 
     // ---- 5618 ---------------------------------------------------------------
