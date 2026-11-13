@@ -646,9 +646,10 @@ Not built. Waiting on answers to the questions below.
 
 Shane's answers: layout confirmed (chassis flywheels fire up through the turret
 hole onto the deflector), RPM is the ONLY knob (deflector fixed at
-DEFAULT_SHOT_DEG), new branch. The flywheel-encoder question went unanswered;
-the screen shows L/R RPM and every log row carries both, so a bad encoder will
-show up as WHEELS DISAGREE or a skewed column.
+DEFAULT_SHOT_DEG), new branch. **The bad flywheel encoder (Nov 8) is FIXED**
+(Shane, 2026-11-13), so the velocity loop can be trusted. The screen still
+shows L/R RPM and every log row carries both: WHEELS DISAGREE or a lopsided
+column would mean it has come back.
 
 **Op mode:** `Shot Map`, group Tune (`ShotMapTune.java`). Not run on a robot yet.
 - INIT: pick the wall start you are parked on (the four WallStarts, now shared
