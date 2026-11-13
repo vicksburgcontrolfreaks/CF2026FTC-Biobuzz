@@ -381,30 +381,56 @@ Facts worth keeping:
   linear-in-turret-angle effect, NOT backlash and NOT a nonlinearity.
 - The encoder is exact, so the slope is NOT the encoder.
 
-**Leading hypothesis, NOT tested: frame-edge bias.** The turret can only hold
+**CONFIRMED 2026-11-13: frame-edge bias.** The turret can only hold
 tags from +29 to -20 before losing them, which is roughly the camera's whole
 usable FOV. A sweep therefore walks the tags from one edge of the image to the
 other, and uncorrected lens distortion biases a solved pose most at the edges.
 That would be smooth, repeatable, roughly linear in angle, and confined to the
 FOV -- which is what the table shows.
 
-If that is right, **4 in is a worst case this test manufactured** by pointing the
-camera away from the target, and the operating number is the 0.6 in from tags
-near centre -- which is where a turret-mounted camera naturally puts them.
+### How it was confirmed, 2026-11-13
 
-Ways to test it: compare fixes with the tag centred versus deliberately at the
-frame edge at the SAME turret angle (moving the robot, not the turret, to change
-where the tag lands); or check whether the SDK is using a real intrinsic
-calibration for this webcam.
+Park, home, aim the turret at the cell, capture. Then ROTATE THE ROBOT in place,
+re-aim the turret at the cell so the tags stay CENTRED, capture again. Five or
+six headings. Same range of turret angles as the sweep, but the tags never leave
+the middle of the image.
 
-## The camera-mount question: not settled by localization
+Robot x/y does not change when it rotates in place, so position SPREAD is still
+the right statistic. (The heading slope is NOT -- the robot really did rotate,
+so the slope and the implied TICKS_PER_DEGREE line read nonsense on this test.)
+
+    noise floor, one angle one spot ......... 0.60 in
+    turret angle varied, tags CENTRED ....... 1.26 in   (~1.1 in attributable)
+    turret angle varied, tags across frame .. 4.2  in   (~4.2 in attributable)
+
+About **4x more error with the tag at the edge of the image than centred, over
+the same turret travel.** So the turret chain contributes **at most ~1.1 in, and
+that is an upper bound** -- rotating the robot by hand moves it a little for
+real, so part of the 1.26 is genuine movement rather than error.
+
+Consequences:
+
+- **4 in was a worst case the sweep manufactured** by pointing the camera away
+  from the target. In normal use the turret points at the cell, the tags ARE
+  centred, and repeatability is ~1.26 in or better.
+- There is an obvious filter rule to add: reject a fix whose tag is far from the
+  image centre. `AprilTagDetection` carries `center` in pixels and
+  `ftcPose.bearing`, so gating on roughly |bearing| < 10 deg would drop the bad
+  fixes automatically instead of trusting nobody takes one.
+- Still worth checking whether the SDK has a real intrinsic calibration for this
+  webcam, since that is the likely root cause of the edge bias.
+
+## The camera-mount question: SETTLED, and not by localization
 
 Taking the camera off the turret would allow a 360 deg turret (no cable across
-the joint) and would delete the turret chain from localization. But:
+the joint) and would delete the turret chain from localization. Measurement says
+do not bother:
 
 - the turret chain's encoder is exact, so there is nothing to fix there;
-- if the residual error is frame-edge bias, a body-mounted camera does not fix
-  it either -- and it loses the turret's habit of keeping tags centred.
+- the turret chain's total contribution is at most ~1.1 in (above);
+- the dominant error is frame-edge bias, which a body-mounted camera does NOT
+  fix -- and moving it gives up the turret's habit of centring tags, which is
+  worth more than the ~1.1 in it would recover.
 
 So **decide the 360 deg turret on strategy, not on localization accuracy.** And
 cost it properly: `Turret` is built around `MIN_ANGLE`/`MAX_ANGLE`, a magnet
