@@ -79,13 +79,20 @@ public class RobotHardware {
      * collector FORWARD = pulls pieces IN. indexer FORWARD = feeds UP to the shooter.
      * Checked on 6494; not yet checked on 5618.
      *
-     * 2026-11-11: indexer motor flipped to REVERSE on BOTH robots (it was running
-     * backwards). "Forward" in code still means feed UP; only the raw motor
-     * direction changed. NOT robot-tested yet.
+     * THE INDEXER IS PER ROBOT. 2026-11-11 flipped it to REVERSE on both robots,
+     * but that flip belonged to 5618's rebuilt collection system only -- 6494 was
+     * already right as FORWARD. The raw direction now comes from
+     * RobotProfile.indexerDirection(), which reads WhichRobot itself so this works
+     * the same whether or not the op mode ever calls RobotProfile.install().
+     * "Forward" in code still means feed UP on both robots; that is the whole
+     * point of setting the raw direction per robot here.
+     *
+     * The collector is still the same on both. If one ever differs, it moves
+     * next to the indexer in RobotProfile rather than growing a switch here.
      */
     public static void applyCollectionDirections(DcMotorSimple collector, DcMotorSimple indexer) {
         if (collector != null) collector.setDirection(DcMotorSimple.Direction.FORWARD);
-        if (indexer != null) indexer.setDirection(DcMotorSimple.Direction.REVERSE);
+        if (indexer != null) indexer.setDirection(RobotProfile.indexerDirection());
     }
 
     public void init(HardwareMap hardwareMap) {

@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+
 import org.firstinspires.ftc.teamcode.geometry.AimLead;
 import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
@@ -144,6 +146,47 @@ public final class RobotProfile {
         // anything -- TurretDirector falls back to the camera while the geometry is
         // NaN and says so, so turning it on early is harmless but pointless.
         TurretDirector.USE_ODOMETRY_AIM = false;
+    }
+
+    // ---- Collection: indexer motor direction --------------------------------
+    /**
+     * Which way this robot's indexer motor has to be set so that FORWARD means
+     * "feed UP to the shooter".
+     *
+     * WHY THIS ONE IS A FUNCTION AND NOT SET BY install()
+     * The turret and camera numbers above are state that install() pushes into
+     * live @Configurable fields at op-mode init. The indexer direction can't
+     * work that way: RobotHardware.applyCollectionDirections() is the only
+     * place the motor direction is set, and it runs inside RobotHardware.init()
+     * -- plus straight from Collection System Test, Indexer Load Test, Load
+     * Sort Test and Load Recovery Test, NONE of which call install() at all.
+     * install()-set state would leave those four running the other robot's
+     * direction, in exactly the op modes you'd use to check the indexer.
+     * Asking WhichRobot here means there is no init order to get wrong.
+     *
+     * HISTORY
+     * 2026-11-11 (a65c48a) flipped this to REVERSE on BOTH robots, but the flip
+     * was only ever for 5618's rebuilt collection system. 6494 was fine as
+     * FORWARD and is put back here (Shane, 2026-11-12).
+     *
+     * Neither value is robot-tested since the split.
+     */
+    public static DcMotorSimple.Direction indexerDirection() {
+        try {
+            switch (WhichRobot.get()) {
+                case R5618:
+                    // The rebuilt collection system ran backwards as FORWARD.
+                    // Flipped 2026-11-11; NOT robot-tested.
+                    return DcMotorSimple.Direction.REVERSE;
+                case R6494:
+                default:
+                    // Confirmed feeding UP on the robot, 2026-11-05.
+                    return DcMotorSimple.Direction.FORWARD;
+            }
+        } catch (IllegalStateException e) {
+            // Unknown robot: keep the default (6494's), same as Launcher does.
+            return DcMotorSimple.Direction.FORWARD;
+        }
     }
 
     // ---- plumbing -----------------------------------------------------------
