@@ -128,6 +128,50 @@ public class TurretDirector {
     /** Let the camera correct the odometry aim angle. Only read when aiming from odometry. */
     public static boolean USE_CAMERA_TRIM = true;
 
+    /**
+     * One INIT-menu row for the aim diagnostics that otherwise live only in
+     * Panels, so they can be switched from the Driver Station D-pad instead.
+     *
+     * WHY A PRESET AND NOT TWO BOOLEAN ROWS. These are only ever flipped in a
+     * known combination while chasing a bias, and two extra rows in the match
+     * menu is two more things to scroll past before every match. One row, and
+     * NORMAL is the default.
+     *
+     * NORMAL actively writes both flags back to their shipped defaults, so a run
+     * can't inherit a leftover setting from an earlier run in the same power-up.
+     *
+     * Added 2026-11-12 to test the left-bias suspect: TurretAim.bearingOf()
+     * subtracts HiveTags.rowOffsetOf(), a hive-frame offset, straight from a
+     * camera-frame x with no account of which side the row is viewed from.
+     */
+    public enum AimTest {
+        NORMAL("normal", true, true),
+        NO_CELL_CENTRING("no cell centring", false, true),
+        NO_CAMERA_TRIM("no camera trim", true, false),
+        NEITHER("no centring, no trim", false, false);
+
+        private final String label;
+        private final boolean centreOnCell;
+        private final boolean cameraTrim;
+
+        AimTest(String label, boolean centreOnCell, boolean cameraTrim) {
+            this.label = label;
+            this.centreOnCell = centreOnCell;
+            this.cameraTrim = cameraTrim;
+        }
+
+        /** Make this the live setting. Call once at Start, next to AimSource.apply(). */
+        public void apply() {
+            TurretAim.CENTRE_ON_CELL = centreOnCell;
+            USE_CAMERA_TRIM = cameraTrim;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
     /** How fast the trim follows the camera. 0.15 = 15% of the disagreement per measurement. */
     public static double TRIM_SMOOTHING = 0.15;
 

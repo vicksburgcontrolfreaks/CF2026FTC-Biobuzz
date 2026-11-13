@@ -143,6 +143,14 @@ public class DriveTeleOp extends OpMode {
             menu.add("Aim by", TurretDirector.AimSource.CAMERA, TurretDirector.AimSource.ODOMETRY)
                     .summary("aim %s")
                     .allowWhen(TurretDirector.AimSource::isAvailable);
+    // Diagnostics for the left-bias hunt. NORMAL is the match setting; leave it
+    // there unless you are running the test. See TurretDirector.AimTest.
+    private final AutoMenu.Choice<TurretDirector.AimTest> aimTest =
+            menu.add("Aim test", TurretDirector.AimTest.NORMAL,
+                            TurretDirector.AimTest.NO_CELL_CENTRING,
+                            TurretDirector.AimTest.NO_CAMERA_TRIM,
+                            TurretDirector.AimTest.NEITHER)
+                    .summary("%s");
 
     private RobotHardware hardware;
     private Follower follower;
@@ -253,6 +261,7 @@ public class DriveTeleOp extends OpMode {
         // Apply the menu pick ONCE here, not every loop: USE_ODOMETRY_AIM is also
         // editable live in Panels, and rewriting it each loop would stomp that.
         aimSource.get().apply();
+        aimTest.get().apply();
 
         Pose start;
         boolean poseFromAuto = startPose.get() == StartPose.FROM_AUTO && PoseHandoff.has();
@@ -492,6 +501,12 @@ public class DriveTeleOp extends OpMode {
         telemetry.addData("Aim by", "%s%s%s", aim.getSource(),
                 aim.isUsingOdometry() ? String.format("  |  %.1f in", aim.getDistance()) : "",
                 aim.hasCameraFix() ? String.format("  |  trim %+.1f deg", aim.getTrimDeg()) : "");
+        // Tags in frame for the cell we're aiming at. The cell-centring correction
+        // cancels out at 4 and is at its worst at 1, so this is what tells you
+        // whether a bias is the row-offset sign or something else.
+        telemetry.addData("Tags used", "%d of 4%s", aim.camera().getTagsUsed(),
+                aimTest.get() == TurretDirector.AimTest.NORMAL ? ""
+                        : "   [AIM TEST: " + aimTest.get() + "]");
         telemetry.addData("Aim at", "%s%s", targetCell.displayName,
                 cameraPicks ? "  (camera picks)"
                         : !bySide ? "" : targetCell == lastSideCell ? "  (our side)" : "  (picked - until we cross the middle)");
