@@ -26,6 +26,12 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *   B   record the HAND-SET spot (push it where you want it first)
  *   Y   power the servo and find the command for the hand-set spot. HANDS OFF.
  *   X   go limp again (servo off), any time
+ *   D-pad up  HOLD at this robot's saved POLLEN_POSITION, right away, no
+ *             feedback needed. For re-attaching a slipped horn/linkage: with
+ *             the linkage DISCONNECTED, hold here, set the mechanism to the
+ *             pollen gap by hand, and re-tighten. Every saved number then
+ *             lines up again. Do NOT use with a slipped linkage still
+ *             attached -- the saved number may be past a hard stop.
  *
  * Works in INIT too, so you can do steps A and B before pressing Start.
  * Y only works after Start.
@@ -67,7 +73,7 @@ public class PivotHandSet extends LinearOpMode {
     private boolean limp = true;
     private String note = "Servo is OFF. Move the pivot by hand.";
 
-    private boolean aPrev, bPrev, xPrev, yPrev;
+    private boolean aPrev, bPrev, xPrev, yPrev, upPrev;
 
     @Override
     public void runOpMode() {
@@ -98,6 +104,20 @@ public class PivotHandSet extends LinearOpMode {
 
     private void handleButtons(boolean started) {
         boolean a = gamepad1.a, b = gamepad1.b, x = gamepad1.x, y = gamepad1.y;
+        boolean up = gamepad1.dpad_up;
+
+        if (up && !upPrev) {
+            if (!started) {
+                note = "Press Start first -- the servo can't move during INIT.";
+            } else {
+                limp = false;
+                commanded = ShooterPivot.POLLEN_POSITION;
+                servo.setPosition(commanded);
+                note = String.format("HOLDING saved pollen %.3f. Set the mechanism to the pollen "
+                        + "gap by hand and re-tighten the linkage. X = servo off.", commanded);
+            }
+        }
+        upPrev = up;
 
         if (x && !xPrev) {
             goLimp();
@@ -260,6 +280,8 @@ public class PivotHandSet extends LinearOpMode {
                 ShooterPivot.MIN_SAFE_POSITION, ShooterPivot.MAX_SAFE_POSITION);
         telemetry.addLine(note);
         telemetry.addLine("A=stop  B=hand-set  Y=find number  X=servo off");
+        telemetry.addLine(String.format("D-pad up = hold saved pollen %.3f (linkage OFF!)",
+                ShooterPivot.POLLEN_POSITION));
         telemetry.update();
     }
 }
