@@ -37,10 +37,11 @@ import java.util.List;
  * DriveTeleOp aims in a match -- and puts the whole chain on the screen.
  *
  * WHAT IT DOES NOT DO
- * It never writes the pose. It never moves the robot. It computes what a
+ * It never writes the pose and it never drives the robot. It computes what a
  * correction WOULD be and shows whether VisionPoseFilter would accept it. The
  * blend into Pedro's pose is the next step, and it should not be written until
- * the numbers here look right.
+ * the numbers here look right. It DOES move the turret, but only the homing you
+ * ask for with Y and the jogging you ask for yourself.
  *
  * IT OWNS THE WEBCAM. A webcam can only be opened once, so this cannot run at
  * the same time as DriveTeleOp or anything else using TurretCamera.
@@ -62,6 +63,34 @@ import java.util.List;
  *      one side -- the error being POSITION-DEPENDENT is what matters, because
  *      that is the shape of a camera-mount or hive-geometry error rather than
  *      noise.
+ *
+ * THE TURRET SWEEP: SHOULD THE CAMERA COME OFF THE TURRET?
+ * Taking the camera off the turret would allow a 360 deg turret and would delete
+ * the whole tag -> turret base -> robot chain from localization. Whether that is
+ * worth a rebuild depends on how much that chain is actually costing, and this
+ * measures it instead of guessing:
+ *
+ *   1. Park the robot. Do not move it again until step 4.
+ *   2. Press Y, let the turret home. Point it at a cell and press A.
+ *   3. Step the turret (D-pad L/R) to another angle, let it SETTLE, press A.
+ *      Repeat for 3-5 angles across the travel.
+ *   4. Read SPREAD. The robot never moved, so every inch of spread is the turret
+ *      chain: homing accuracy, TURRET_ZERO_DEG, TURRET_CCW_SIGN,
+ *      TICKS_PER_DEGREE, TURRET_OFFSET_X/Y and gear backlash.
+ *
+ * A small spread means the turret chain is fine and a body-mounted camera would
+ * buy little localization accuracy -- decide on the 360 deg turret alone. Inches
+ * of spread is exactly what moving the camera removes.
+ *
+ * It also separates two failure modes: error that CHANGES with turret angle is
+ * the turret chain, error that stays put is the camera mount or hive geometry.
+ *
+ * CONTROLS (gamepad 1)
+ *   Y              home the turret (once; nothing moves before it)
+ *   D-pad L / R    step the turret target by TURRET_STEP_DEG
+ *   Right stick X  jog the turret (right = clockwise, as in DriveTeleOp)
+ *   A              capture a sweep sample (refused unless settled and fresh)
+ *   B              clear the samples
  *
  * WHAT TO DISTRUST
  * HiveTags still carries made-up numbers (RED_HIVE_X, CELL_ARM, CELL_DROP), and
@@ -85,6 +114,16 @@ public class TagPoseTest extends OpMode {
     public static double TRUTH_Y = Double.NaN;
     public static double TRUTH_HEADING_DEG = Double.NaN;
 
+    /** One D-pad L/R press, degrees of turret target. */
+    public static double TURRET_STEP_DEG = 15.0;
+    /** Right stick at full deflection, degrees of turret target per second. */
+    public static double TURRET_JOG_DEG_PER_SEC = 45.0;
+    /** A captured sample's fix must be newer than this, or the capture is refused. */
+    public static double CAPTURE_MAX_FIX_AGE_SEC = 0.5;
+
+    private static final int MAX_SAMPLES = 8;
+    private static final double STICK_DEADZONE = 0.1;
+
     private RobotHardware hw;
     private Follower follower;
     private Turret turret;
@@ -105,6 +144,22 @@ public class TagPoseTest extends OpMode {
     private VisionPoseFilter.Verdict lastVerdict = null;
     private double lastFixAgeMs = 0;
     private int framesWithFix = 0, framesWithoutPose = 0;
+    private final ElapsedTime sinceFix = new ElapsedTime();
+
+    // ---- The turret sweep ---------------------------------------------------
+    // Park the robot, capture a fix at several TURRET angles without moving the
+    // robot, and the reported ROBOT position should not change -- the robot
+    // hasn't moved. However far it does move is what the turret chain costs:
+    // homing accuracy, TURRET_ZERO_DEG, TURRET_CCW_SIGN, TICKS_PER_DEGREE,
+    // TURRET_OFFSET_X/Y and gear backlash, all of which a body-mounted camera
+    // would delete. That is the number the fixed-vs-turret camera decision turns
+    // on, so it is measured here rather than argued about.
+    private final double[] sampleTurretDeg = new double[MAX_SAMPLES];
+    private final double[] sampleX = new double[MAX_SAMPLES];
+    private final double[] sampleY = new double[MAX_SAMPLES];
+    private final double[] sampleHeadingDeg = new double[MAX_SAMPLES];
+    private int samples = 0;
+    private String captureNote = "A captures a sample once the turret has settled";
 
     @Override
     public void init() {
@@ -164,6 +219,27 @@ public class TagPoseTest extends OpMode {
             turret.startHoming();
             homingStarted = true;
         }
+        // Jog only once homed, so the soft limits are on and a step can't drive
+        // the turret into the cable or a stop. Same sign convention as
+        // DriveTeleOp: stick RIGHT turns the turret right, angle goes DOWN.
+        if (turret.isHomed()) {
+            if (gamepad1.dpadLeftWasPressed()) {
+                turret.setTargetAngle(turret.getTargetAngle() + TURRET_STEP_DEG);
+            }
+            if (gamepad1.dpadRightWasPressed()) {
+                turret.setTargetAngle(turret.getTargetAngle() - TURRET_STEP_DEG);
+            }
+            double stick = gamepad1.right_stick_x;
+            if (Math.abs(stick) > STICK_DEADZONE) {
+                turret.setTargetAngle(turret.getTargetAngle()
+                        - stick * TURRET_JOG_DEG_PER_SEC * dt);
+            }
+        }
+        if (gamepad1.aWasPressed()) captureSample();
+        if (gamepad1.bWasPressed()) {
+            samples = 0;
+            captureNote = "cleared";
+        }
         turret.update();
 
         Pose pose = follower.getPose();
@@ -189,6 +265,7 @@ public class TagPoseTest extends OpMode {
         TagLocalizer.Fix fix = localizer.solveFrame(detections, turret.getAngle());
         if (fix != null) {
             lastFix = fix;
+            sinceFix.reset();
             framesWithFix++;
             lastFixAgeMs = (System.nanoTime() - fix.frameNanos) / 1e6;
             lastVerdict = VisionPoseFilter.check(turret.isOnTarget(), speed, turnRate,
@@ -198,6 +275,85 @@ public class TagPoseTest extends OpMode {
         }
 
         showTelemetry(detections.size(), withPose, dt);
+    }
+
+    /**
+     * Record this turret angle and the fix that goes with it.
+     *
+     * Refuses rather than records a meaningless sample. A fix taken mid-slew is
+     * computed against a turret angle the turret has already left, and a stale
+     * fix describes a turret position from before the last step -- either one
+     * would show up as turret-chain error that isn't real, which is the exact
+     * thing this test is trying to measure.
+     */
+    private void captureSample() {
+        if (!turret.isHomed()) {
+            captureNote = "REFUSED: turret not homed (press Y)";
+        } else if (!turret.isOnTarget()) {
+            captureNote = "REFUSED: turret still moving -- let it settle";
+        } else if (lastFix == null || sinceFix.seconds() > CAPTURE_MAX_FIX_AGE_SEC) {
+            captureNote = "REFUSED: no fresh fix -- point the camera at a cell's tags";
+        } else if (samples >= MAX_SAMPLES) {
+            captureNote = "REFUSED: " + MAX_SAMPLES + " samples is full (B clears)";
+        } else {
+            sampleTurretDeg[samples] = turret.getAngle();
+            sampleX[samples] = lastFix.robot.getX();
+            sampleY[samples] = lastFix.robot.getY();
+            sampleHeadingDeg[samples] = Math.toDegrees(lastFix.robot.getHeading());
+            samples++;
+            captureNote = "captured " + samples + " of " + MAX_SAMPLES;
+        }
+    }
+
+    /** Farthest captured fix from the mean of them, inches. 0 with fewer than 2. */
+    private double positionSpread() {
+        if (samples < 2) return 0;
+        double mx = 0, my = 0;
+        for (int i = 0; i < samples; i++) {
+            mx += sampleX[i];
+            my += sampleY[i];
+        }
+        mx /= samples;
+        my /= samples;
+        double worst = 0;
+        for (int i = 0; i < samples; i++) {
+            worst = Math.max(worst, Math.hypot(sampleX[i] - mx, sampleY[i] - my));
+        }
+        return worst;
+    }
+
+    /** Biggest gap between any two captured headings, degrees. 0 with fewer than 2. */
+    private double headingSpread() {
+        double worst = 0;
+        for (int i = 0; i < samples; i++) {
+            for (int j = i + 1; j < samples; j++) {
+                worst = Math.max(worst, Math.abs(TurretGeometry.wrapDegrees(
+                        sampleHeadingDeg[i] - sampleHeadingDeg[j])));
+            }
+        }
+        return worst;
+    }
+
+    private void showSweep() {
+        telemetry.addLine();
+        telemetry.addLine("TURRET SWEEP -- the ROBOT must not move between captures");
+        telemetry.addData("Capture", captureNote);
+        if (samples == 0) {
+            telemetry.addLine("D-pad L/R steps the turret, right stick jogs it.");
+            telemetry.addLine("Settle, press A, step, press A again. 3-5 angles is plenty.");
+            return;
+        }
+        for (int i = 0; i < samples; i++) {
+            telemetry.addLine(String.format("  %d  turret %+6.1f   fix (%.1f, %.1f)  hdg %.1f",
+                    i + 1, sampleTurretDeg[i], sampleX[i], sampleY[i], sampleHeadingDeg[i]));
+        }
+        if (samples < 2) return;
+        // THE ANSWER to "would a body-mounted camera localize better". The robot
+        // did not move, so all of this spread is the turret chain.
+        telemetry.addData("SPREAD  <-- the turret chain's cost", "%.2f in, heading %.1f deg",
+                positionSpread(), headingSpread());
+        telemetry.addLine("    Small = the turret chain is fine and a fixed camera buys little.");
+        telemetry.addLine("    Inches = that is what moving the camera off the turret removes.");
     }
 
     private void showTelemetry(int tagsSeen, int withPose, double dt) {
@@ -218,6 +374,7 @@ public class TagPoseTest extends OpMode {
 
         if (lastFix == null) {
             telemetry.addLine("No fix yet. Point the camera at a hive cell's tags.");
+            showSweep();
             telemetry.addData("Loop", "%.0f ms", dt * 1000);
             telemetry.update();
             return;
@@ -254,6 +411,7 @@ public class TagPoseTest extends OpMode {
             telemetry.addLine();
             telemetry.addLine("Set TRUTH_X / TRUTH_Y in Panels to see the error directly.");
         }
+        showSweep();
         telemetry.addData("Loop", "%.0f ms", dt * 1000);
         telemetry.update();
     }
