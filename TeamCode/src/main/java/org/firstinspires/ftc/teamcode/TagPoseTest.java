@@ -153,17 +153,48 @@ public class TagPoseTest extends OpMode {
      */
     public static WallFix.Face WALL_FACE = WallFix.Face.FRONT;
 
-    // ---- Camera, matching TurretCamera's tuned values ----------------------
-    // This op mode originally ran on AUTO exposure and default decimation, on
-    // the reasoning that a parked robot has no motion blur to beat. That was
-    // wrong for a different reason: exposure and gain also decide whether the
-    // decoder can READ a tag at all, and TurretCamera's 6 ms / gain 250 were
-    // tuned on these tags. Running auto here meant this op mode detected worse
-    // than the match camera does, which is backwards for a bring-up tool.
+    // ---- Camera -------------------------------------------------------------
+    // HISTORY, because this got decided wrong once and the wrong version is the
+    // kind that looks like a fix. On 2026-11-13 this op mode was switched FROM
+    // auto exposure TO TurretCamera's 6 ms / gain 250, reasoning that a bring-up
+    // tool should not detect worse than the match camera. It detected WORSE:
+    // Shane had reliably held 4 tags from (57, 9), and on 6 ms / gain 250 the
+    // same spot gave 1-2.
+    //
+    // Why 6 ms is right there and wrong here: TurretCamera SLEWS on the turret,
+    // so it buys motion-blur immunity with darkness. A parked bench test has no
+    // motion to freeze, so it paid the darkness for nothing -- on tags that face
+    // DOWN and sit in their own cell's shadow. 6 ms plus gain 250 is dark AND
+    // noisy, and both hurt the decoder.
+    //
+    // So AUTO is the default again. Manual is still reachable, live, on gamepad
+    // 2, because "what exposure do these tags actually want" is worth knowing
+    // and has never been measured -- only assumed, twice, in both directions.
+    public static boolean FORCE_MANUAL_EXPOSURE = false;
     public static int EXPOSURE_MS = 6;
     public static int CAMERA_GAIN = 250;
-    /** 1, not TurretCamera's 2: detection range matters more than CPU on a bench. */
-    public static int DECIMATION = 1;
+    /**
+     * 0 = DON'T CALL setDecimation, leaving the native detector's own default --
+     * which is what the configuration that reliably held 4 tags did. It is not the
+     * same as passing a number: AprilTagProcessorImpl leaves its `decimation`
+     * field at 0 and `needToSetDecimation` false until someone calls the setter,
+     * so an untouched detector keeps a default this code never sees.
+     * 1-3 force a value (1 = most range, most CPU; TurretCamera uses 2).
+     */
+    public static int DECIMATION = 0;
+
+    /** gamepad 2 steps, per press. */
+    private static final int EXPOSURE_STEP_MS = 2;
+    private static final int GAIN_STEP = 25;
+
+    /**
+     * Ask the camera for a specific resolution, or take whatever the SDK gives.
+     * Read at INIT (the portal is built once), so change it and re-init -- it is
+     * NOT live like the exposure controls. See the note at the builder.
+     */
+    public static boolean PIN_RESOLUTION = true;
+    public static int RESOLUTION_WIDTH = 640;
+    public static int RESOLUTION_HEIGHT = 480;
 
     private static final int MAX_SAMPLES = 8;
     private static final double STICK_DEADZONE = 0.1;
@@ -180,15 +211,74 @@ public class TagPoseTest extends OpMode {
 
     // Manual exposure can only be set once the camera is STREAMING, and the mode
     // change needs a moment to take before the values stick -- same sequence and
-    // same 50 ms settle TurretCamera uses. One-shot; a failure here is not fatal,
-    // it just means auto exposure and worse detection.
-    private boolean exposureSet = false;
+    // same 50 ms settle TurretCamera uses. A failure here is not fatal; it just
+    // means auto exposure.
+    //
+    // NOT one-shot any more. It used to latch `exposureSet` and never look again,
+    // so editing EXPOSURE_MS or CAMERA_GAIN mid-run did nothing and every value
+    // cost a redeploy -- which is why nobody ever swept it. The `applied*` fields
+    // record what the camera was last actually told; anything else re-applies.
     private String cameraNote = "starting";
+    private String resolutionNote = "?";
     private final ElapsedTime exposureSettle = new ElapsedTime();
     private boolean modeSet = false;
+    private boolean manualFailed = false;
+    private Boolean appliedManual = null;        // null = nothing applied yet
+    private int appliedExposure = -1, appliedGain = -1, appliedDecimation = -1;
 
+    /**
+     * Pushes FORCE_MANUAL_EXPOSURE / EXPOSURE_MS / CAMERA_GAIN / DECIMATION at the
+     * camera whenever they differ from what it was last told. Cheap when nothing
+     * changed (an int compare), so it is safe to call every loop.
+     */
     private void setUpExposure() {
-        if (exposureSet || portal.getCameraState() != VisionPortal.CameraState.STREAMING) return;
+        if (portal.getCameraState() != VisionPortal.CameraState.STREAMING) return;
+
+        if (DECIMATION != appliedDecimation) {
+            // 0 means leave it alone -- see the constant. Once it HAS been forced
+            // there is no way back to the native default without a re-init, so the
+            // note says "forced" rather than pretending 0 undoes it.
+            if (DECIMATION > 0) processor.setDecimation((float) DECIMATION);
+            appliedDecimation = DECIMATION;
+        }
+
+        if (!FORCE_MANUAL_EXPOSURE) {
+            // DELIBERATELY DOES NOT TOUCH THE MODE when nothing has been applied
+            // yet (appliedManual == null). The configuration that reliably held 4
+            // tags never called setMode at all -- it left the camera in whatever
+            // it powers up in -- and "set it to auto" is NOT the same thing. This
+            // op mode's job today is to reproduce that state exactly, so the
+            // untouched path has to be genuinely untouched.
+            //
+            // Only a toggle BACK from manual restores a mode, because Manual is
+            // sticky once set. ContinuousAuto, not Auto: the SDK's own comment
+            // says Auto is "single trigger auto exposure", which meters once and
+            // holds -- not what anyone means by putting it back on auto.
+            if (Boolean.TRUE.equals(appliedManual)) {
+                try {
+                    ExposureControl exposure = portal.getCameraControl(ExposureControl.class);
+                    if (exposure.getMode() != ExposureControl.Mode.ContinuousAuto) {
+                        exposure.setMode(ExposureControl.Mode.ContinuousAuto);
+                    }
+                    cameraNote = "ContinuousAuto exposure";
+                } catch (RuntimeException e) {
+                    cameraNote = "auto restore FAILED: " + e.getMessage();
+                }
+                appliedManual = Boolean.FALSE;
+                modeSet = false;
+                manualFailed = false;
+            } else if (appliedManual == null) {
+                appliedManual = Boolean.FALSE;
+                cameraNote = "camera default, UNTOUCHED (known-good path)";
+            }
+            return;
+        }
+
+        if (manualFailed) return;   // asked for manual, camera refused: stop retrying
+
+        boolean valuesStale = EXPOSURE_MS != appliedExposure || CAMERA_GAIN != appliedGain;
+        if (Boolean.TRUE.equals(appliedManual) && !valuesStale) return;
+
         try {
             ExposureControl exposure = portal.getCameraControl(ExposureControl.class);
             if (!modeSet) {
@@ -202,13 +292,64 @@ public class TagPoseTest extends OpMode {
             if (exposureSettle.milliseconds() < 50) return;
             exposure.setExposure(EXPOSURE_MS, TimeUnit.MILLISECONDS);
             portal.getCameraControl(GainControl.class).setGain(CAMERA_GAIN);
-            exposureSet = true;
-            cameraNote = String.format("%d ms, gain %d, decimation %d",
-                    EXPOSURE_MS, CAMERA_GAIN, DECIMATION);
+            appliedManual = Boolean.TRUE;
+            appliedExposure = EXPOSURE_MS;
+            appliedGain = CAMERA_GAIN;
+            cameraNote = String.format("MANUAL %d ms, gain %d, decimation %d",
+                    appliedExposure, appliedGain, appliedDecimation);
         } catch (RuntimeException e) {
-            exposureSet = true;   // stop retrying
+            manualFailed = true;
             cameraNote = "AUTO exposure (manual failed: " + e.getMessage() + ")";
         }
+    }
+
+    /** The per-tag line, rebuilt each loop. */
+    private String perTag = "";
+
+    private String decimationNote() {
+        if (appliedDecimation < 0) return "?";
+        return appliedDecimation == 0 ? "detector default" : String.valueOf(appliedDecimation);
+    }
+
+    /**
+     * One entry per tag the decoder actually read this frame: its ID, how far off
+     * the camera centreline it sat, and whether the SDK gave it a field pose.
+     *
+     * Why this earns a line: "1-2 tags" has three completely different causes and
+     * the old counters could not tell them apart. A tag MISSING here was never
+     * decoded (too dark, too small, out of frame, too oblique -- a camera or
+     * geometry problem). A tag present but marked `nopose` decoded fine and the
+     * localization chain dropped it (a configuration problem). Which one you are
+     * looking at decides where to go next, and guessing wrong costs a session.
+     */
+    private String describe(List<AprilTagDetection> detections) {
+        if (detections.isEmpty()) return "none decoded";
+        StringBuilder sb = new StringBuilder();
+        for (AprilTagDetection d : detections) {
+            if (sb.length() > 0) sb.append("  ");
+            sb.append(d.id);
+            if (d.ftcPose != null) {
+                sb.append(String.format("@%+.0f", d.ftcPose.bearing));
+            }
+            if (d.robotPose == null) sb.append("(nopose)");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Gamepad 2 only, so gamepad 1's workflow is untouched: A toggles auto/manual,
+     * D-pad U/D steps exposure, D-pad L/R steps gain, X cycles decimation 1-2-3.
+     * setUpExposure() notices the change on the next loop and applies it.
+     */
+    private void editCamera() {
+        if (gamepad2.aWasPressed()) FORCE_MANUAL_EXPOSURE = !FORCE_MANUAL_EXPOSURE;
+        if (gamepad2.dpadUpWasPressed()) EXPOSURE_MS += EXPOSURE_STEP_MS;
+        if (gamepad2.dpadDownWasPressed()) EXPOSURE_MS = Math.max(1, EXPOSURE_MS - EXPOSURE_STEP_MS);
+        if (gamepad2.dpadRightWasPressed()) CAMERA_GAIN = Math.min(255, CAMERA_GAIN + GAIN_STEP);
+        if (gamepad2.dpadLeftWasPressed()) CAMERA_GAIN = Math.max(0, CAMERA_GAIN - GAIN_STEP);
+        // 0 (detector default) -> 1 -> 2 -> 3 -> 0. Going back to 0 only stops
+        // FORCING a value; it cannot un-force one until the next init.
+        if (gamepad2.xWasPressed()) DECIMATION = DECIMATION >= 3 ? 0 : DECIMATION + 1;
     }
 
     // For VisionPoseFilter.check(), which wants to know if the robot is moving.
@@ -331,9 +472,18 @@ public class TagPoseTest extends OpMode {
                 .setDrawTagOutline(true)
                 .setDrawTagID(true)
                 .build();
-        processor.setDecimation((float) DECIMATION);
-        portal = new VisionPortal.Builder()
-                .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
+        // Decimation is NOT set here any more; setUpExposure() owns it, and only
+        // when DECIMATION > 0. An unconditional call here is what made "the
+        // detector's own default" unreachable.
+        VisionPortal.Builder builder = new VisionPortal.Builder()
+                .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
+        if (PIN_RESOLUTION) {
+            builder.setCameraResolution(new Size(RESOLUTION_WIDTH, RESOLUTION_HEIGHT));
+            resolutionNote = String.format("pinned %dx%d", RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
+        } else {
+            resolutionNote = "SDK default (not pinned)";
+        }
+        portal = builder
                 // PINNED, and it matters. Our camera is a Logitech C270, and the
                 // SDK's built-in calibration for it exists at 640x480 ONLY
                 // (focalLength 822.317, distortion -0.045 / 1.173 / -3.632 --
@@ -351,18 +501,36 @@ public class TagPoseTest extends OpMode {
                 // If pinning this fixes those two, the same line belongs in
                 // TurretCamera -- but that one feeds match aiming through
                 // TurretAim, so measure here first.
-                .setCameraResolution(new Size(640, 480))
+                //
+                // NOW A SUSPECT, 2026-11-13 (afternoon). Pinning was argued from
+                // the "range reads ~10% short" figure -- and that figure has since
+                // been disowned: the five-spot run behind it was taken with
+                // crippled camera settings and probably measured single-tag pose
+                // ambiguity. So this line rests on evidence we no longer trust,
+                // AND it landed in the same window as the detection regression
+                // (4 tags from (57, 9) before, 1-2 after). It may well be a no-op
+                // -- the SDK's own default is 640x480 -- but "may well be" is not
+                // a measurement, so it is switchable now. PIN_RESOLUTION is read
+                // at INIT, so change it and re-init; no redeploy needed.
                 .addProcessor(processor)
                 .build();
     }
 
     @Override
     public void init_loop() {
+        editCamera();
         setUpExposure();
+        // The tag list works before Start too -- counting what decodes needs no
+        // turret and no pose, so camera settings can be swept right here at INIT.
+        List<AprilTagDetection> detections = processor.getDetections();
+        perTag = describe(detections == null ? Collections.emptyList() : detections);
         telemetry.addLine("TAG POSE TEST -- read only, writes nothing");
         BuildInfo.show(telemetry);
         telemetry.addData("Robot", WhichRobot.number());
-        telemetry.addData("Camera", "%s   %s", portal.getCameraState(), cameraNote);
+        telemetry.addData("Camera", "%s   %s | dec %s | %s",
+                portal.getCameraState(), cameraNote, decimationNote(), resolutionNote);
+        telemetry.addData("TAGS", "%s", perTag);
+        telemetry.addLine("gp2: A auto/manual, dpad U/D exposure, L/R gain, X decimation");
         telemetry.addLine();
         telemetry.addLine("Park on a spot you can measure. Point the camera at a hive.");
         telemetry.addLine("At Start, press Y to HOME THE TURRET -- fixes are wrong until you do.");
@@ -404,6 +572,7 @@ public class TagPoseTest extends OpMode {
     public void loop() {
         double dt = loopTimer.seconds();
         loopTimer.reset();
+        editCamera();
         setUpExposure();
         follower.update();
 
@@ -455,6 +624,7 @@ public class TagPoseTest extends OpMode {
             if (d.robotPose != null) withPose++;
         }
 
+        perTag = describe(detections);
         lastWall = solveWall(detections, pose);
 
         TagLocalizer.Fix fix = localizer.solveFrame(detections, turret.getAngle());
@@ -778,6 +948,11 @@ public class TagPoseTest extends OpMode {
             telemetry.addLine(">>> Tags seen but NO field pose: processor not configured");
             telemetry.addLine("    for localization. TagLocalizer cannot run. Tell Claude.");
         }
+
+        // The camera config and what it is actually yielding, together on purpose:
+        // the whole point is to watch the tag list respond as you change settings.
+        telemetry.addData("CAM", "%s | dec %s | %s", cameraNote, decimationNote(), resolutionNote);
+        telemetry.addData("TAGS", "%d: %s", tagsSeen, perTag);
 
         showTruthEditor();
 
