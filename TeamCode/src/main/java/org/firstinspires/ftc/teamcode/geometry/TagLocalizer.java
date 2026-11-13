@@ -130,7 +130,16 @@ public class TagLocalizer {
         public final double headingRad;      // the field direction the turret points
         public final Tilt hiveTilt;          // the tilt that came out level
         public final double levelErrorDeg;   // how far from level it came out
-        public final double floorError;      // how far off the floor, inches
+        /**
+         * How far off the floor the turret base solved, SIGNED, inches. The base
+         * really is on the floor, so this should be ~0 -- it is a free check on
+         * the whole vertical chain (CAMERA_UP, CAMERA_PITCH_DEG, the tag height).
+         * Signed because the direction is the diagnostic: a vertical error of a
+         * few inches comes with a horizontal range error, which is what a bad
+         * camera pitch looks like.
+         */
+        public final double z;
+        public final double floorError;      // |z|, for the believable test
         public final boolean believable;     // within LEVEL_TOLERANCE_DEG and FLOOR_TOLERANCE
 
         TurretFix(Rigid3 turret, Tilt hiveTilt) {
@@ -140,7 +149,8 @@ public class TagLocalizer {
             this.headingRad = Math.atan2(pointing[1], pointing[0]);
             this.hiveTilt = hiveTilt;
             this.levelErrorDeg = Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, turret.get(2, 2)))));
-            this.floorError = Math.abs(turret.z());
+            this.z = turret.z();
+            this.floorError = Math.abs(this.z);
             this.believable = levelErrorDeg <= LEVEL_TOLERANCE_DEG && floorError <= FLOOR_TOLERANCE;
         }
     }

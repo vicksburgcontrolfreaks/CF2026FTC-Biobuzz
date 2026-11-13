@@ -617,8 +617,16 @@ public class TagPoseTest extends OpMode {
                 lastFix.tagsUsed, lastFix.spread, lastFix.tagRange, lastFix.tagBearingDeg);
         telemetry.addData("FILTER", "%s%s", lastVerdict,
                 lastFix.turret.believable ? "" : "   TURRET BASE NOT BELIEVABLE");
-        telemetry.addData("hive tilt", "%s   |   turret %+.1f   |   loop %.0f ms",
-                lastFix.turret.hiveTilt, turret.getAngle(), dt * 1000);
+        // BASE is a free consistency check and the reason it is back on screen:
+        // the turret base really is on the floor and level, so z and level should
+        // solve to ~0. Several inches of z means the VERTICAL chain is wrong
+        // (CAMERA_UP, CAMERA_PITCH_DEG, or the tag height), and a vertical error
+        // comes with a horizontal range error -- which is the open question as of
+        // 2026-11-13. I had compacted these two off the screen; that was a
+        // mistake, they are the cheapest diagnostic here.
+        telemetry.addData("BASE", "z %+.2f in | level %.1f deg | %s | turret %+.1f",
+                lastFix.turret.z, lastFix.turret.levelErrorDeg, lastFix.turret.hiveTilt,
+                turret.getAngle());
         showSweep();
         telemetry.update();
     }
