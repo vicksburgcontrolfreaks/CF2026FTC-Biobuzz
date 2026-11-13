@@ -576,8 +576,13 @@ public class TagPoseTest extends OpMode {
         Pose p = follower.getPose();
         telemetry.addData("Odometry", "(%.1f, %.1f) %.1f deg   [from %s]", p.getX(), p.getY(),
                 Math.toDegrees(p.getHeading()), poseOrigin);
-        telemetry.addData("Fix quality", "%d tags, spread %.2f in, range %.1f in, %.0f ms old",
-                lastFix.tagsUsed, lastFix.spread, lastFix.tagRange, lastFixAgeMs);
+        // "off centre" is the one that matters most: past MAX_TAG_BEARING_DEG the
+        // filter throws the fix away, because an edge-of-frame tag measured 4x
+        // worse than a centred one (2026-11-13).
+        telemetry.addData("Fix quality",
+                "%d tags, spread %.2f in, range %.1f in, %.0f deg off centre, %.0f ms old",
+                lastFix.tagsUsed, lastFix.spread, lastFix.tagRange, lastFix.tagBearingDeg,
+                lastFixAgeMs);
         telemetry.addData("Turret base", "level err %.1f deg, floor err %.2f in, hive %s%s",
                 lastFix.turret.levelErrorDeg, lastFix.turret.floorError, lastFix.turret.hiveTilt,
                 lastFix.turret.believable ? "" : "   <-- NOT BELIEVABLE");
