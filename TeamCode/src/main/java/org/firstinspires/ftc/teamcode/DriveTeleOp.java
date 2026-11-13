@@ -650,6 +650,16 @@ public class DriveTeleOp extends OpMode {
         // Tags in frame for the cell we're aiming at. The cell-centring correction
         // cancels out at 4 and is at its worst at 1, so this is what tells you
         // whether a bias is the row-offset sign or something else.
+        // Loud, because it means the pose went bad mid-match and the turret
+        // handed itself back to the camera. Shots still work; odometry doesn't.
+        if (!aim.isPoseTrusted()) {
+            telemetry.addLine(String.format(
+                    ">>> POSE NOT TRUSTED (camera disagreed by %.0f deg) -- aiming by",
+                    Math.abs(aim.getLastRejectedDeg())));
+            telemetry.addLine("    CAMERA. Odometry comes back on its own if the pose agrees again.");
+        } else if (aim.isRejectingTrim()) {
+            telemetry.addLine(">>> Camera and pose disagreeing -- about to drop to camera aiming.");
+        }
         if (solo) {
             telemetry.addLine(">>> SOLO (one gamepad): LT = everything backward.");
             telemetry.addLine("    No collector-out, no turret-by-hand, no deflector.");

@@ -186,6 +186,16 @@ public class TurretDirector {
     /** A bearing from a frame older than this describes where we WERE. */
     public static double TRIM_MAX_AGE_MS = 150;
 
+    /**
+     * How long the camera and the pose have to disagree by more than
+     * MAX_TRIM_DEG before odometry aiming is dropped for camera aiming.
+     *
+     * Long enough that one wild detection can't throw away a good pose, short
+     * enough that a drifted pose doesn't get to aim a whole volley. At 0.75 s a
+     * driver feels the turret hand over rather than watching it sit wrong.
+     */
+    public static double TRIM_DISTRUST_SEC = 0.75;
+
     /** Stop trusting the bearing this long after a tag was last seen. */
     public static double TRIM_FRESH_SEC = 0.5;
 
@@ -201,6 +211,22 @@ public class TurretDirector {
     private boolean onTarget = false;
     private String status = "not updated yet";
     private String source = "-";
+
+    // ---- Is the pose worth aiming from? (2026-11-12) ------------------------
+    /**
+     * False once the camera and the pose have disagreed past MAX_TRIM_DEG for
+     * TRIM_DISTRUST_SEC. While false the CAMERA aims and odometry is only
+     * monitored, so a pose that comes good again can take the turret back.
+     *
+     * Starts true: with no measurement yet there is nothing against the pose.
+     */
+    private boolean poseTrusted = true;
+    /** True while this frame's disagreement is over the cap. For telemetry. */
+    private boolean rejecting = false;
+    /** When the current run of rejections began, or NaN if we are not rejecting. */
+    private double rejectingSinceSec = Double.NaN;
+    /** The last over-cap disagreement, degrees. What the Driver Station reports. */
+    private double lastRejectedDeg = 0;
 
     public TurretDirector(int[] targetTagIds) {
         this.camera = new TurretAim(targetTagIds);
@@ -224,6 +250,10 @@ public class TurretDirector {
         camera.resetPhase();
         lead.reset();
         forgetTrim();
+        // A fresh start gets the benefit of the doubt, the same as construction.
+        poseTrusted = true;
+        rejecting = false;
+        rejectingSinceSec = Double.NaN;
     }
 
     /** Drop the camera correction. The aim falls back to raw odometry. */
@@ -285,13 +315,38 @@ public class TurretDirector {
         // MEASURES without commanding -- two things driving one turret would
         // fight, and TurretAim's step-then-go-blind cycle would undo the
         // continuous tracking every time it committed a move.
-        camera.update(detections, turret, false);
-
-        solution = OdometryAim.solve(geometry, robot, targetX, targetY,
+        // MONITORING SOLVE. Pure -- it commands nothing. It runs even after we
+        // have fallen back to the camera, which is what lets a bad pose earn its
+        // trust back instead of being written off until the next INIT.
+        OdometryAim.Solution monitor = OdometryAim.solve(geometry, robot, targetX, targetY,
                 turret.getAngle(), Turret.MIN_ANGLE, Turret.MAX_ANGLE, HYSTERESIS_DEG);
 
+        // poseTrusted was decided by LAST loop's measurement, so the handover
+        // costs one loop (~20 ms). Deciding it here instead would mean measuring
+        // the camera before letting it command, and TurretAim.update() does both
+        // in one call -- a loop of latency is the cheaper of the two.
+        boolean odometryDrives = poseTrusted;
+
+        // The camera only commands when odometry ISN'T. Two things driving one
+        // turret would fight, and TurretAim's step-then-go-blind cycle would undo
+        // the continuous tracking every time it committed a move.
+        camera.update(detections, turret, enabled && !odometryDrives);
+
+        updateTrim(turret, monitor, timeSec);
+
+        if (!odometryDrives) {
+            // FELL BACK. The pose disagreed with the camera by more than
+            // MAX_TRIM_DEG for TRIM_DISTRUST_SEC, so it is not being used to aim.
+            solution = null;
+            onTarget = camera.isOnTarget();
+            source = String.format("camera (POSE NOT TRUSTED, off by %.0f deg)",
+                    Math.abs(lastRejectedDeg));
+            status = camera.getStatus() + " | odometry rejected";
+            return;
+        }
+
+        solution = monitor;
         lead.update(solution.desiredDeg, timeSec);
-        updateTrim(turret);
 
         double command = solution.commandDeg + appliedTrim() + lead.leadDeg();
         if (enabled && turret.isHomed()) {
@@ -301,9 +356,10 @@ public class TurretDirector {
         }
 
         onTarget = solution.reachable && turret.isOnTarget();
-        source = USE_CAMERA_TRIM
-                ? (trimEverSet ? "odometry + camera trim" : "odometry (no camera fix yet)")
-                : "odometry";
+        source = !USE_CAMERA_TRIM ? "odometry (trim off, NO pose check)"
+                : rejecting ? "odometry + STALE trim, camera disagrees"
+                : trimEverSet ? "odometry + camera trim"
+                : "odometry (no camera fix yet)";
         status = String.format("%s | %s | %.1f in",
                 source,
                 solution.reachable ? "in reach"
@@ -311,20 +367,75 @@ public class TurretDirector {
                 solution.distance);
     }
 
-    private void updateTrim(Turret turret) {
-        if (!USE_CAMERA_TRIM) return;
+    /**
+     * Fold this frame's camera bearing into the trim, and decide whether the pose
+     * is still worth aiming from.
+     *
+     * WHAT CHANGED 2026-11-12 AND WHY. The rejection below used to be a bare
+     * {@code return}: a disagreement past MAX_TRIM_DEG was dropped as
+     * "unbelievable" and nothing else happened. That reasoning only holds while
+     * the pose is roughly right. When the pose is badly wrong the big
+     * disagreement IS the truth, so the gate threw away the truth, the last
+     * accepted trim kept being applied forever, and the turret aimed off a
+     * drifted pose with no way to tell from the Driver Station. 6494 did exactly
+     * that on the red hive after some hard driving -- trim frozen at 2.5 deg
+     * while the aim was tens of degrees out, and showing the camera more tags
+     * could not help because the measurements were being computed and binned.
+     *
+     * Now a sustained rejection means something: the pose loses its trust, the
+     * stale trim is dropped, and the camera takes the turret back.
+     */
+    private void updateTrim(Turret turret, OdometryAim.Solution monitor, double timeSec) {
+        if (!USE_CAMERA_TRIM) {
+            // Trim off is opting out of the pose check too -- there is nothing to
+            // compare the pose against. Odometry keeps the turret, right or wrong.
+            rejecting = false;
+            rejectingSinceSec = Double.NaN;
+            return;
+        }
+        // No usable bearing this frame: can't judge the pose, so don't. Aiming
+        // from odometry with no tags in sight is the whole point of odometry.
         if (!camera.hasFreshBearing()) return;
         if (camera.getAgeMs() > TRIM_MAX_AGE_MS) return;
         if (camera.getSecondsSinceSeen() > TRIM_FRESH_SEC) return;
 
         double measured = trimFrom(turret.getAngle(), camera.getSmoothBearing(),
-                TurretAim.BEARING_SIGN, TurretAim.AIM_BIAS_DEG, solution.desiredDeg);
-        if (Math.abs(measured) > MAX_TRIM_DEG) return;
+                TurretAim.BEARING_SIGN, TurretAim.AIM_BIAS_DEG, monitor.desiredDeg);
 
+        if (Math.abs(measured) > MAX_TRIM_DEG) {
+            lastRejectedDeg = measured;
+            rejecting = true;
+            if (Double.isNaN(rejectingSinceSec)) rejectingSinceSec = timeSec;
+            // Sustained, not a single bad frame -- one wild detection shouldn't
+            // throw away a good pose.
+            if (timeSec - rejectingSinceSec >= TRIM_DISTRUST_SEC) distrustPose();
+            return;
+        }
+
+        rejecting = false;
+        rejectingSinceSec = Double.NaN;
+        // The camera and the pose agree again. Trust is earned back the same way
+        // it was lost -- by measurement, not by a timer. Flapping is damped by
+        // distrust needing TRIM_DISTRUST_SEC of disagreement while this needs one
+        // good frame, so it leans toward using the camera.
+        poseTrusted = true;
         // The first real fix lands whole, so the aim does not have to crawl to it
         // over a dozen frames. After that it is smoothed.
         trimDeg = trimEverSet ? trimDeg + TRIM_SMOOTHING * (measured - trimDeg) : measured;
         trimEverSet = true;
+    }
+
+    /** Hand the turret back to the camera and forget the trim built on a bad pose. */
+    private void distrustPose() {
+        if (!poseTrusted) return;
+        poseTrusted = false;
+        // This trim was measured against a pose we no longer believe. Keeping it
+        // is the "stale forever" bug; dropping it means a re-trust starts clean.
+        trimDeg = 0;
+        trimEverSet = false;
+        // The camera has been measuring with enabled=false, so its phase machine
+        // is wherever it was left. Start a clean track rather than resuming.
+        camera.resetPhase();
     }
 
     private double appliedTrim() {
@@ -359,6 +470,26 @@ public class TurretDirector {
 
     public boolean hasCameraFix() {
         return trimEverSet;
+    }
+
+    /**
+     * False when odometry aiming has been dropped because the pose disagreed with
+     * the camera. Op modes should surface this -- it is the difference between
+     * "aiming by camera because you chose to" and "aiming by camera because the
+     * pose went bad", and those want very different reactions.
+     */
+    public boolean isPoseTrusted() {
+        return poseTrusted;
+    }
+
+    /** True while the camera is disagreeing with the pose by more than the cap. */
+    public boolean isRejectingTrim() {
+        return rejecting;
+    }
+
+    /** The last over-cap camera/pose disagreement, degrees. */
+    public double getLastRejectedDeg() {
+        return lastRejectedDeg;
     }
 
     /**
