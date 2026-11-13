@@ -234,18 +234,27 @@ public class TagLocalizer {
      * Prefer solveFrame(): a frame usually shows all 4 of a cell's tags.
      */
     public Fix solve(AprilTagDetection detection, double turretDegAtFrame) {
+        TurretFix fix = turretFixOf(detection);
+        if (fix == null || !fix.believable) return null;
+
+        Pose robot = turret.robotPoseFromTurret(fix.x, fix.y, fix.headingRad, turretDegAtFrame);
+        return new Fix(robot, fix, detection.id, detection.ftcPose.range,
+                Math.abs(detection.ftcPose.bearing), detection.frameAcquisitionNanoTime);
+    }
+
+    /**
+     * Steps 2-3 for one detection: the tilt-corrected turret base, NOT checked for
+     * believable. Null if the SDK had no field pose for it. WallFix uses this for
+     * the hive tilt alone, which only needs the level test to pick the right one
+     * of two answers 60 deg apart.
+     */
+    public static TurretFix turretFixOf(AprilTagDetection detection) {
         if (detection.robotPose == null) return null;
         Position p = detection.robotPose.getPosition().toUnit(DistanceUnit.INCH);
         YawPitchRollAngles o = detection.robotPose.getOrientation();
         Rigid3 fromSdk = Rigid3.fromPose3D(p.x, p.y, p.z,
                 o.getYaw(AngleUnit.DEGREES), o.getPitch(AngleUnit.DEGREES), o.getRoll(AngleUnit.DEGREES));
-
-        TurretFix fix = solveTurret(fromSdk);
-        if (!fix.believable) return null;
-
-        Pose robot = turret.robotPoseFromTurret(fix.x, fix.y, fix.headingRad, turretDegAtFrame);
-        return new Fix(robot, fix, detection.id, detection.ftcPose.range,
-                Math.abs(detection.ftcPose.bearing), detection.frameAcquisitionNanoTime);
+        return solveTurret(fromSdk);
     }
 
     /**

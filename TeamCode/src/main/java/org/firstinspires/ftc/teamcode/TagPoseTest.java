@@ -15,6 +15,10 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.Exposur
 import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.GainControl;
 import org.firstinspires.ftc.teamcode.Auton.Waypoints;
 import org.firstinspires.ftc.teamcode.field.Alliance;
+import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
+import org.firstinspires.ftc.teamcode.field.HiveTags;
+import org.firstinspires.ftc.teamcode.geometry.Rigid3;
+import org.firstinspires.ftc.teamcode.geometry.WallFix;
 import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
 import org.firstinspires.ftc.teamcode.geometry.VisionPoseFilter;
@@ -24,6 +28,7 @@ import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import java.util.List;
@@ -140,6 +145,13 @@ public class TagPoseTest extends OpMode {
     public static double CAPTURE_MAX_FIX_AGE_SEC = 0.5;
     /** Inches (or degrees) per second while a trigger is held, editing the truth. */
     public static double TRUTH_EDIT_PER_SEC = 15.0;
+
+    /**
+     * Which face of the robot is on the wall, for the WALL line, when the truth
+     * is NOT a preset (each preset knows its own). FRONT = collector first, the
+     * way drivers would re-anchor in a match once the turret is flipped.
+     */
+    public static WallFix.Face WALL_FACE = WallFix.Face.FRONT;
 
     // ---- Camera, matching TurretCamera's tuned values ----------------------
     // This op mode originally ran on AUTO exposure and default decimation, on
@@ -307,17 +319,22 @@ public class TagPoseTest extends OpMode {
      * with Waypoints if the robot size ever changes.
      */
     private enum TruthPreset {
-        RED_AUDIENCE("red, audience wall", Alliance.RED, Waypoints.GARDEN_EDGE_START),
-        RED_SCORING("red, scoring wall", Alliance.RED, Waypoints.FAR_EDGE_START),
-        BLUE_SCORING("blue, scoring wall", Alliance.BLUE, Waypoints.GARDEN_EDGE_START),
-        BLUE_AUDIENCE("blue, audience wall", Alliance.BLUE, Waypoints.FAR_EDGE_START);
+        // Facing the other alliance, the audience wall is on the robot's RIGHT and
+        // the scoring wall on its LEFT -- for both alliances.
+        RED_AUDIENCE("red, audience wall", Alliance.RED, Waypoints.GARDEN_EDGE_START, WallFix.Face.RIGHT),
+        RED_SCORING("red, scoring wall", Alliance.RED, Waypoints.FAR_EDGE_START, WallFix.Face.LEFT),
+        BLUE_SCORING("blue, scoring wall", Alliance.BLUE, Waypoints.GARDEN_EDGE_START, WallFix.Face.RIGHT),
+        BLUE_AUDIENCE("blue, audience wall", Alliance.BLUE, Waypoints.FAR_EDGE_START, WallFix.Face.LEFT);
 
         final String label;
         final Pose pose;
+        /** Which side of the robot touches the wall here, for the WALL line. */
+        final WallFix.Face face;
 
-        TruthPreset(String label, Alliance alliance, Pose redPose) {
+        TruthPreset(String label, Alliance alliance, Pose redPose, WallFix.Face face) {
             this.label = label;
             this.pose = alliance.map(redPose);
+            this.face = face;
         }
     }
 
@@ -473,6 +490,8 @@ public class TagPoseTest extends OpMode {
             if (d.robotPose != null) withPose++;
         }
 
+        lastWall = solveWall(detections, pose);
+
         TagLocalizer.Fix fix = localizer.solveFrame(detections, turret.getAngle());
         if (fix != null) {
             // No truth typed in, so let the first fix be the origin. Everything
@@ -541,6 +560,75 @@ public class TagPoseTest extends OpMode {
             worst = Math.max(worst, Math.hypot(sampleX[i] - mx, sampleY[i] - my));
         }
         return worst;
+    }
+
+    // ---- WALL FIX (2026-11-13) -------------------------------------------------
+    // Read-only, like everything else here: what WallFix WOULD say if the robot
+    // were re-anchored on this wall right now. The presets ARE wall spots, so
+    // parking on one tests the full solve (ERROR line) and the wall fix (WALL
+    // line) against the same truth at once. See WallFix for why it should beat
+    // the full solve: it takes heading and wall distance from the wall and only
+    // the BEARING from the camera.
+    private WallFix.Result lastWall = null;
+    private final ElapsedTime wallWindow = new ElapsedTime();
+    private double wallErrMin = Double.NaN, wallErrMax = Double.NaN;
+
+    private WallFix.Face wallFace() {
+        return preset != null ? preset.face : WALL_FACE;
+    }
+
+    /** Pose origin to a face. Same half-sizes Waypoints builds the presets from. */
+    private static double faceDistance(WallFix.Face face) {
+        return face == WallFix.Face.FRONT || face == WallFix.Face.BACK
+                ? RobotConstants.ROBOT_LENGTH / 2 : RobotConstants.ROBOT_WIDTH / 2;
+    }
+
+    private WallFix.Result solveWall(List<AprilTagDetection> detections, Pose pose) {
+        List<WallFix.Sighting> sightings = new ArrayList<>();
+        for (AprilTagDetection d : detections) {
+            if (d.ftcPose == null || FieldAprilTags.Cell.forTag(d.id) == null) continue;
+            // The hive's tilt moves a tag ~1.4 in. sideways here, so take it from
+            // the level test -- which picks between two answers 60 deg apart, a
+            // job even a shaky single-tag solve gets right.
+            TagLocalizer.TurretFix tf = TagLocalizer.turretFixOf(d);
+            if (tf == null) continue;
+            Rigid3 tag = HiveTags.tagPose(d.id, tf.hiveTilt);
+            sightings.add(new WallFix.Sighting(tag.x(), tag.y(),
+                    WallFix.bearingDeg(d.ftcPose.x, d.ftcPose.y, d.ftcPose.z,
+                            TagLocalizer.CAMERA_PITCH_DEG, TagLocalizer.CAMERA_YAW_DEG)));
+        }
+        WallFix.Face face = wallFace();
+        return WallFix.solve(pose.getHeading(), face, faceDistance(face), turret.getAngle(),
+                TurretGeometry.forRobot(), TagLocalizer.CAMERA_FORWARD, TagLocalizer.CAMERA_LEFT,
+                sightings);
+    }
+
+    /**
+     * One line: the wall fix, and its error ALONG the wall -- the only number it
+     * gets from the camera. The across-wall coordinate and the heading come from
+     * the wall itself, so against a preset truth they are right by construction.
+     */
+    private void showWall() {
+        WallFix.Result w = lastWall;
+        if (w == null || !w.ok()) {
+            telemetry.addData("WALL", "%s face: %s", wallFace(), w == null ? "--" : w.why);
+            return;
+        }
+        boolean haveTruth = !Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y);
+        double along = w.alongX() ? w.robot.getX() : w.robot.getY();
+        double err = !haveTruth ? Double.NaN : along - (w.alongX() ? TRUTH_X : TRUTH_Y);
+        if (wallWindow.seconds() > STEADY_WINDOW_SEC || Double.isNaN(wallErrMin)) {
+            wallWindow.reset();
+            wallErrMin = wallErrMax = err;
+        } else if (!Double.isNaN(err)) {
+            wallErrMin = Math.min(wallErrMin, err);
+            wallErrMax = Math.max(wallErrMax, err);
+        }
+        telemetry.addData("WALL  <-- and this", "%s %s %.1f, err %s",
+                w.wall, w.alongX() ? "x" : "y", along,
+                haveTruth ? range(wallErrMin, wallErrMax, "in") : "(set TRUTH)");
+        telemetry.addData("  wall q", "%s face, %d tags, spread %.1f in, %.1f in/deg, snap %+.1f deg",
+                wallFace(), w.tagsUsed, w.spread, w.inchesPerDeg, w.snapDeg);
     }
 
     /**
@@ -748,6 +836,9 @@ public class TagPoseTest extends OpMode {
         } else if (v != null) {
             telemetry.addLine("ERROR: set TRUTH above (triggers) and it appears here.");
         }
+        // Before the NO FIX early return on purpose: one tag the full solve
+        // rejects can still give a wall fix, and seeing that is part of the test.
+        showWall();
 
         if (v == null) {
             telemetry.addLine("NO FIX yet -- point the camera at a hive cell's tags.");
@@ -777,9 +868,9 @@ public class TagPoseTest extends OpMode {
         // comes with a horizontal range error -- which is the open question as of
         // 2026-11-13. I had compacted these two off the screen; that was a
         // mistake, they are the cheapest diagnostic here.
-        telemetry.addData("BASE 1s", "z %s | level %s",
-                range(zMin, zMax, "in"), range(levelMin, levelMax, "deg"));
-        telemetry.addData("err 1s", "%s | %s | turret %+.1f",
+        // One line, was two ("BASE 1s" and "err 1s"), to make room for WALL.
+        telemetry.addData("1s", "z %s | lvl %s | err %s | %s | turret %+.1f",
+                range(zMin, zMax, "in"), range(levelMin, levelMax, "deg"),
                 range(errMin, errMax, "in"), lastFix.turret.hiveTilt, turret.getAngle());
         showSweep();
         telemetry.update();

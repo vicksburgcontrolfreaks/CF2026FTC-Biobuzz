@@ -550,3 +550,66 @@ DO NOT reason further from those five numbers. Redo the run.
 Still unmeasured on the robot, and the remaining candidates if ~7 in survives:
 CAMERA_LEFT and CAMERA_YAW_DEG, both assumed 0. The steady -2 to -3 deg heading
 error is what a small yaw looks like.
+
+---
+
+# 2026-11-13 (from home): wall re-anchor, and the blue-side test
+
+Theory session, no robot. Two additions to Tag Pose Test, both read-only.
+
+## X now cycles all four wall starts
+
+Red audience -> red scoring -> blue scoring -> blue audience. The screen says
+which preset is loaded ("none (hand-set)" once the triggers touch it).
+
+**The mirrored-pair test.** Red audience and blue scoring are exact 180 deg
+rotations of each other (so are the other two), so the camera sees the same
+picture from each. An error that lives on the ROBOT (camera yaw/left/pitch,
+turret zero, lens) FLIPS SIGN in field coordinates between the pair. An error in
+the FIELD MODEL (HiveTags, the blue hive placed by symmetry) does not. Before
+running it:
+- tip the hives into mirrored states (red audience cell up <-> blue scoring up);
+- write down the prediction that ~2 in of x difference is our FIELD (58 vs 60
+  in wall-to-hive), not the code;
+- do it AFTER the 3+ tag redo on red, or it compares ambiguity noise.
+
+## The WALL line: re-anchoring on a wall, measured before it is built
+
+Shane's idea: the drivers hit walls constantly, so let a button press say "we
+are square on this wall" and let the camera supply the rest. `WallFix` does the
+math: odometry heading rounded to the nearest 90 (refused past 10 deg), the wall
+fixes one coordinate, and the camera's horizontal BEARING to each tag gives the
+position along the wall. No range, no camera height, no tag orientation -- so
+none of pitch, edge-of-frame heading bias, or single-tag pose ambiguity.
+One tag is enough. `WallFixTest` covers the math (10 tests).
+
+On screen, under ERROR:
+
+    WALL  <-- and this   AUDIENCE x 33.4, err +0.3..+0.6in
+      wall q             RIGHT face, 4 tags, spread 0.4 in, 1.1 in/deg, snap +0.0 deg
+
+- `err` is the along-wall error only -- the one number the camera supplies. The
+  other coordinate and the heading come from the wall, so against a preset they
+  are right by construction.
+- `in/deg` is how many inches one degree of bearing error costs here. ~1 at the
+  wall starts. It blows up as the sight line approaches parallel to the wall,
+  and sightings under 20 deg are refused.
+- Each preset knows its touching face (audience wall = RIGHT, scoring = LEFT,
+  both alliances). Hand-set truth uses `WALL_FACE`, default FRONT (collector).
+
+**What to compare at each preset:** ERROR line's along-wall component (dx on
+the audience/scoring walls) vs the WALL err. If WALL is consistently within
+1-2 in while the full solve is not, the re-anchor is worth wiring into
+DriveTeleOp. A steady WALL bias that flips sign across a mirrored pair is a
+bearing bias -- CAMERA_YAW_DEG or TURRET_ZERO_DEG -- worth ~1 in per degree.
+
+**Unverified assumption:** WallFix reads `ftcPose` as CAMERA-relative. Tag Pose
+Test's processor has a camera pose set, and nobody has confirmed that leaves
+ftcPose camera-relative (it should; robotPose is the robot-relative one). If WALL
+is wildly off while the full solve is sane, suspect this first.
+
+**For the match version (not built):** collector-first is the only workable
+convention, and it needs the turret flipped -- back-first puts the camera facing
+the wall. Guards to add: robot stopped + turret settled before accepting, refuse
+an answer on a flower segment or off the field, rumble accept/refuse, and on
+accept reset poseTrusted and clear the trim (TurretDirector.resetPhase).
