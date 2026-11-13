@@ -983,3 +983,79 @@ limits, a robot with its front on the wall cannot point the camera back into the
 field where the hive is. Flipped, it can. So the re-anchor should be BUILT to be
 convention-agnostic (`WallFix.Face` is already a parameter) and TUNED after the
 flip.
+
+## FLIP IMPLEMENTED 2026-11-13 (not yet homed on the robot)
+
+It turned out to need NO hardware change at all, which my first answer got
+wrong. The magnet rides on a turret bracket under the camera, so the
+camera-to-magnet angle never changes -- and with no hard stops, WHICH SIDE OF
+THE MAGNET the turret operates on is purely a software choice. Shane had already
+demonstrated it by hand.
+
+My error: I assumed the magnet sat near the front, which would have put it ~180
+deg from the new centre and made homing expensive. It actually sits ~85 deg off
+centre, near the end of travel, so after the flip it lands ~80 deg from the new
+centre -- about the same as before.
+
+**Shane's measurements, 2026-11-13, in the NEW frame:**
+
+    stops (chosen, not physical)   +/-150
+    magnet band                    9.1 wide, edges 79.5 / 88.6, centre 84
+
+**What changed in code:**
+
+| where | from | to |
+|---|---|---|
+| `RobotProfile` 6494 | `TURRET_ZERO_DEG 0` | `180` |
+| `Turret` 6494 | `HOME_SWITCH_ANGLE -85.5` | `79.5` |
+| | `MAGNET_BAND_DEG 10.1` | `9.1` |
+| | `MIN/MAX_ANGLE -90/+90` | `-150/+150` |
+| | `HOMING_DIRECTION -1` | `+1` (CCW, toward the magnet) |
+| | `HOMING_SEARCH_MAX_DEG 150` | `110` |
+
+**Why 79.5 and not 88.6.** `HOME_SWITCH_ANGLE` is the edge reached FIRST
+travelling in `HOMING_DIRECTION`, not the band centre. Searching + from centre,
+the near edge is 79.5. The code's own band formula then reproduces Shane's other
+measured edge exactly -- `bandFar = 79.5 + 1.0 * 9.1 = 88.6` -- which is the
+check that the pair is the right way round. If homing parks ~9 deg off, the pair
+is swapped: use 88.6 with `HOMING_DIRECTION -1`.
+
+**THE WIN: the blind arc goes from 180 deg to 60 deg.** +/-150 of travel instead
+of +/-90. Most of the reason `OdometryAim` carries a blind-arc-and-hysteresis
+layer was that travel was under half a circle. Worth re-reading that class once
+this is proven -- some of it may now be dead weight.
+
+**TWO PROTECTIONS DELIBERATELY WEAKENED, both documented at the constants:**
+
+1. `MIN_ANGLE` used to sit INSIDE the magnet band, so a homed turret could never
+   park on the far side of the magnet where homing cannot find it. At +/-150 the
+   magnet is mid-travel, so it CAN. The pre-home instruction is now the only
+   thing preventing it, and the instruction CHANGED: "roughly REARWARD", not
+   forward. Updated in the comments and in the Driver Station failure text.
+2. The search used to run toward the cable's SLACK side, so a failed search was
+   free. It now runs toward the TIGHT side. Hence 110 instead of 150: enough to
+   find the magnet from centre (~80 deg) with margin, not enough to wind the
+   cable up.
+
+**The laptop tests do NOT validate any of this.** `TurretGeometryTest`,
+`OdometryAimTest` and `LaunchReachTest` all build their own made-up robots on
+purpose, so they never read these constants. 246 tests passing says the code
+compiles and the math is unchanged -- not that the numbers are right.
+
+**ON-ROBOT ORDER, and do not skip 1:**
+
+1. **Cable, by hand, robot off, across the whole new +/-150 window.** This is
+   territory the code has never driven and there are no hard stops.
+2. **Turret Range Test.** Home it. The band edges should read 79.5 / 88.6. If
+   they read ~9 deg low, swap the pair as above.
+3. **Home twice**, compare the resting angle -- that is the repeatability number
+   nobody has ever collected.
+4. **Turret Aim Test** -- `TURRET_CCW_SIGN` should still be 1.0.
+5. **Does the camera point REARWARD after homing?** The one-glance check that
+   `TURRET_ZERO_DEG = 180` is the truth and not a lie.
+6. Camera aiming (`Aim by = CAMERA`), then autos / `LaunchReach` reachability,
+   then the wall re-anchor.
+
+**Shot Map data is void** if any was taken before this. The flip changes the
+deflector's relationship to the chassis flywheels, which is exactly what
+`ShotMap` says voids a robot's table and fit.

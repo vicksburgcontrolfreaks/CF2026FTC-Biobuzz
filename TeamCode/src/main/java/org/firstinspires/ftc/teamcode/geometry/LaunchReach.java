@@ -15,9 +15,15 @@ import java.util.List;
  * LaunchReach: "can the turret point at the hive from this launch spot?"
  * Checked at INIT, before the robot drives, like PathSafety.
  *
- * The turret only turns -140..+140 (Turret.MIN_ANGLE / MAX_ANGLE). If a route
- * launches from a spot where the hive is behind the turret, it parks at a
- * limit and misses -- and nobody finds out until the match.
+ * The turret cannot turn all the way round: Turret.MIN_ANGLE / MAX_ANGLE, which
+ * are PER ROBOT (+/-150 on 6494 since the 2026-11-13 flip; it was +/-90 before,
+ * and this comment claimed +/-140 from an even older build). If a route launches
+ * from a spot where the hive is outside that arc, the turret parks at a limit and
+ * misses -- and nobody finds out until the match.
+ *
+ * NOTE THE ARC MOVED, not just its width: with TURRET_ZERO_DEG = 180 the
+ * reachable arc is centred on the robot's REAR. Routes that used to shoot while
+ * driving at the hive may now be the unreachable ones.
  *
  * It checks BOTH hive tilts, because we don't know which cell will be up when
  * we get there. And it warns a little BEFORE the limit (REACH_MARGIN_DEG): the

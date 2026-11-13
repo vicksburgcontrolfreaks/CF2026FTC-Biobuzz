@@ -85,7 +85,21 @@ public final class RobotProfile {
         // of wandering ~7 deg), so these two are measured AND proven.
         TurretGeometry.TURRET_OFFSET_X = -4.5;
         TurretGeometry.TURRET_OFFSET_Y = 0.0;
-        TurretGeometry.TURRET_ZERO_DEG = 0.0;   // faces front, per the build team (Evan)
+        // FLIPPED 2026-11-13. The turret now works the far side of its magnet, so
+        // turret 0 points BACKWARD (away from the collector). Nothing was
+        // unbolted: there are no hard stops, so which side of the magnet the
+        // turret lives on is a software choice, and the magnet rides on the
+        // turret under the camera so the camera-to-magnet angle never changed.
+        //
+        // WHY: the camera has to look back into the field while the robot sits
+        // collector-first against a wall, which is the only workable convention
+        // for the wall re-anchor (back-first points the camera at the wall).
+        // Facing front with +/-90 of travel, that shot was unreachable.
+        //
+        // What it costs: the reachable arc is the robot's REAR half, so drivers
+        // aim with their back to the hive and every shooting auto needs
+        // re-checking. See docs/turret-odometry-aim-status.md.
+        TurretGeometry.TURRET_ZERO_DEG = 180.0;
         TurretGeometry.TURRET_CCW_SIGN = 1.0;   // turret-bringup.md range test: ticks rise CCW
 
         // Camera on the turret, from the turret axis at FLOOR level, turret at 0.
