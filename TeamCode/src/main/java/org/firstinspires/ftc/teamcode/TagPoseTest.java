@@ -358,6 +358,47 @@ public class TagPoseTest extends OpMode {
         return worst;
     }
 
+    /** Turret angle covered by the captures, degrees. Near 0 = a noise-floor run. */
+    private double turretSpan() {
+        if (samples < 2) return 0;
+        double lo = sampleTurretDeg[0], hi = sampleTurretDeg[0];
+        for (int i = 1; i < samples; i++) {
+            lo = Math.min(lo, sampleTurretDeg[i]);
+            hi = Math.max(hi, sampleTurretDeg[i]);
+        }
+        return hi - lo;
+    }
+
+    /**
+     * Least-squares line through (turret angle, captured heading).
+     *
+     * @return {slope deg/deg, intercept deg, RMS residual deg}. Slope is r - 1,
+     *         where r = TICKS_PER_DEGREE assumed / true -- see showSweep().
+     *         Returns zeros if the captures don't span enough turret angle to
+     *         fit anything, which is the noise-floor case.
+     */
+    private double[] headingFit() {
+        int n = samples;
+        if (n < 3) return new double[] {0, 0, 0};
+        double sx = 0, sy = 0, sxy = 0, sxx = 0;
+        for (int i = 0; i < n; i++) {
+            sx += sampleTurretDeg[i];
+            sy += sampleHeadingDeg[i];
+            sxy += sampleTurretDeg[i] * sampleHeadingDeg[i];
+            sxx += sampleTurretDeg[i] * sampleTurretDeg[i];
+        }
+        double den = n * sxx - sx * sx;
+        if (Math.abs(den) < 1e-9) return new double[] {0, 0, 0};
+        double slope = (n * sxy - sx * sy) / den;
+        double intercept = (sy - slope * sx) / n;
+        double sumSq = 0;
+        for (int i = 0; i < n; i++) {
+            double e = sampleHeadingDeg[i] - (slope * sampleTurretDeg[i] + intercept);
+            sumSq += e * e;
+        }
+        return new double[] {slope, intercept, Math.sqrt(sumSq / n)};
+    }
+
     /** Biggest gap between any two captured headings, degrees. 0 with fewer than 2. */
     private double headingSpread() {
         double worst = 0;
@@ -384,12 +425,50 @@ public class TagPoseTest extends OpMode {
                     i + 1, sampleTurretDeg[i], sampleX[i], sampleY[i], sampleHeadingDeg[i]));
         }
         if (samples < 2) return;
-        // THE ANSWER to "would a body-mounted camera localize better". The robot
-        // did not move, so all of this spread is the turret chain.
-        telemetry.addData("SPREAD  <-- the turret chain's cost", "%.2f in, heading %.1f deg",
+        telemetry.addData("SPREAD", "%.2f in, heading %.1f deg",
                 positionSpread(), headingSpread());
-        telemetry.addLine("    Small = the turret chain is fine and a fixed camera buys little.");
-        telemetry.addLine("    Inches = that is what moving the camera off the turret removes.");
+
+        // Which test did you just run? Captures all at ONE turret angle measure
+        // the NOISE FLOOR; captures across angles measure the turret chain on top
+        // of it. Telling them apart by the angle span means one op mode does both
+        // and neither gets mistaken for the other -- which nearly happened on
+        // 2026-11-12, when a 4.2 in across-angle spread looked like it might be
+        // tag noise until 8 captures at one angle came back at 0.6 in.
+        double span = turretSpan();
+        if (span < 5.0) {
+            telemetry.addLine("    ^ all within " + String.format("%.1f", span)
+                    + " deg of turret: this is the NOISE FLOOR.");
+            telemetry.addLine("      Compare it against a sweep across the travel. Sweep much");
+            telemetry.addLine("      bigger = the turret chain. Similar = tag noise, and no");
+            telemetry.addLine("      amount of turret work or camera moving will help.");
+            return;
+        }
+
+        // The slope of heading error against turret angle is the invariant.
+        // SPREAD depends on which angles you happened to sample; the slope does
+        // not, so it is what to compare between runs.
+        //
+        // The tag gives the turret base's field heading WITHOUT the encoder, and
+        // the robot heading is that minus the reported turret angle. The robot
+        // never moved, so its true heading is constant and
+        //     computed heading = true heading + turretAngle * (r - 1)
+        // where r = TICKS_PER_DEGREE_assumed / TICKS_PER_DEGREE_true. So the fitted
+        // slope IS r - 1, and the intercept is the real heading.
+        double[] fit = headingFit();
+        double slope = fit[0], residual = fit[2];
+        telemetry.addLine();
+        telemetry.addData("Heading vs turret", "slope %+.4f deg/deg over %.0f deg of sweep",
+                slope, span);
+        telemetry.addData("Fit residual", "%.2f deg   (noise floor measured alone: run"
+                + " captures at ONE angle)", residual);
+        if (Math.abs(slope) > 0.01) {
+            telemetry.addData("=> implies TICKS_PER_DEGREE", "%.2f   (now %.2f)",
+                    Turret.TICKS_PER_DEGREE / (1 + slope), Turret.TICKS_PER_DEGREE);
+        }
+        telemetry.addLine("    Clean line (residual near the noise floor) = SCALE error;");
+        telemetry.addLine("    trust the number above. Big residual = NOT a simple scale");
+        telemetry.addLine("    error -- backlash or a nonlinearity. Capture all one");
+        telemetry.addLine("    direction, then mixed: if only mixed scatters, it's backlash.");
     }
 
     private void showTelemetry(int tagsSeen, int withPose, double dt) {
