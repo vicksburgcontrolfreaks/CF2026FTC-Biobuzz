@@ -161,6 +161,12 @@ public class TagPoseTest extends OpMode {
     private int samples = 0;
     private String captureNote = "A captures a sample once the turret has settled";
 
+    // Has the odometry pose been given a real origin yet? See start(). Until it
+    // has, VisionPoseFilter's "too far from odometry" rule is meaningless, so the
+    // Filter line says so rather than printing a verdict nobody should act on.
+    private boolean poseSeeded = false;
+    private String poseOrigin = "";
+
     @Override
     public void init() {
         // Per-robot turret geometry and CAMERA numbers, before anything is solved.
@@ -201,11 +207,31 @@ public class TagPoseTest extends OpMode {
 
     @Override
     public void start() {
-        // Pedro needs some starting pose to integrate from. It is a placeholder
-        // and the error lines below do NOT depend on it -- the fix is compared
-        // against your tape measurement, not against odometry. Odometry is shown
-        // only so you can watch the two side by side.
-        follower.setStartingPose(new Pose(TagLocalizer.CAMERA_FORWARD, 0, 0));
+        // WHERE ODOMETRY STARTS, AND WHY IT MATTERS HERE (fixed 2026-11-12).
+        //
+        // This used to seed a placeholder (CAMERA_FORWARD, 0, 0) on the grounds
+        // that nothing read it. That was wrong: VisionPoseFilter's fifth rule
+        // rejects a fix more than MAX_JUMP (18 in) from the odometry pose, so a
+        // fictional pose made the Filter line read TOO_FAR_FROM_ODOMETRY forever
+        // -- a scary-looking verdict that meant nothing. Shane hit it the first
+        // time he ran this.
+        //
+        // So: start odometry at the TRUTH when there is one. Then the fix should
+        // land within an inch or two of it, and TOO_FAR_FROM_ODOMETRY becomes a
+        // real finding (the fix is more than 18 in off a spot you measured).
+        // With no truth set, the FIRST fix seeds it instead -- see loop() -- and
+        // the jump rule then checks later fixes against the first one, which is
+        // a consistency check rather than an accuracy one.
+        if (!Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y)) {
+            double heading = Double.isNaN(TRUTH_HEADING_DEG) ? 0 : Math.toRadians(TRUTH_HEADING_DEG);
+            follower.setStartingPose(new Pose(TRUTH_X, TRUTH_Y, heading));
+            poseSeeded = true;
+            poseOrigin = "your TRUTH_X/Y"
+                    + (Double.isNaN(TRUTH_HEADING_DEG) ? " (heading assumed 0)" : "");
+        } else {
+            follower.setStartingPose(new Pose(0, 0, 0));
+            poseOrigin = "nothing yet -- waiting for the first fix to seed it";
+        }
         loopTimer.reset();
     }
 
@@ -264,6 +290,16 @@ public class TagPoseTest extends OpMode {
 
         TagLocalizer.Fix fix = localizer.solveFrame(detections, turret.getAngle());
         if (fix != null) {
+            // No truth typed in, so let the first fix be the origin. Everything
+            // after it is then compared against something real, which is what
+            // makes the Filter verdict worth reading at all.
+            if (!poseSeeded) {
+                follower.setPose(fix.robot);
+                pose = fix.robot;
+                lastPose = pose;
+                poseSeeded = true;
+                poseOrigin = "the first fix (no TRUTH set)";
+            }
             lastFix = fix;
             sinceFix.reset();
             framesWithFix++;
@@ -384,8 +420,8 @@ public class TagPoseTest extends OpMode {
         telemetry.addData("FIX  (vision)", "(%.1f, %.1f) %.1f deg", v.getX(), v.getY(),
                 Math.toDegrees(v.getHeading()));
         Pose p = follower.getPose();
-        telemetry.addData("Odometry", "(%.1f, %.1f) %.1f deg", p.getX(), p.getY(),
-                Math.toDegrees(p.getHeading()));
+        telemetry.addData("Odometry", "(%.1f, %.1f) %.1f deg   [from %s]", p.getX(), p.getY(),
+                Math.toDegrees(p.getHeading()), poseOrigin);
         telemetry.addData("Fix quality", "%d tags, spread %.2f in, range %.1f in, %.0f ms old",
                 lastFix.tagsUsed, lastFix.spread, lastFix.tagRange, lastFixAgeMs);
         telemetry.addData("Turret base", "level err %.1f deg, floor err %.2f in, hive %s%s",
@@ -394,8 +430,20 @@ public class TagPoseTest extends OpMode {
         // Which rule would stop this correction being applied. Parked and settled
         // it should read ACCEPT; ROBOT_MOVING while stationary means the pose is
         // jittering, TURRET_MOVING means the turret has not settled.
+        //
+        // TOO_FAR_FROM_ODOMETRY only means anything once odometry has a real
+        // origin. Before that it is an artifact of the placeholder, which is
+        // exactly what made this line confusing the first time out.
         telemetry.addData("Filter", "%s   (speed %.1f in/s, turn %.1f deg/s)",
                 lastVerdict, speed, turnRate);
+        if (lastVerdict == VisionPoseFilter.Verdict.TOO_FAR_FROM_ODOMETRY) {
+            telemetry.addLine(String.format(
+                    "    ^ fix is %.0f in from odometry (rule: max %.0f). Odometry came",
+                    Math.hypot(v.getX() - p.getX(), v.getY() - p.getY()),
+                    VisionPoseFilter.MAX_JUMP));
+            telemetry.addLine("      from " + poseOrigin + " -- judge the FIX against the tape,");
+            telemetry.addLine("      not against this, unless TRUTH_X/Y is set.");
+        }
 
         if (!Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y)) {
             double ex = v.getX() - TRUTH_X;
