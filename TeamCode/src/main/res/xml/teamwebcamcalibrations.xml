@@ -54,6 +54,61 @@
 
     <!-- ======================================================================================= -->
 
+    <!--
+      OURS, AND THE ONLY ACTIVE ENTRY IN THIS FILE. Everything below is commented
+      out because the SDK ships it; this one REPLACES the SDK's built-in C270
+      calibration, which the (vid, pid, size) key lets it do.
+
+      WHY: measured on the robot 2026-11-13 (Shane). Tape from the lens to the
+      centre of the raised red audience cell from about (57, 9): 62 in. Tag Pose
+      Test reported 56-57 in. Reported range is proportional to the focal length,
+      so
+
+          f_true = 822.317 * (62 / 56.5) = 902
+
+      The same 9% explains two other things independently, which is why it is
+      believed: the turret base solves z = +3.1..+4.0 when it is physically on the
+      floor (a range error's vertical component is eps * 35.2 in = 3.2), and the
+      position error ran ~7 in at ~60 in (eps * 60 = 5.6). One number, three
+      symptoms. Tag size is confirmed 3.25 exactly and CAMERA_UP, the tag height
+      and the camera pitch are all confirmed by tape, so the focal length is what
+      is left.
+
+      WHAT THIS IS NOT: a real calibration. It is the SDK's C270 entry with the
+      focal length scaled by a ONE-POINT field measurement at one distance, one
+      angle, near frame centre. Specifically it does NOT touch the distortion
+      coefficients, so it does nothing for the ~4x frame-edge error measured on
+      2026-11-13. A proper checkerboard calibration (3DF Zephyr, see the notes
+      below) would fix both and should replace this.
+
+      UNCERTAINTY: the report was "56 or 57", so f lands between 894 and 910.
+      902 is the middle. If range still reads short after this, re-measure at two
+      distances before nudging it again.
+
+      VALIDATE, in this order:
+        1. range reported ~= tape, at TWO clearly different distances;
+        2. the turret base's z falls to ~0 in Tag Pose Test;
+        3. all four tags go believable (FUNNEL), because the floor test stops
+           eating them;
+        4. the position error collapses from ~7 in.
+      If the ratio is NOT the same at both distances, a single focal length cannot
+      fix it and this entry is the wrong tool.
+
+      IF NOTHING CHANGES AT ALL: the key did not match. Either the camera is not a
+      C270 (check the label on it) or it is not streaming 640x480 (TagPoseTest's
+      PIN_RESOLUTION). That is a useful result, not a failure.
+    -->
+    <Camera vid="Logitech" pid="0x0825">
+        <Calibration
+            size="640 480"
+            focalLength="902.0f, 902.0f"
+            principalPoint="319.495f, 242.502f"
+            distortionCoefficients="-0.0449369, 1.17277, 0, 0, -3.63244, 0, 0, 0"
+            />
+    </Camera>
+
+    <!-- ======================================================================================= -->
+
     <!-- Microsoft Lifecam HD 3000 v1, Calibrated by PTC using unknown tooling -->
     <!-- <Camera vid="Microsoft" pid="0x0779">
         <Calibration
