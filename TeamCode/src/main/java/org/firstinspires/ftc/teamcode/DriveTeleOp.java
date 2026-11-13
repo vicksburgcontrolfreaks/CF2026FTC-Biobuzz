@@ -31,7 +31,9 @@ import java.util.List;
  * GAMEPAD 1 (driver)
  *   Left stick   drive (field-centric: forward = away from OUR drivers)
  *   Right stick  turn
- *   X            "the robot faces away from me right now" -- heading reset, rumbles
+ *   X            "the robot faces away from me right now" -- re-references the
+ *                DRIVING sticks only, rumbles. It does NOT move the pose, so it
+ *                cannot throw the turret's aim off (see driverHeadingOffset).
  *                (was BACK until 2026-11-06; BACK didn't register reliably on 6494)
  *
  * GAMEPAD 2 (operator)                             (all "hold" = only while held)
@@ -179,6 +181,28 @@ public class DriveTeleOp extends OpMode {
     private boolean turretParked = false;
     private int headingResets = 0;                      // gamepad1 X presses seen
     private final ElapsedTime headingResetTimer = new ElapsedTime();
+    /**
+     * How far the POSE heading is turned left of the direction the driver last
+     * declared "away from me" (gamepad 1 X). Field-centric driving subtracts
+     * this; NOTHING ELSE READS IT.
+     *
+     * WHY THIS EXISTS INSTEAD OF RESETTING THE POSE (Shane, 2026-11-12)
+     * X used to overwrite the pose heading with awayFromDriversHeading(). That
+     * was harmless while the turret aimed by camera, but odometry aiming reads
+     * the pose heading -- so pressing X while the robot faced any other
+     * direction made the heading wrong by that much, the turret aimed at where
+     * the hive would be for the fake heading, and it clipped and sat on a soft
+     * limit. Worse, once the camera/odometry disagreement passed
+     * TurretDirector.MAX_TRIM_DEG the camera trim was REJECTED every loop, so
+     * the aim ran on pure bad odometry and missed consistently to one side --
+     * which is what 6494 did on the blue hive, and what forcing the trim off
+     * (Aim test "no camera trim") reproduced deliberately.
+     *
+     * The driver's "away from me" and the field's true heading are two different
+     * things. Conflating them was the bug. This keeps them apart: X re-references
+     * the sticks and the localizer never hears about it.
+     */
+    private double driverHeadingOffset = 0.0;
     private boolean turretManual = false;
     private boolean wasReady = false;
     private int lastTrips = 0;
@@ -323,8 +347,11 @@ public class DriveTeleOp extends OpMode {
 
     private void drive() {
         if (gamepad1.xWasPressed()) {
-            Pose p = follower.getPose();
-            follower.setPose(new Pose(p.getX(), p.getY(), alliance.get().awayFromDriversHeading()));
+            // "The robot faces away from me right now." This is a DRIVING
+            // reference, so it moves a driving-only offset and DOES NOT TOUCH
+            // THE POSE. See driverHeadingOffset for what went wrong when it did.
+            driverHeadingOffset = follower.getPose().getHeading()
+                    - alliance.get().awayFromDriversHeading();
             gamepad1.rumble(300);
             headingResets++;
             headingResetTimer.reset();
@@ -332,7 +359,8 @@ public class DriveTeleOp extends OpMode {
 
         double[] robot = FieldCentric.toRobot(
                 -gamepad1.left_stick_y, gamepad1.left_stick_x,
-                follower.getPose().getHeading(), alliance.get().awayFromDriversHeading());
+                follower.getPose().getHeading() - driverHeadingOffset,
+                alliance.get().awayFromDriversHeading());
         double forward = robot[0];
         double right = robot[1];
         double turn = gamepad1.right_stick_x;
@@ -514,11 +542,13 @@ public class DriveTeleOp extends OpMode {
         Pose p = follower.getPose();
         telemetry.addData("Pose", "(%.1f, %.1f) %.1f deg  [%s]", p.getX(), p.getY(),
                 Math.toDegrees(p.getHeading()), alliance.get());
-        // X check: the count goes up on every press the code sees. Right after a
-        // press, heading should read the "away" heading (red 0, blue 180).
-        telemetry.addData("Heading reset", headingResets == 0 ? "never (gamepad1 X)"
-                : String.format("%d times, last %.0f s ago (sets %.0f deg)", headingResets,
-                        headingResetTimer.seconds(), Math.toDegrees(alliance.get().awayFromDriversHeading())));
+        // X check: the count goes up on every press the code sees. The POSE above
+        // must NOT jump when X is pressed -- only this offset moves. A pose
+        // heading that changes on X means the old bug is back.
+        telemetry.addData("Driver zero", headingResets == 0 ? "never pressed (gamepad1 X)"
+                : String.format("%d times, last %.0f s ago, offset %+.0f deg (drive only)",
+                        headingResets, headingResetTimer.seconds(),
+                        Math.toDegrees(driverHeadingOffset)));
         // For recalibrating the nectar trip at the real feed speed.
         telemetry.addData("Indexer amps", "now %.2f  last run peak %.2f  (trip %.2f)",
                 launcher.getIndexerAmps(), guard.getLastRunPeakAmps(), NectarGuard.TRIP_AMPS);
