@@ -90,8 +90,23 @@ public final class RobotProfile {
         // Camera on the turret, from the turret axis at FLOOR level, turret at 0.
         CAMERA_FORWARD = 4.5;    // MEASURED, Shane 2026-11-10
         CAMERA_LEFT = 0.0;       // NOT MEASURED -- assumed centred on the turret axis
-        CAMERA_UP = 14.5;        // MEASURED (approx), Shane 2026-11-11
-        CAMERA_PITCH_DEG = 35.0; // MEASURED (approx), Shane 2026-11-11. Was 30 by hand, 2026-10-22.
+        CAMERA_UP = 14.5;        // MEASURED, re-checked with a tape 2026-11-13
+        // 35 -> 38, MEASURED with a phone inclinometer against the camera body,
+        // Shane 2026-11-13. (30 by hand 2026-10-22, 35 "approx" 2026-11-11.)
+        //
+        // TWO INDEPENDENT NUMBERS AGREE ON THE 3 DEG. Tag Pose Test solves where
+        // the turret BASE is, and the base is physically on the floor and level.
+        // It was coming out 3 deg off level and +3.8 in off the floor -- the
+        // level error is the camera's declared orientation being wrong by that
+        // much, and 3 deg of pitch at the ~60 in slant range to a tag is about
+        // 2.6 in of height, most of the 3.8.
+        //
+        // NOTE THIS ALSO MOVES CAMERA AIMING. applyCamera() pushes the same
+        // number into TurretAim, whose bearingOf() rotates the camera frame down
+        // to horizontal with it. More correct should mean better, but camera
+        // aiming is what actually works in matches, so check DriveTeleOp aims
+        // after deploying this.
+        CAMERA_PITCH_DEG = 38.0;
         CAMERA_YAW_DEG = 0.0;    // NOT MEASURED -- assumed square to the turret
         applyCamera();
 
