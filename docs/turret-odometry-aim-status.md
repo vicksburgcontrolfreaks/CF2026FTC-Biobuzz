@@ -849,3 +849,137 @@ sessions.
    build the bearing, so this is exactly the path the pitch change touched.
 2. Put `PIN_RESOLUTION` back to true.
 3. The two-range z reading, whenever convenient.
+
+---
+
+# DECISION 2026-11-13: shelve tag localization, build the wall re-anchor
+
+Shane's call, and the right one. Recorded with the reasoning so it reads as a
+deliberate choice and not as something that quietly fizzled.
+
+## How the range error ended
+
+The focal length override (`teamwebcamcalibrations.xml`, 822.317 -> 902) was
+measured and then re-measured:
+
+| spot | tape | reported before | reported after |
+|---|---|---|---|
+| far | 62 | 56-57 | 60 |
+| near | 48 | -- | 46 |
+
+**What is left is a constant 2.0 in at both distances, not a constant percent.**
+As ratios those are 0.968 and 0.958; as offsets they are 2.0 and 2.0, which fits
+visibly better. A fixed offset is the signature of a MEASUREMENT DATUM -- the
+lens's optical centre sits behind the body you tape from, and "centre of the
+raised cell" is not the tag plane.
+
+**So do NOT nudge 902 again.** Scaling f to chase a constant offset overcorrects
+far and undercorrects near. 902 stands.
+
+## Why tag localization is shelved
+
+Not because it cannot be made to work -- after the fix it roughly does. Because
+the cost/benefit was never good:
+
+- **It can never be a continuous service.** Tags are reliable from the shooting
+  positions and absent across much of the field (measured 2026-11-11). Any pose
+  correction degrades to odometry-only anyway, so ODOMETRY QUALITY is the ceiling
+  either way.
+- **Wiring it risks the thing that already works.** `TurretCamera` would need
+  `setCameraPose()`, and it is still unverified whether that leaves `ftcPose`
+  camera-relative -- which `TurretAim.bearingOf()` depends on, in matches. It
+  also needs a timestamped turret-angle history that does not exist.
+- **`WallFix` is already written and unit-tested, and is immune to this whole
+  error class.** Bearing only: no range, no camera height, no tag height, no
+  distortion. One tag is enough. Note that today's calibration fix would not have
+  helped it AT ALL, because bearing is scale-invariant -- which is precisely why
+  it is the robust choice.
+- **It matches how the drivers already behave.** They hit walls constantly, so a
+  reset costing one button press on something they already do beats a continuous
+  correction needing three subsystems to cooperate.
+
+**The honest limit:** a wall reset BOUNDS drift, it does not fix it. 6494's
+phantom sideways drift (`docs/TODO.md` section 0) stays the root cause and is
+mechanical -- the strafe pod.
+
+What today's calibration work is still worth: `TAG_SIZE`, `CAMERA_UP`, the tag
+height and the pitch are all now tape-confirmed, the chain's accuracy class is
+known, and cell-centring in `TurretAim` improves slightly (it mixes a true-inch
+row offset with a camera-frame x that used to be 9% short). Keep the override.
+
+---
+
+# FLIPPING THE TURRET: what it actually costs
+
+Asked 2026-11-13. Short answer: **the code is one constant. The validation is the
+real cost, and one mechanical detail decides whether it stays that cheap.**
+
+## The code, if it is flipped the easy way
+
+`TurretGeometry.TURRET_ZERO_DEG`'s javadoc already anticipates this: "Turret on
+the back, facing backward at 0 deg = 180." The math wraps, so:
+
+    RobotProfile (6494):  TurretGeometry.TURRET_ZERO_DEG = 0.0  ->  180.0
+
+**That is the whole code change**, PROVIDED the turret subassembly rotates 180
+deg about its own vertical axis WITH the magnet mount and encoder. Everything
+else is expressed in the TURRET's own frame and does not move:
+`CAMERA_FORWARD/LEFT/UP/PITCH_DEG`, `MIN_ANGLE`/`MAX_ANGLE`, `HOME_SWITCH_ANGLE`,
+`HOMING_DIRECTION`, `MAGNET_BAND_DEG`. `TURRET_OFFSET_X/Y` describe where the
+AXIS sits on the chassis, and spinning the assembly about that axis does not move
+it, so -4.5 / 0.0 stand.
+
+## The three mechanical cases -- ask the build team which one this is
+
+1. **Assembly + magnet + encoder all rotate together about the vertical axis.**
+   One constant, as above. THIS IS THE ONE TO ASK FOR.
+2. **Ring/output flips but the magnet stays fixed to the chassis.**
+   `HOME_SWITCH_ANGLE` moves by 180 and homing must be re-measured from scratch
+   (three Turret Range Test sweeps, same as 2026-10-15). The 2026 rebuild moved
+   the magnet ~59 deg and that alone cost a re-measure.
+3. **Assembly remounted UPSIDE DOWN rather than rotated.**
+   `TURRET_CCW_SIGN` inverts (1.0 -> -1.0) and the camera's up vector and pitch
+   sign change too. Messy. Avoid.
+
+## What must be re-validated, and one of these is a safety item
+
+1. **CABLE / soft limits -- do this first.** 6494 has NO hard stops; `MIN_ANGLE`
+   /`MAX_ANGLE` are the only protection and 0.80 `MAX_POWER` was chosen partly
+   because a faster turret coasts further past the soft limit toward the tight
+   cable end. After a flip the cable's tight end may sit somewhere else relative
+   to those limits. Check by hand, robot off, before driving it.
+2. **Turret Range Test** -- homing finds zero, travel span matches, and
+   `HOME_SWITCH_ANGLE` still measures where it did.
+3. **Turret Aim Test** -- confirm `TURRET_CCW_SIGN` / `ENCODER_DIRECTION` did not
+   invert.
+4. **The pre-homing convention flips.** Turret.java tells the drive team to set
+   the turret "roughly forward" by hand before homing, because the magnet must
+   never be behind you when the search starts. That becomes "roughly rearward".
+   Update the comment with the change or homing will fail confusingly.
+5. **Reachability moves to the REAR half.** `OdometryAim`'s blind arc and
+   `LaunchReach` are built on `MIN_ANGLE`/`MAX_ANGLE` around zero, so with
+   `TURRET_ZERO_DEG = 180` the reachable arc covers the robot's BACK. Every auto
+   that shoots has to be re-checked for reachability, and drivers must keep the
+   hive in the robot's REAR half while aiming. That is the real cost -- a driving
+   habit, not a line of code. (`LaunchReach`'s header still says -140..+140,
+   which is stale; it is +/-90.)
+6. **INIT homing legality** inside the 18 in cube is still unconfirmed, and the
+   150 deg sweep now sweeps the other way relative to the robot. Re-assess then.
+
+## DO IT BEFORE THE SHOT MAP SESSION
+
+`ShotMap`'s whole offset model is `a*cos(turret) + b*sin(turret)`, which assumes
+a fixed relationship between the chassis flywheels and the turret-mounted
+deflector. `ShotMap.java` already says a rebuild that moves the flywheels
+relative to the turret voids that robot's table and fit. **A flip is exactly that
+rebuild**, so flipping AFTER collecting shot data throws the data away. Flip
+first.
+
+## Why the re-anchor wants it
+
+Collector-first is the only workable convention for hitting a wall deliberately:
+back-first puts the camera at the wall. With `TURRET_ZERO_DEG = 0` and +/-90
+limits, a robot with its front on the wall cannot point the camera back into the
+field where the hive is. Flipped, it can. So the re-anchor should be BUILT to be
+convention-agnostic (`WallFix.Face` is already a parameter) and TUNED after the
+flip.
