@@ -475,3 +475,78 @@ the RED alliance wall meets the AUDIENCE wall, +x toward blue, +y away from the
 audience, heading 0 facing +x. **Measure to the robot's CENTRE OF ROTATION** --
 that is what the Pinpoint reports (`strafePodX(0)`, `forwardPodY(6.89)`), and
 what `RobotProfile` means by "4.5 in behind centre".
+
+## Late 2026-11-13: start here tomorrow
+
+Everything above was written mid-session. Four things changed after it, and the
+last one puts a question mark over the accuracy numbers.
+
+### CAMERA_PITCH_DEG 35 -> 38, measured
+
+Phone inclinometer on the camera body: 38. Two independent numbers agreed --
+Tag Pose Test had the turret base solving 3 deg off level, and the base is
+physically level, so the level error WAS the declared pitch being 3 deg wrong.
+
+A prediction was written into that commit: level should fall under 1 deg, z
+from +3.8 to about +1.2, and the position error should get slightly WORSE
+(a too-low pitch reads range too long, which was partly cancelling the range
+under-read). The re-run could not test it -- see "the readings were bouncing".
+
+THIS ALSO MOVED CAMERA AIMING. applyCamera() pushes the same number into
+TurretAim, which DriveTeleOp uses in matches. 38 should aim better than 35, but
+that is unverified. **Check DriveTeleOp still tracks the cell before trusting
+the robot in a match.** That is the one outstanding risk from today.
+
+### The readings were BOUNCING, and nothing said so
+
+z was reported as "+3.8" at one spot and "-2 to +4" at another. A single sample
+of an unstable quantity reads exactly like a measurement. Tag Pose Test now
+shows z, level and error as a min..max RANGE over the last second and prints
+BOUNCING past 1.5 of swing. If it says BOUNCING, do not write the number down.
+
+### Tag count decides fix quality -- this is the big one
+
+Observed directly: with FOUR tags the turret base solved to z ~ 0, which is
+where it physically is. With ONE tag it solved to z ~ 3 and swung -2..+4.
+
+That is planar pose ambiguity: a single AprilTag has two nearly equally good
+solutions and the solver picks wrong a fair fraction of the time. combine()
+out-votes a flipped tag when there are others; with one, it can do nothing.
+
+VisionPoseFilter gained rule 6, TOO_FEW_TAGS, MIN_TAGS = 2.
+
+### Detection was crippled, and it was my doing
+
+Tag Pose Test could only hold ONE tag at a time. It was built on AUTO exposure
+and the default decimation on the reasoning that a parked robot has no motion
+blur -- but exposure and gain also decide whether a tag DECODES, and
+TurretCamera's 6 ms / gain 250 were tuned on these tags. The bring-up tool was
+detecting worse than the match camera.
+
+Fixed: 6 ms, gain 250, and DECIMATION 1 (not 2) to buy range on a 3.25 in tag
+at 30-60 in. A bench test can afford the CPU.
+
+### So the five-spot accuracy run is SUSPECT
+
+Those five spots were measured with the bad camera settings, so some were
+probably single-tag fixes -- which means they may have measured pose ambiguity
+rather than any calibration error. That would explain why every theory built on
+the "9.8% radial" figure has since failed: the row-offset sign, the encoder
+scale, PIVOT_Y, and the camera resolution were all chased and all cleared.
+
+DO NOT reason further from those five numbers. Redo the run.
+
+### Tomorrow, in order
+
+1. Redeploy. Check **how many tags** Tag Pose Test can now hold. If 3-4 is
+   reliable, decimation was the blocker.
+2. Verify **DriveTeleOp camera aiming** still tracks, after the pitch change.
+3. **Redo the five-spot accuracy run** with 3+ tags and steady (non-BOUNCING)
+   readings at every spot. Record tag count with each error.
+4. The most trustworthy single reading from today, for comparison: at (59, 9)
+   with 3 tags, z ~ 0.5, error 7 in. If the redone run agrees, ~7 in is real and
+   worth chasing. If it comes in much lower, the error was ambiguity all along.
+
+Still unmeasured on the robot, and the remaining candidates if ~7 in survives:
+CAMERA_LEFT and CAMERA_YAW_DEG, both assumed 0. The steady -2 to -3 deg heading
+error is what a small yaw looks like.
