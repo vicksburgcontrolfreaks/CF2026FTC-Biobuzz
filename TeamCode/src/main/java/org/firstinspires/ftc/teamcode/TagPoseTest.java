@@ -14,6 +14,7 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.ExposureControl;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.GainControl;
 import org.firstinspires.ftc.teamcode.Auton.Waypoints;
+import org.firstinspires.ftc.teamcode.field.Alliance;
 import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
 import org.firstinspires.ftc.teamcode.geometry.VisionPoseFilter;
@@ -64,7 +65,7 @@ import java.util.List;
  *   2. Press Y, let the turret home.
  *   3. Dial the measured position into the TRUTH lines at the bottom of the
  *      screen: D-pad Up/Down picks X, Y or heading, the TRIGGERS move it.
- *      No Panels needed. Parked on the garden-edge start? Press X instead.
+ *      No Panels needed. Parked on a wall start? Press X until it's the one.
  *   4. Read "Error". That is the whole question: how far wrong is a tag fix?
  *   5. Move to another spot and do it again. Near, far, left, right, and off to
  *      one side -- the error being POSITION-DEPENDENT is what matters, because
@@ -100,7 +101,8 @@ import java.util.List;
  *   B              clear the samples
  *   D-pad U / D    pick which TRUTH value to edit (X / Y / heading)
  *   Triggers       move the picked TRUTH value (RT up, LT down)
- *   X              load GARDEN_EDGE_START as the truth (red coordinates)
+ *   X              load the next wall-start preset as the truth (cycles all
+ *                  four: red/blue x audience/scoring wall -- see TruthPreset)
  *
  * WHAT TO DISTRUST (updated 2026-11-13)
  * The HIVE is measured -- CELL_ARM, CELL_DROP, HIVE_SWING_DEG and PIVOT_Y all
@@ -272,7 +274,7 @@ public class TagPoseTest extends OpMode {
     /**
      * Editing the truth FROM THE GAMEPAD, because TRUTH_X/Y are @Configurable and
      * Panels is not something everyone on this team uses. D-pad Up/Down picks the
-     * field, the triggers move it, X loads the garden-edge preset.
+     * field, the triggers move it, X cycles through the four wall-start presets.
      *
      * Tape-measuring to a robot's centre of rotation is good to about an inch at
      * best, so 1 in of editing resolution is not the limiting error here.
@@ -280,6 +282,47 @@ public class TagPoseTest extends OpMode {
     private enum TruthField { X, Y, HEADING }
 
     private TruthField editing = TruthField.X;
+
+    /**
+     * The four spots whose coordinates are known with no tape measure: robot
+     * facing the OTHER alliance, side touching the audience or scoring wall,
+     * back edge on the tile seam nearest its own alliance wall (x = 24 for red,
+     * x = 120 for blue).
+     *
+     * WHY ALL FOUR (Shane, 2026-11-13): the mirrored pairs (red audience <->
+     * blue scoring, red scoring <-> blue audience) are exact 180 deg rotations of
+     * each other, so the camera sees the same picture from both. An error that
+     * lives on the ROBOT (camera yaw/left/pitch, turret zero, lens) comes out the
+     * same relative to the robot, which in field coordinates means it FLIPS sign
+     * between the pair. An error in the FIELD MODEL (HiveTags, the blue hive
+     * placed by symmetry, our field's build tolerance) stays put in field
+     * coordinates and does not flip cleanly.
+     *
+     * For the comparison to mean anything, tip the hives into mirrored states
+     * too (red audience cell up <-> blue scoring cell up). And expect ~2 in of x
+     * difference from our field alone: Shane taped red wall to red hive 58 in,
+     * blue wall to blue hive 60 in.
+     *
+     * Blue is built with Alliance.map, never typed in, so all four stay in step
+     * with Waypoints if the robot size ever changes.
+     */
+    private enum TruthPreset {
+        RED_AUDIENCE("red, audience wall", Alliance.RED, Waypoints.GARDEN_EDGE_START),
+        RED_SCORING("red, scoring wall", Alliance.RED, Waypoints.FAR_EDGE_START),
+        BLUE_SCORING("blue, scoring wall", Alliance.BLUE, Waypoints.GARDEN_EDGE_START),
+        BLUE_AUDIENCE("blue, audience wall", Alliance.BLUE, Waypoints.FAR_EDGE_START);
+
+        final String label;
+        final Pose pose;
+
+        TruthPreset(String label, Alliance alliance, Pose redPose) {
+            this.label = label;
+            this.pose = alliance.map(redPose);
+        }
+    }
+
+    /** The preset X loaded last, or null if none / the truth was hand-edited since. */
+    private TruthPreset preset = null;
 
     @Override
     public void init() {
@@ -503,12 +546,12 @@ public class TagPoseTest extends OpMode {
     /**
      * Dial the tape measurement in from the gamepad. See TruthField.
      *
-     * X loads GARDEN_EDGE_START, which is the one spot on the field whose
-     * coordinates are already known AND physically repeatable -- back edge on the
-     * end of the garden tape, side touching the garden wall. Parking there needs
-     * no tape at all, and it is the same spot DriveTeleOp now assumes at Start.
-     * RED coordinates: this op mode has no alliance row, so on the blue side use
-     * the triggers or spin the numbers through 144 yourself.
+     * X cycles through the four TruthPresets -- the wall starts, whose
+     * coordinates are known AND physically repeatable, so parking on one needs
+     * no tape at all. The first press loads red audience (GARDEN_EDGE_START, the
+     * spot DriveTeleOp assumes at Start); each press after moves to the next.
+     * Touching the triggers afterwards means the truth is no longer exactly a
+     * preset, and the screen says so.
      */
     private void editTruth(double dt) {
         if (gamepad1.dpadUpWasPressed()) {
@@ -519,13 +562,17 @@ public class TagPoseTest extends OpMode {
             editing = TruthField.values()[(editing.ordinal() + 1) % TruthField.values().length];
         }
         if (gamepad1.xWasPressed()) {
-            Pose g = Waypoints.GARDEN_EDGE_START;
-            TRUTH_X = g.getX();
-            TRUTH_Y = g.getY();
-            TRUTH_HEADING_DEG = Math.toDegrees(g.getHeading());
+            preset = preset == null ? TruthPreset.values()[0]
+                    : TruthPreset.values()[(preset.ordinal() + 1) % TruthPreset.values().length];
+            TRUTH_X = preset.pose.getX();
+            TRUTH_Y = preset.pose.getY();
+            // Normalised to (-180, 180] so blue reads 180, whatever rotate180 returns.
+            double h = preset.pose.getHeading();
+            TRUTH_HEADING_DEG = Math.toDegrees(Math.atan2(Math.sin(h), Math.cos(h)));
         }
         double adjust = (gamepad1.right_trigger - gamepad1.left_trigger) * TRUTH_EDIT_PER_SEC * dt;
         if (adjust == 0) return;
+        preset = null;   // hand-edited: no longer exactly the preset
         switch (editing) {
             case X:
                 TRUTH_X = (Double.isNaN(TRUTH_X) ? 0 : TRUTH_X) + adjust;
@@ -542,15 +589,16 @@ public class TagPoseTest extends OpMode {
     /**
      * Two lines, at the TOP of the screen. Nothing here is saved anywhere and
      * nothing needs to be: the numbers are live, and the ERROR line below updates
-     * as you move them. X OVERWRITES all three with the garden-edge start, so do
-     * not press it after dialling a tape measurement in.
+     * as you move them. X OVERWRITES all three with the next preset, so do not
+     * press it after dialling a tape measurement in.
      */
     private void showTruthEditor() {
         telemetry.addLine(String.format("TRUTH  %sx %s   %sy %s   %shdg %s",
                 editing == TruthField.X ? ">" : " ", fmt(TRUTH_X),
                 editing == TruthField.Y ? ">" : " ", fmt(TRUTH_Y),
                 editing == TruthField.HEADING ? ">" : " ", fmt(TRUTH_HEADING_DEG)));
-        telemetry.addLine("  D-pad U/D pick | TRIGGERS move | X = garden edge (overwrites)");
+        telemetry.addLine("  preset: " + (preset == null ? "none (hand-set)" : preset.label));
+        telemetry.addLine("  D-pad U/D pick | TRIGGERS move | X = next wall preset (overwrites)");
     }
 
     private static String fmt(double v) {
