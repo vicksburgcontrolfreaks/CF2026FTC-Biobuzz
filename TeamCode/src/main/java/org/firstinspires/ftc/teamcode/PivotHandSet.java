@@ -32,6 +32,9 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *             pollen gap by hand, and re-tighten. Every saved number then
  *             lines up again. Do NOT use with a slipped linkage still
  *             attached -- the saved number may be past a hard stop.
+ *   D-pad left / right  same, but hold the saved OPEN / CLOSED end
+ *             (MIN/MAX_SAFE_POSITION) -- for linkages that only go back on
+ *             near a hard stop. Re-attach with the mechanism at that stop.
  *
  * Works in INIT too, so you can do steps A and B before pressing Start.
  * Y only works after Start.
@@ -73,7 +76,25 @@ public class PivotHandSet extends LinearOpMode {
     private boolean limp = true;
     private String note = "Servo is OFF. Move the pivot by hand.";
 
-    private boolean aPrev, bPrev, xPrev, yPrev, upPrev;
+    private boolean aPrev, bPrev, xPrev, yPrev, upPrev, leftPrev, rightPrev;
+
+    /**
+     * Command a saved number and hold it, for re-attaching a slipped linkage.
+     * The END numbers were measured just off the hard stops (backed off from
+     * where the servo strained), so re-attach with the mechanism just touching
+     * its stop -- or a hair off it, never pushed past it.
+     */
+    private void hold(boolean started, double position, String name) {
+        if (!started) {
+            note = "Press Start first -- the servo can't move during INIT.";
+            return;
+        }
+        limp = false;
+        commanded = position;
+        servo.setPosition(commanded);
+        note = String.format("HOLDING saved %s %.3f. Put the mechanism at that spot by hand "
+                + "and re-tighten the linkage. X = servo off.", name, commanded);
+    }
 
     @Override
     public void runOpMode() {
@@ -104,20 +125,12 @@ public class PivotHandSet extends LinearOpMode {
 
     private void handleButtons(boolean started) {
         boolean a = gamepad1.a, b = gamepad1.b, x = gamepad1.x, y = gamepad1.y;
-        boolean up = gamepad1.dpad_up;
+        boolean up = gamepad1.dpad_up, left = gamepad1.dpad_left, right = gamepad1.dpad_right;
 
-        if (up && !upPrev) {
-            if (!started) {
-                note = "Press Start first -- the servo can't move during INIT.";
-            } else {
-                limp = false;
-                commanded = ShooterPivot.POLLEN_POSITION;
-                servo.setPosition(commanded);
-                note = String.format("HOLDING saved pollen %.3f. Set the mechanism to the pollen "
-                        + "gap by hand and re-tighten the linkage. X = servo off.", commanded);
-            }
-        }
-        upPrev = up;
+        if (up && !upPrev) hold(started, ShooterPivot.POLLEN_POSITION, "pollen");
+        if (left && !leftPrev) hold(started, ShooterPivot.MIN_SAFE_POSITION, "OPEN (wide) end");
+        if (right && !rightPrev) hold(started, ShooterPivot.MAX_SAFE_POSITION, "CLOSED (tight) end");
+        upPrev = up; leftPrev = left; rightPrev = right;
 
         if (x && !xPrev) {
             goLimp();
@@ -280,8 +293,9 @@ public class PivotHandSet extends LinearOpMode {
                 ShooterPivot.MIN_SAFE_POSITION, ShooterPivot.MAX_SAFE_POSITION);
         telemetry.addLine(note);
         telemetry.addLine("A=stop  B=hand-set  Y=find number  X=servo off");
-        telemetry.addLine(String.format("D-pad up = hold saved pollen %.3f (linkage OFF!)",
-                ShooterPivot.POLLEN_POSITION));
+        telemetry.addLine(String.format("Hold (linkage OFF!): D-pad L open %.3f | up pollen %.3f | R closed %.3f",
+                ShooterPivot.MIN_SAFE_POSITION, ShooterPivot.POLLEN_POSITION,
+                ShooterPivot.MAX_SAFE_POSITION));
         telemetry.update();
     }
 }
