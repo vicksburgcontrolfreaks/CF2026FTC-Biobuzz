@@ -9,6 +9,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.teamcode.Auton.Waypoints;
 import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
 import org.firstinspires.ftc.teamcode.geometry.VisionPoseFilter;
@@ -56,8 +57,9 @@ import java.util.List;
  *   1. Park the robot on a spot you can measure with a tape. Point the camera
  *      at a hive.
  *   2. Press Y, let the turret home.
- *   3. Type the measured position into TRUTH_X / TRUTH_Y / TRUTH_HEADING_DEG
- *      in Panels, or just read the Fix line and compare by hand.
+ *   3. Dial the measured position into the TRUTH lines at the bottom of the
+ *      screen: D-pad Up/Down picks X, Y or heading, the TRIGGERS move it.
+ *      No Panels needed. Parked on the garden-edge start? Press X instead.
  *   4. Read "Error". That is the whole question: how far wrong is a tag fix?
  *   5. Move to another spot and do it again. Near, far, left, right, and off to
  *      one side -- the error being POSITION-DEPENDENT is what matters, because
@@ -91,6 +93,9 @@ import java.util.List;
  *   Right stick X  jog the turret (right = clockwise, as in DriveTeleOp)
  *   A              capture a sweep sample (refused unless settled and fresh)
  *   B              clear the samples
+ *   D-pad U / D    pick which TRUTH value to edit (X / Y / heading)
+ *   Triggers       move the picked TRUTH value (RT up, LT down)
+ *   X              load GARDEN_EDGE_START as the truth (red coordinates)
  *
  * WHAT TO DISTRUST
  * HiveTags still carries made-up numbers (RED_HIVE_X, CELL_ARM, CELL_DROP), and
@@ -120,6 +125,8 @@ public class TagPoseTest extends OpMode {
     public static double TURRET_JOG_DEG_PER_SEC = 45.0;
     /** A captured sample's fix must be newer than this, or the capture is refused. */
     public static double CAPTURE_MAX_FIX_AGE_SEC = 0.5;
+    /** Inches (or degrees) per second while a trigger is held, editing the truth. */
+    public static double TRUTH_EDIT_PER_SEC = 15.0;
 
     private static final int MAX_SAMPLES = 8;
     private static final double STICK_DEADZONE = 0.1;
@@ -166,6 +173,18 @@ public class TagPoseTest extends OpMode {
     // Filter line says so rather than printing a verdict nobody should act on.
     private boolean poseSeeded = false;
     private String poseOrigin = "";
+
+    /**
+     * Editing the truth FROM THE GAMEPAD, because TRUTH_X/Y are @Configurable and
+     * Panels is not something everyone on this team uses. D-pad Up/Down picks the
+     * field, the triggers move it, X loads the garden-edge preset.
+     *
+     * Tape-measuring to a robot's centre of rotation is good to about an inch at
+     * best, so 1 in of editing resolution is not the limiting error here.
+     */
+    private enum TruthField { X, Y, HEADING }
+
+    private TruthField editing = TruthField.X;
 
     @Override
     public void init() {
@@ -266,6 +285,7 @@ public class TagPoseTest extends OpMode {
             samples = 0;
             captureNote = "cleared";
         }
+        editTruth(dt);
         turret.update();
 
         Pose pose = follower.getPose();
@@ -356,6 +376,60 @@ public class TagPoseTest extends OpMode {
             worst = Math.max(worst, Math.hypot(sampleX[i] - mx, sampleY[i] - my));
         }
         return worst;
+    }
+
+    /**
+     * Dial the tape measurement in from the gamepad. See TruthField.
+     *
+     * X loads GARDEN_EDGE_START, which is the one spot on the field whose
+     * coordinates are already known AND physically repeatable -- back edge on the
+     * end of the garden tape, side touching the garden wall. Parking there needs
+     * no tape at all, and it is the same spot DriveTeleOp now assumes at Start.
+     * RED coordinates: this op mode has no alliance row, so on the blue side use
+     * the triggers or spin the numbers through 144 yourself.
+     */
+    private void editTruth(double dt) {
+        if (gamepad1.dpadUpWasPressed()) {
+            editing = TruthField.values()[(editing.ordinal() + TruthField.values().length - 1)
+                    % TruthField.values().length];
+        }
+        if (gamepad1.dpadDownWasPressed()) {
+            editing = TruthField.values()[(editing.ordinal() + 1) % TruthField.values().length];
+        }
+        if (gamepad1.xWasPressed()) {
+            Pose g = Waypoints.GARDEN_EDGE_START;
+            TRUTH_X = g.getX();
+            TRUTH_Y = g.getY();
+            TRUTH_HEADING_DEG = Math.toDegrees(g.getHeading());
+        }
+        double adjust = (gamepad1.right_trigger - gamepad1.left_trigger) * TRUTH_EDIT_PER_SEC * dt;
+        if (adjust == 0) return;
+        switch (editing) {
+            case X:
+                TRUTH_X = (Double.isNaN(TRUTH_X) ? 0 : TRUTH_X) + adjust;
+                break;
+            case Y:
+                TRUTH_Y = (Double.isNaN(TRUTH_Y) ? 0 : TRUTH_Y) + adjust;
+                break;
+            case HEADING:
+                TRUTH_HEADING_DEG = (Double.isNaN(TRUTH_HEADING_DEG) ? 0 : TRUTH_HEADING_DEG) + adjust;
+                break;
+        }
+    }
+
+    private void showTruthEditor() {
+        telemetry.addLine();
+        telemetry.addLine(String.format("TRUTH (D-pad U/D picks, triggers move, X = garden edge)"));
+        telemetry.addLine(String.format("  %s X %s      %s Y %s      %s heading %s",
+                editing == TruthField.X ? ">" : " ", fmt(TRUTH_X),
+                editing == TruthField.Y ? ">" : " ", fmt(TRUTH_Y),
+                editing == TruthField.HEADING ? ">" : " ", fmt(TRUTH_HEADING_DEG)));
+        telemetry.addLine("  Field (0,0) = red wall x audience wall. +x to blue, +y from");
+        telemetry.addLine("  audience. Measure to the ROBOT'S CENTRE.");
+    }
+
+    private static String fmt(double v) {
+        return Double.isNaN(v) ? "--" : String.format("%.1f", v);
     }
 
     /** Turret angle covered by the captures, degrees. Near 0 = a noise-floor run. */
@@ -489,6 +563,7 @@ public class TagPoseTest extends OpMode {
 
         if (lastFix == null) {
             telemetry.addLine("No fix yet. Point the camera at a hive cell's tags.");
+            showTruthEditor();
             showSweep();
             telemetry.addData("Loop", "%.0f ms", dt * 1000);
             telemetry.update();
@@ -536,8 +611,9 @@ public class TagPoseTest extends OpMode {
             }
         } else {
             telemetry.addLine();
-            telemetry.addLine("Set TRUTH_X / TRUTH_Y in Panels to see the error directly.");
+            telemetry.addLine("Set TRUTH below to see the error directly.");
         }
+        showTruthEditor();
         showSweep();
         telemetry.addData("Loop", "%.0f ms", dt * 1000);
         telemetry.update();

@@ -281,3 +281,171 @@ retune, or it gets tuned against a pose that is about to move.
 camera aiming behaves -- before it, the aim point moved up to 6.5 in. depending
 on which tags were in frame, and 1-2 tags is the normal case. `CENTRE_ON_CELL`
 turns it off if it misbehaves.
+
+---
+
+# 2026-11-12 / 11-13: what the robot said, and what it ruled out
+
+A long bench session on 6494, mostly measurement. Read this before touching the
+aim again -- several of the obvious theories are already dead, and two of them
+were mine.
+
+## THE BUG THAT WAS ACTUALLY BREAKING MATCHES: gamepad 1 X
+
+`DriveTeleOp`'s X ("the robot faces away from me right now") used to overwrite
+the POSE heading with `awayFromDriversHeading()`. Harmless while the turret
+aimed by camera. Fatal once it aims by odometry: press X while the robot faces
+any other direction and the heading is wrong by that much, the turret aims at
+where the hive would be for the fake heading, clips, and sits on a soft limit.
+
+Worse, it hides itself. Once the camera/odometry disagreement passes
+`MAX_TRIM_DEG` (15), `updateTrim()` rejected every measurement, so the aim ran
+on pure bad odometry with the camera locked out -- a consistent one-sided miss
+that showing the camera more tags cannot fix, because the measurements were
+being computed and binned. Shane reproduced it twice: once with X, once by
+forcing the trim off with "Aim test: no camera trim".
+
+FIXED two ways. X now moves `driverHeadingOffset`, which only field-centric
+driving reads; `follower.setPose()` is gone from the op mode. And a sustained
+rejection now drops `poseTrusted`, clears the stale trim, and hands the turret
+back to the camera, saying so on the Driver Station.
+
+**If an aim ever goes consistently wrong again, read the "Aim by" line first.**
+A trim that is frozen rather than tracking is this failure.
+
+## MEASURED: the tag fixes are good, centred
+
+With the robot parked and the turret held still, 8 captures in Tag Pose Test:
+
+    0.6 in, 0.8 deg
+
+That is the noise floor of the whole chain -- tag solve, camera mount, turret
+encoder, everything. **Localization is viable.** This was the open question
+behind wiring `TagLocalizer`, and the answer is yes.
+
+## MEASURED: TICKS_PER_DEGREE = 78.51 is CORRECT. Do not change it.
+
+Confirmed three independent ways:
+
+- REV Through Bore V2 spec, 8192 counts/rev
+- CAD gear ODs: ring 142 mm at module 2 = 69T, encoder gear 44 mm = 20T
+- On the robot, 2026-11-13: pushing the turret by hand in Turret Range Test and
+  counting ring teeth past a fixed reference. 41775 ticks over 102 tooth
+  intervals = **409.56 ticks/tooth against 409.6 predicted (0.01%)**
+
+Watch the fencepost: the raw counts were 37 / 24 / 44 teeth "lined up", which is
+36 / 23 / 43 INTERVALS. Divided by the as-counted numbers the three runs scatter
+over 7.8 ticks and miss; divided by N-1 they scatter over 1.4 and land exactly on
+prediction. Count intervals, not teeth.
+
+Also measured: the encoder does NOT slip. Returning the turret to a tape mark
+five times repeated within 50 ticks (0.7 deg), which is hand-positioning.
+
+## RULED OUT, with the reasoning, so nobody re-derives it
+
+**The turret encoder scale.** See above. A tag sweep across the turret's travel
+suggested a 10% scale error; the tooth count says 3%, and corrected for the
+fencepost, 0%. The sweep was wrong, not the gears. Nothing was changed.
+
+**`TurretAim.bearingOf()`'s row-offset sign.** The theory was that
+`HiveTags.rowOffsetOf()` -- a hive-frame offset -- is subtracted straight from a
+camera-frame x with no account of which side the row is viewed from, so it would
+double the error instead of removing it. Testable prediction: the miss gets
+WORSE with fewer tags in frame, since four tags cancel and one does not. Tested
+by covering 3 of 4 tags: barely changed. **Dead.** The sign is fine, or at least
+is not what is biting. (Note "Aim test: no cell centring" is a no-op whenever 4
+tags are visible, so that row only tests anything at 1-2 tags.)
+
+**The deflector being removed.** Cannot throw -- `Deflector` uses `tryGet` for
+both devices and `isPresent()` guards every method.
+
+## STILL OPEN: why the fix degrades across the turret's travel
+
+Parked, sweeping only the turret, the fix moves:
+
+| sweep | position spread | heading spread | fitted slope |
+|---|---|---|---|
+| 49 deg | 4.13 in | 7.0 deg | 0.143 |
+| 49 deg | 4.33 in | 4.9 deg | 0.100 |
+| 23 deg | 1.31 in | 2.6 deg | 0.108 |
+
+Facts worth keeping:
+
+- The robot never moved, so this is all in the tag -> turret base -> robot chain.
+- `4.2 in / sin(5.9 deg) ~ 40 in`, the tag range. The position error IS the
+  heading error projected over the range -- one root cause, not two.
+- The slope reproduces from different robot positions and sweep spans, so it is
+  not the pose or the hive position. SPREAD does not reproduce, because it
+  depends on which angles were sampled -- compare slopes, not spreads.
+- Residual about the fitted line is 0.46 deg, at the noise floor. It is a clean
+  linear-in-turret-angle effect, NOT backlash and NOT a nonlinearity.
+- The encoder is exact, so the slope is NOT the encoder.
+
+**Leading hypothesis, NOT tested: frame-edge bias.** The turret can only hold
+tags from +29 to -20 before losing them, which is roughly the camera's whole
+usable FOV. A sweep therefore walks the tags from one edge of the image to the
+other, and uncorrected lens distortion biases a solved pose most at the edges.
+That would be smooth, repeatable, roughly linear in angle, and confined to the
+FOV -- which is what the table shows.
+
+If that is right, **4 in is a worst case this test manufactured** by pointing the
+camera away from the target, and the operating number is the 0.6 in from tags
+near centre -- which is where a turret-mounted camera naturally puts them.
+
+Ways to test it: compare fixes with the tag centred versus deliberately at the
+frame edge at the SAME turret angle (moving the robot, not the turret, to change
+where the tag lands); or check whether the SDK is using a real intrinsic
+calibration for this webcam.
+
+## The camera-mount question: not settled by localization
+
+Taking the camera off the turret would allow a 360 deg turret (no cable across
+the joint) and would delete the turret chain from localization. But:
+
+- the turret chain's encoder is exact, so there is nothing to fix there;
+- if the residual error is frame-edge bias, a body-mounted camera does not fix
+  it either -- and it loses the turret's habit of keeping tags centred.
+
+So **decide the 360 deg turret on strategy, not on localization accuracy.** And
+cost it properly: `Turret` is built around `MIN_ANGLE`/`MAX_ANGLE`, a magnet
+band, a one-direction 150 deg homing search, and `OdometryAim` has a blind-arc
+and hysteresis layer that exists only because travel is less than a circle.
+Check too whether anything besides the camera crosses the rotating joint.
+
+## NEXT: the measurement that decides whether to wire TagLocalizer
+
+Absolute accuracy under OPERATING conditions, which is not what the sweep did:
+
+1. Park, home the turret, and AIM IT AT THE CELL so tags sit near frame centre.
+2. Set the truth (gamepad, see below) and read `Error`.
+3. 3-4 captures, then repeat at four or five robot positions, including the
+   spots you actually shoot from.
+
+Consistently inside ~2 in -> wire `TagLocalizer` + `VisionPoseFilter` into the
+pose. Both are written and unit-tested; the blocker is that `TurretCamera` builds
+its processor with `FieldAprilTags.getLibrary()` and no `setCameraPose()`, so
+`detection.robotPose` is null and `TagLocalizer.solve()` returns null on its
+first line. Tag Pose Test configures its own processor to get around that.
+
+Position-dependent and large with tags CENTRED -> the problem is upstream in
+`HiveTags` (`RED_HIVE_X`, `CELL_ARM`, `CELL_DROP` are still made up) and the hive
+needs measuring before any of this works. See `docs/hive-opening-measure.md`.
+
+Two known gaps before `TagLocalizer` goes live: `turretDegAtFrame` is the CURRENT
+turret angle, not the angle at frame capture (fine parked, wrong while slewing --
+needs a timestamped angle history), and setting a camera pose on the processor
+`TurretAim` reads may change whether `ftcPose` stays camera-relative. VERIFY that
+before touching `TurretCamera`; `bearingOf()` depends on it. A second processor
+on the same portal avoids the question at a CPU cost.
+
+## Setting the truth in Tag Pose Test, without Panels
+
+`TRUTH_X` / `TRUTH_Y` are editable from gamepad 1: **D-pad Up/Down** picks X, Y
+or heading, the **triggers** move it (RT up, LT down). **X** loads
+`GARDEN_EDGE_START` for when the robot is parked there.
+
+Coordinates are Pedro field inches, `FieldConstants`: (0,0) is the corner where
+the RED alliance wall meets the AUDIENCE wall, +x toward blue, +y away from the
+audience, heading 0 facing +x. **Measure to the robot's CENTRE OF ROTATION** --
+that is what the Pinpoint reports (`strafePodX(0)`, `forwardPodY(6.89)`), and
+what `RobotProfile` means by "4.5 in behind centre".
