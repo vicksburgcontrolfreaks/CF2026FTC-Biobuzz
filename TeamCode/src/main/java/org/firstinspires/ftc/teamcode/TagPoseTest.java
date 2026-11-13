@@ -14,7 +14,7 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.ExposureControl;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.GainControl;
 import org.firstinspires.ftc.teamcode.Auton.Waypoints;
-import org.firstinspires.ftc.teamcode.field.Alliance;
+import org.firstinspires.ftc.teamcode.field.WallStart;
 import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
 import org.firstinspires.ftc.teamcode.field.HiveTags;
 import org.firstinspires.ftc.teamcode.geometry.Rigid3;
@@ -107,7 +107,7 @@ import java.util.List;
  *   D-pad U / D    pick which TRUTH value to edit (X / Y / heading)
  *   Triggers       move the picked TRUTH value (RT up, LT down)
  *   X              load the next wall-start preset as the truth (cycles all
- *                  four: red/blue x audience/scoring wall -- see TruthPreset)
+ *                  four: red/blue x audience/scoring wall -- see WallStart)
  *
  * WHAT TO DISTRUST (updated 2026-11-13)
  * The HIVE is measured -- CELL_ARM, CELL_DROP, HIVE_SWING_DEG and PIVOT_Y all
@@ -296,50 +296,15 @@ public class TagPoseTest extends OpMode {
     private TruthField editing = TruthField.X;
 
     /**
-     * The four spots whose coordinates are known with no tape measure: robot
-     * facing the OTHER alliance, side touching the audience or scoring wall,
-     * back edge on the tile seam nearest its own alliance wall (x = 24 for red,
-     * x = 120 for blue).
-     *
-     * WHY ALL FOUR (Shane, 2026-11-13): the mirrored pairs (red audience <->
-     * blue scoring, red scoring <-> blue audience) are exact 180 deg rotations of
-     * each other, so the camera sees the same picture from both. An error that
-     * lives on the ROBOT (camera yaw/left/pitch, turret zero, lens) comes out the
-     * same relative to the robot, which in field coordinates means it FLIPS sign
-     * between the pair. An error in the FIELD MODEL (HiveTags, the blue hive
-     * placed by symmetry, our field's build tolerance) stays put in field
-     * coordinates and does not flip cleanly.
-     *
-     * For the comparison to mean anything, tip the hives into mirrored states
-     * too (red audience cell up <-> blue scoring cell up). And expect ~2 in of x
-     * difference from our field alone: Shane taped red wall to red hive 58 in,
-     * blue wall to blue hive 60 in.
-     *
-     * Blue is built with Alliance.map, never typed in, so all four stay in step
-     * with Waypoints if the robot size ever changes.
+     * The truth presets X cycles through: the four wall starts. See WallStart for
+     * why all four, and the mirrored-pair test they enable. For that comparison
+     * to mean anything, tip the hives into mirrored states too (red audience cell
+     * up <-> blue scoring cell up), and expect ~2 in of x difference from our
+     * field alone: Shane taped red wall to red hive 58 in, blue wall to blue hive 60.
      */
-    private enum TruthPreset {
-        // Facing the other alliance, the audience wall is on the robot's RIGHT and
-        // the scoring wall on its LEFT -- for both alliances.
-        RED_AUDIENCE("red, audience wall", Alliance.RED, Waypoints.GARDEN_EDGE_START, WallFix.Face.RIGHT),
-        RED_SCORING("red, scoring wall", Alliance.RED, Waypoints.FAR_EDGE_START, WallFix.Face.LEFT),
-        BLUE_SCORING("blue, scoring wall", Alliance.BLUE, Waypoints.GARDEN_EDGE_START, WallFix.Face.RIGHT),
-        BLUE_AUDIENCE("blue, audience wall", Alliance.BLUE, Waypoints.FAR_EDGE_START, WallFix.Face.LEFT);
-
-        final String label;
-        final Pose pose;
-        /** Which side of the robot touches the wall here, for the WALL line. */
-        final WallFix.Face face;
-
-        TruthPreset(String label, Alliance alliance, Pose redPose, WallFix.Face face) {
-            this.label = label;
-            this.pose = alliance.map(redPose);
-            this.face = face;
-        }
-    }
 
     /** The preset X loaded last, or null if none / the truth was hand-edited since. */
-    private TruthPreset preset = null;
+    private WallStart preset = null;
 
     @Override
     public void init() {
@@ -634,7 +599,7 @@ public class TagPoseTest extends OpMode {
     /**
      * Dial the tape measurement in from the gamepad. See TruthField.
      *
-     * X cycles through the four TruthPresets -- the wall starts, whose
+     * X cycles through the four WallStarts -- the wall starts, whose
      * coordinates are known AND physically repeatable, so parking on one needs
      * no tape at all. The first press loads red audience (GARDEN_EDGE_START, the
      * spot DriveTeleOp assumes at Start); each press after moves to the next.
@@ -650,13 +615,10 @@ public class TagPoseTest extends OpMode {
             editing = TruthField.values()[(editing.ordinal() + 1) % TruthField.values().length];
         }
         if (gamepad1.xWasPressed()) {
-            preset = preset == null ? TruthPreset.values()[0]
-                    : TruthPreset.values()[(preset.ordinal() + 1) % TruthPreset.values().length];
+            preset = preset == null ? WallStart.values()[0] : preset.next();
             TRUTH_X = preset.pose.getX();
             TRUTH_Y = preset.pose.getY();
-            // Normalised to (-180, 180] so blue reads 180, whatever rotate180 returns.
-            double h = preset.pose.getHeading();
-            TRUTH_HEADING_DEG = Math.toDegrees(Math.atan2(Math.sin(h), Math.cos(h)));
+            TRUTH_HEADING_DEG = preset.headingDeg();
         }
         double adjust = (gamepad1.right_trigger - gamepad1.left_trigger) * TRUTH_EDIT_PER_SEC * dt;
         if (adjust == 0) return;

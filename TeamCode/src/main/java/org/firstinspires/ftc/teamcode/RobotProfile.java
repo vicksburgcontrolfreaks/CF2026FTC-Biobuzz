@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import org.firstinspires.ftc.teamcode.geometry.AimLead;
 import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
+import org.firstinspires.ftc.teamcode.shooting.ShotTable;
 import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
 import org.firstinspires.ftc.teamcode.subsystems.TurretDirector;
 
@@ -134,6 +135,14 @@ public final class RobotProfile {
         // To try it again: pick "odometry (pose)" in the INIT menu rather than
         // editing this, and confirm the Turret telemetry line says odometry.
         TurretDirector.USE_ODOMETRY_AIM = false;
+
+        // SHOT TABLE: EMPTY, not measured. Fill it from Shot Map's "spot" rows
+        // (distance_in -> rpm_centre, turret near 0), nearest first. PER ROBOT,
+        // and tied to THIS build: if 6494 is rebuilt and the flywheels move
+        // relative to the turret (they sit ~0.5-1 in left of it now, Shane
+        // 2026-11-13), re-run Shot Map -- the old table and offset fit are void.
+        ShotTable.DISTANCES = new double[]{};
+        ShotTable.RPMS = new double[]{};
     }
 
     // ---- 5618 ---------------------------------------------------------------
@@ -174,6 +183,12 @@ public final class RobotProfile {
         // robot whose geometry is unmeasured, so on 5618 this row is camera-only
         // until the offsets are written above.
         TurretDirector.USE_ODOMETRY_AIM = false;
+
+        // SHOT TABLE: EMPTY, not measured. 5618's turret sits centred over the
+        // flywheels, so its offset fit should come out near zero -- run Shot Map
+        // anyway and confirm it rather than assuming. Rows go here, not on 6494's.
+        ShotTable.DISTANCES = new double[]{};
+        ShotTable.RPMS = new double[]{};
     }
 
     // ---- Collection: indexer motor direction --------------------------------

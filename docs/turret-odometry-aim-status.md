@@ -641,3 +641,41 @@ Not built. Waiting on answers to the questions below.
 - **Questions for Shane:** is the layout above right? Is the bad flywheel
   encoder fixed (the velocity loop depends on it)? RPM only with the deflector
   fixed, or both? A new branch?
+
+## BUILT 2026-11-13: Shot Map (branch `shane/shot-map`, off deflector-autohome)
+
+Shane's answers: layout confirmed (chassis flywheels fire up through the turret
+hole onto the deflector), RPM is the ONLY knob (deflector fixed at
+DEFAULT_SHOT_DEG), new branch. The flywheel-encoder question went unanswered;
+the screen shows L/R RPM and every log row carries both, so a bad encoder will
+show up as WHEELS DISAGREE or a skewed column.
+
+**Op mode:** `Shot Map`, group Tune (`ShotMapTune.java`). Not run on a robot yet.
+- INIT: pick the wall start you are parked on (the four WallStarts, now shared
+  in `field/WallStart.java` by Tag Pose Test too), and the aim source.
+- One ball, one press: A hit, D-pad down SHORT / up LONG / left LEFT / right
+  RIGHT. The RPM jumps to the next value worth trying; the "band" line says
+  DONE when both edges are found, then B saves the spot.
+- RB/LB nudge RPM; LT+RB/LB nudge the aim trim (applied via
+  TurretAim.AIM_BIAS_DEG, restored on stop). X undoes. BACK on gamepad 1
+  re-syncs the pose when parked back on the start spot.
+- Log: `/sdcard/FIRST/shotmap/shotmap-<robot>-<date>.csv`, a "shot" row per
+  press and a "spot" row per B. `adb pull /sdcard/FIRST/shotmap`.
+
+**The search** (`shooting/ShotMap.java`, 14 laptop tests): it finds both EDGES
+of the hit band, not one lucky RPM. Centre -> ShotTable, width -> tolerance.
+About 16-20 balls a spot at 10 RPM resolution; RPM_RESOLUTION defaults to 25.
+Set it from the band widths you actually see.
+
+**Session plan:**
+1. Distance table, turret near 0: 4-6 spots across where you actually shoot.
+2. Offset sweep: at 1-2 distances, rotate in place so the turret sits at about
+   -90 / -45 / 0 / +45 / +90, and map each. The FIT line shows
+   `rpm a cos + b sin` and `aim c + a cos + b sin` once there is enough data.
+   On 6494 expect something; on 5618 (turret centred) expect ~0.
+3. Copy the spot rows into `RobotProfile` (`ShotTable.DISTANCES/RPMS`, PER
+   ROBOT, empty on both now). A rebuild that moves the flywheels relative to
+   the turret voids that robot's table and fit.
+
+**Not built yet:** using the table and fit in DriveTeleOp (spinUp(lookup(d)) +
+the turret-angle corrections). Do it after a table exists.
