@@ -7,9 +7,9 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.Auton.AutoMenu;
+import org.firstinspires.ftc.teamcode.Auton.Waypoints;
 import org.firstinspires.ftc.teamcode.field.Alliance;
 import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
-import org.firstinspires.ftc.teamcode.field.FieldConstants;
 import org.firstinspires.ftc.teamcode.field.HiveGeometry;
 import org.firstinspires.ftc.teamcode.field.PoseHandoff;
 import org.firstinspires.ftc.teamcode.geometry.FieldCentric;
@@ -80,8 +80,11 @@ import java.util.List;
  * START POSE (INIT menu, gamepad 1, same controls as Select Auto):
  *   FROM AUTO    - auto saves its pose every loop (PoseHandoff); default if it
  *                  ran in the last AUTO_POSE_FRESH_SEC.
- *   FACING AWAY  - point the robot away from our drivers before Start.
- *                  Position unknown (field center) -- fine for driving.
+ *   GARDEN EDGE  - assumes Garden Shoot + Park's start pose: back edge on the end
+ *                  of the garden tape, touching the garden wall. Set the robot
+ *                  there and it's right; anywhere else and the POSITION is wrong
+ *                  (the heading is the same either way). Driving doesn't care --
+ *                  only "Aim by odometry" reads the position.
  */
 @TeleOp(name = "DriveTeleOp", group = "TeleOp")
 public class DriveTeleOp extends OpMode {
@@ -92,8 +95,22 @@ public class DriveTeleOp extends OpMode {
     private static final double TURRET_NUDGE_DEG_PER_SEC = 90;  // full stick
     private static final double TURRET_JOG_POWER = 0.25;        // full stick, turret NOT homed (no soft limits!)
 
+    /**
+     * Where TeleOp assumes the robot is sitting at Start.
+     *
+     * GARDEN_EDGE is Garden Shoot + Park's own start pose (Waypoints
+     * GARDEN_EDGE_START, mapped for the alliance exactly as RouteAuto does it).
+     * It replaced "field centre" on 2026-11-12: centre was never a place you
+     * could actually put the robot, so odometry aiming off it was guaranteed
+     * wrong. The garden edge is a spot you CAN set the robot on by hand -- back
+     * edge on the end of the garden tape, touching the garden wall -- so the
+     * assumption is at least achievable.
+     *
+     * It is still an ASSUMPTION. Nothing measures it. Put the robot somewhere
+     * else and odometry aiming is wrong again, just less wildly.
+     */
     private enum StartPose {
-        FROM_AUTO("From auto"), FACING_AWAY("Facing away from us");
+        FROM_AUTO("From auto"), GARDEN_EDGE("Garden edge (same as auto)");
         private final String label;
         StartPose(String label) { this.label = label; }
         @Override public String toString() { return label; }
@@ -111,7 +128,7 @@ public class DriveTeleOp extends OpMode {
     private final AutoMenu.Choice<Alliance> alliance =
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
     private final AutoMenu.Choice<StartPose> startPose =
-            menu.add("Start pose", StartPose.FACING_AWAY, StartPose.FROM_AUTO)
+            menu.add("Start pose", StartPose.GARDEN_EDGE, StartPose.FROM_AUTO)
                     .allowWhen(p -> p != StartPose.FROM_AUTO || PoseHandoff.has());
     // BY_SIDE needs a real position, which only the auto handoff gives us.
     private final AutoMenu.Choice<AimCell> aimCell =
@@ -120,7 +137,7 @@ public class DriveTeleOp extends OpMode {
     // WHERE the aim comes from, as opposed to aimCell's WHICH CELL. The option
     // order here is NOT the default -- init() sets that from RobotProfile, because
     // these field initializers run before RobotProfile.install() knows the robot.
-    // Deliberately not restricted to FROM_AUTO: picking odometry off a FACING_AWAY
+    // Deliberately not restricted to FROM_AUTO: picking odometry off a GARDEN_EDGE
     // pose is a legitimate experiment, and init_loop() warns rather than forbids.
     private final AutoMenu.Choice<TurretDirector.AimSource> aimSource =
             menu.add("Aim by", TurretDirector.AimSource.CAMERA, TurretDirector.AimSource.ODOMETRY)
@@ -206,8 +223,12 @@ public class DriveTeleOp extends OpMode {
         } else {
             telemetry.addData("Auto pose", "none (no auto since power-up)");
         }
-        if (startPose.get() == StartPose.FACING_AWAY) {
-            telemetry.addLine("Point the robot AWAY from the " + alliance.get() + " drivers before Start.");
+        if (startPose.get() == StartPose.GARDEN_EDGE) {
+            Pose s = alliance.get().map(Waypoints.GARDEN_EDGE_START);
+            telemetry.addLine(String.format(
+                    "Set the robot on the GARDEN EDGE start (like auto): (%.0f, %.0f) %.0f deg.",
+                    s.getX(), s.getY(), Math.toDegrees(s.getHeading())));
+            telemetry.addLine("    Back edge on the end of the garden tape, touching the garden wall.");
         }
         telemetry.addData("Turret", "%s (%s)", turret.getState(), turret.getStatusNote());
         if (!turret.isHomed() && Turret.isMeasured()) {
@@ -238,8 +259,15 @@ public class DriveTeleOp extends OpMode {
         if (poseFromAuto) {
             start = PoseHandoff.pose();
         } else {
-            start = new Pose(FieldConstants.CENTER, FieldConstants.CENTER,
-                    alliance.get().awayFromDriversHeading());
+            // Garden Shoot + Park's start, mapped for the alliance the same way
+            // RouteAuto does it (Waypoints are written in RED coordinates).
+            //
+            // The heading is unchanged by this: GARDEN_EDGE_START faces blue, and
+            // alliance.map() rotates it 180 deg for blue -- which works out to
+            // awayFromDriversHeading() for both alliances, what this used to pass.
+            // So field-centric driving behaves exactly as before; only x/y moved,
+            // and x/y is read by nothing but odometry aiming.
+            start = alliance.get().map(Waypoints.GARDEN_EDGE_START);
         }
         follower.setStartingPose(start);
         PoseHandoff.clear();   // taken; a second TeleOp run must not reuse it
