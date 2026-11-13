@@ -131,18 +131,19 @@ import java.util.List;
  *     background meters the exposure DOWN, and these tags are on a downward
  *     face in their own cell's shadow. Moving keeps AE chasing, which is why
  *     motion looked better.
- *   - 6 ms / gain 250 (copied from TurretCamera on 2026-11-13) is too DARK.
- *     Those values buy motion-blur immunity with darkness, which TurretCamera
- *     needs because it slews. A parked bench test has no motion to freeze, so
- *     it paid the darkness for nothing.
+ *   - "6 ms is too DARK for a parked test" was the NEXT wrong answer, mine, and
+ *     the robot killed it the same afternoon. Swept live at (57, 9): 6 ms / gain
+ *     250 decodes 4 tags and gets WORSE as exposure rises, gone by about 14 ms.
+ *     So TurretCamera's values are right here too, and the reasoning that they
+ *     were only right for a slewing camera was wrong.
  *
- * So the target is manual, LONGER than 6 ms, at the lowest gain that holds the
- * tags. A parked robot can afford a long exposure. Do not transplant whatever
- * wins here into TurretCamera unchanged -- that one really does need to freeze
- * motion.
+ * MANUAL 6 ms / GAIN 250 IS THE MEASURED BEST. It is the default for that reason
+ * and not by copying. If you change it, sweep it on gamepad 2 and beat 4 tags.
  *
  * Why the tag count matters at all: a one-tag fix is the unreliable kind.
- * Planar pose ambiguity put z at ~3 in on one tag and ~0 on four.
+ * Planar pose ambiguity put z at ~3 in on one tag and ~0 on four. But note the
+ * count was never the camera's fault -- see FUNNEL. The chain was dropping good
+ * tags on the floor test, and TAGS vs QUALITY is the distinction that shows it.
  */
 @Configurable
 @TeleOp(name = "Tag Pose Test", group = "Test")
@@ -217,7 +218,7 @@ public class TagPoseTest extends OpMode {
      * Read at INIT (the portal is built once), so change it and re-init -- it is
      * NOT live like the exposure controls. See the note at the builder.
      */
-    public static boolean PIN_RESOLUTION = false;
+    public static boolean PIN_RESOLUTION = true;
     public static int RESOLUTION_WIDTH = 640;
     public static int RESOLUTION_HEIGHT = 480;
 
