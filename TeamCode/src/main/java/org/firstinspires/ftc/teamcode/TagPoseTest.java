@@ -417,15 +417,18 @@ public class TagPoseTest extends OpMode {
         }
     }
 
+    /**
+     * Two lines, at the TOP of the screen. Nothing here is saved anywhere and
+     * nothing needs to be: the numbers are live, and the ERROR line below updates
+     * as you move them. X OVERWRITES all three with the garden-edge start, so do
+     * not press it after dialling a tape measurement in.
+     */
     private void showTruthEditor() {
-        telemetry.addLine();
-        telemetry.addLine(String.format("TRUTH (D-pad U/D picks, triggers move, X = garden edge)"));
-        telemetry.addLine(String.format("  %s X %s      %s Y %s      %s heading %s",
+        telemetry.addLine(String.format("TRUTH  %sx %s   %sy %s   %shdg %s",
                 editing == TruthField.X ? ">" : " ", fmt(TRUTH_X),
                 editing == TruthField.Y ? ">" : " ", fmt(TRUTH_Y),
                 editing == TruthField.HEADING ? ">" : " ", fmt(TRUTH_HEADING_DEG)));
-        telemetry.addLine("  Field (0,0) = red wall x audience wall. +x to blue, +y from");
-        telemetry.addLine("  audience. Measure to the ROBOT'S CENTRE.");
+        telemetry.addLine("  D-pad U/D pick | TRIGGERS move | X = garden edge (overwrites)");
     }
 
     private static String fmt(double v) {
@@ -486,18 +489,14 @@ public class TagPoseTest extends OpMode {
     }
 
     private void showSweep() {
-        telemetry.addLine();
-        telemetry.addLine("TURRET SWEEP -- the ROBOT must not move between captures");
-        telemetry.addData("Capture", captureNote);
+        // One line when idle, a handful when sweeping. The per-sample list is
+        // gone on purpose -- it crowded the editor and the ERROR line off the
+        // Driver Station, and SPREAD is the number the test is actually for.
         if (samples == 0) {
-            telemetry.addLine("D-pad L/R steps the turret, right stick jogs it.");
-            telemetry.addLine("Settle, press A, step, press A again. 3-5 angles is plenty.");
+            telemetry.addData("SWEEP", "A captures (%s)", captureNote);
             return;
         }
-        for (int i = 0; i < samples; i++) {
-            telemetry.addLine(String.format("  %d  turret %+6.1f   fix (%.1f, %.1f)  hdg %.1f",
-                    i + 1, sampleTurretDeg[i], sampleX[i], sampleY[i], sampleHeadingDeg[i]));
-        }
+        telemetry.addData("SWEEP", "%d captured   (%s)", samples, captureNote);
         if (samples < 2) return;
         telemetry.addData("SPREAD", "%.2f in, heading %.1f deg",
                 positionSpread(), headingSpread());
@@ -510,11 +509,8 @@ public class TagPoseTest extends OpMode {
         // tag noise until 8 captures at one angle came back at 0.6 in.
         double span = turretSpan();
         if (span < 5.0) {
-            telemetry.addLine("    ^ all within " + String.format("%.1f", span)
-                    + " deg of turret: this is the NOISE FLOOR.");
-            telemetry.addLine("      Compare it against a sweep across the travel. Sweep much");
-            telemetry.addLine("      bigger = the turret chain. Similar = tag noise, and no");
-            telemetry.addLine("      amount of turret work or camera moving will help.");
+            telemetry.addLine(String.format(
+                    "    ^ all within %.1f deg of turret: NOISE FLOOR, not the chain.", span));
             return;
         }
 
@@ -530,97 +526,78 @@ public class TagPoseTest extends OpMode {
         // slope IS r - 1, and the intercept is the real heading.
         double[] fit = headingFit();
         double slope = fit[0], residual = fit[2];
-        telemetry.addLine();
-        telemetry.addData("Heading vs turret", "slope %+.4f deg/deg over %.0f deg of sweep",
-                slope, span);
-        telemetry.addData("Fit residual", "%.2f deg   (noise floor measured alone: run"
-                + " captures at ONE angle)", residual);
-        if (Math.abs(slope) > 0.01) {
-            telemetry.addData("=> implies TICKS_PER_DEGREE", "%.2f   (now %.2f)",
-                    Turret.TICKS_PER_DEGREE / (1 + slope), Turret.TICKS_PER_DEGREE);
-        }
-        telemetry.addLine("    Clean line (residual near the noise floor) = SCALE error;");
-        telemetry.addLine("    trust the number above. Big residual = NOT a simple scale");
-        telemetry.addLine("    error -- backlash or a nonlinearity. Capture all one");
-        telemetry.addLine("    direction, then mixed: if only mixed scatters, it's backlash.");
+        telemetry.addData("SLOPE", "%+.4f deg/deg over %.0f deg | residual %.2f deg%s",
+                slope, span, residual,
+                Math.abs(slope) > 0.01
+                        ? String.format(" | TPD %.1f", Turret.TICKS_PER_DEGREE / (1 + slope))
+                        : "");
+        // How to read SLOPE: residual near the noise floor means a clean scale
+        // error and the TPD figure is trustworthy; a big residual means it is not
+        // a simple scale error (backlash or a nonlinearity), and capturing all
+        // one direction versus mixed separates those. Kept as a comment rather
+        // than four telemetry lines -- see showTelemetry() on why.
     }
 
+    /**
+     * SHORT ON PURPOSE. The Driver Station telemetry pane does not scroll -- it
+     * shows what fits and silently drops the rest. The first version of this
+     * screen put the TRUTH editor and the Error line at the BOTTOM of about 20
+     * lines, so Shane ran the whole test on 2026-11-13 without ever seeing
+     * either one, dialled in nothing, and got no error read-out.
+     *
+     * So: the thing you STEER and the thing you READ go first, blocking warnings
+     * above them, and the diagnostics get one line each. If you add a line here,
+     * take one out.
+     */
     private void showTelemetry(int tagsSeen, int withPose, double dt) {
-        BuildInfo.show(telemetry);
+        // Blocking problems first -- nothing below means anything if these fire.
         if (!turret.isHomed()) {
-            telemetry.addLine(">>> TURRET NOT HOMED -- press Y. Every fix below is");
-            telemetry.addLine("    wrong by however far the turret is from its true zero.");
+            telemetry.addLine(">>> TURRET NOT HOMED -- press Y. Every fix is wrong until you do.");
         }
-        telemetry.addData("Turret", "%s  %+.1f deg", turret.getState(), turret.getAngle());
-        telemetry.addData("Tags", "%d in frame, %d with a field pose", tagsSeen, withPose);
         if (tagsSeen > 0 && withPose == 0) {
-            telemetry.addLine(">>> Tags seen but NO field pose: the processor is not");
-            telemetry.addLine("    configured for localization. TagLocalizer can't run.");
+            telemetry.addLine(">>> Tags seen but NO field pose: processor not configured");
+            telemetry.addLine("    for localization. TagLocalizer cannot run. Tell Claude.");
         }
-        telemetry.addData("Frames", "%d with a fix, %d with tags but no pose",
-                framesWithFix, framesWithoutPose);
-        telemetry.addLine();
 
-        if (lastFix == null) {
-            telemetry.addLine("No fix yet. Point the camera at a hive cell's tags.");
-            showTruthEditor();
+        showTruthEditor();
+
+        Pose v = lastFix == null ? null : lastFix.robot;
+        if (v != null && !Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y)) {
+            double ex = v.getX() - TRUTH_X;
+            double ey = v.getY() - TRUTH_Y;
+            telemetry.addData("ERROR  <-- write this down", "%.2f in   dx %+.2f  dy %+.2f%s",
+                    Math.hypot(ex, ey), ex, ey,
+                    Double.isNaN(TRUTH_HEADING_DEG) ? ""
+                            : String.format("   hdg %+.1f deg", TurretGeometry.wrapDegrees(
+                                    Math.toDegrees(v.getHeading()) - TRUTH_HEADING_DEG)));
+        } else if (v != null) {
+            telemetry.addLine("ERROR: set TRUTH above (triggers) and it appears here.");
+        }
+
+        if (v == null) {
+            telemetry.addLine("NO FIX yet -- point the camera at a hive cell's tags.");
+            // The counters only earn screen space here: "tags seen, never a pose"
+            // is the localization-not-configured symptom, and "fixes seen, none
+            // now" means it worked a moment ago and the tags have just gone.
+            telemetry.addData("Tags", "%d in frame, %d with a pose   (%d fixes, %d poseless)",
+                    tagsSeen, withPose, framesWithFix, framesWithoutPose);
             showSweep();
             telemetry.addData("Loop", "%.0f ms", dt * 1000);
             telemetry.update();
             return;
         }
 
-        Pose v = lastFix.robot;
-        telemetry.addData("FIX  (vision)", "(%.1f, %.1f) %.1f deg", v.getX(), v.getY(),
+        telemetry.addData("FIX", "(%.1f, %.1f) %.1f deg", v.getX(), v.getY(),
                 Math.toDegrees(v.getHeading()));
-        Pose p = follower.getPose();
-        telemetry.addData("Odometry", "(%.1f, %.1f) %.1f deg   [from %s]", p.getX(), p.getY(),
-                Math.toDegrees(p.getHeading()), poseOrigin);
-        // "off centre" is the one that matters most: past MAX_TAG_BEARING_DEG the
-        // filter throws the fix away, because an edge-of-frame tag measured 4x
-        // worse than a centred one (2026-11-13).
-        telemetry.addData("Fix quality",
-                "%d tags, spread %.2f in, range %.1f in, %.0f deg off centre, %.0f ms old",
-                lastFix.tagsUsed, lastFix.spread, lastFix.tagRange, lastFix.tagBearingDeg,
-                lastFixAgeMs);
-        telemetry.addData("Turret base", "level err %.1f deg, floor err %.2f in, hive %s%s",
-                lastFix.turret.levelErrorDeg, lastFix.turret.floorError, lastFix.turret.hiveTilt,
-                lastFix.turret.believable ? "" : "   <-- NOT BELIEVABLE");
-        // Which rule would stop this correction being applied. Parked and settled
-        // it should read ACCEPT; ROBOT_MOVING while stationary means the pose is
-        // jittering, TURRET_MOVING means the turret has not settled.
-        //
-        // TOO_FAR_FROM_ODOMETRY only means anything once odometry has a real
-        // origin. Before that it is an artifact of the placeholder, which is
-        // exactly what made this line confusing the first time out.
-        telemetry.addData("Filter", "%s   (speed %.1f in/s, turn %.1f deg/s)",
-                lastVerdict, speed, turnRate);
-        if (lastVerdict == VisionPoseFilter.Verdict.TOO_FAR_FROM_ODOMETRY) {
-            telemetry.addLine(String.format(
-                    "    ^ fix is %.0f in from odometry (rule: max %.0f). Odometry came",
-                    Math.hypot(v.getX() - p.getX(), v.getY() - p.getY()),
-                    VisionPoseFilter.MAX_JUMP));
-            telemetry.addLine("      from " + poseOrigin + " -- judge the FIX against the tape,");
-            telemetry.addLine("      not against this, unless TRUTH_X/Y is set.");
-        }
-
-        if (!Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y)) {
-            double ex = v.getX() - TRUTH_X;
-            double ey = v.getY() - TRUTH_Y;
-            telemetry.addLine();
-            telemetry.addData("Error  <-- THE ANSWER", "%.1f in   (dx %+.1f, dy %+.1f)",
-                    Math.hypot(ex, ey), ex, ey);
-            if (!Double.isNaN(TRUTH_HEADING_DEG)) {
-                telemetry.addData("Heading error", "%+.1f deg", TurretGeometry.wrapDegrees(
-                        Math.toDegrees(v.getHeading()) - TRUTH_HEADING_DEG));
-            }
-        } else {
-            telemetry.addLine();
-            telemetry.addLine("Set TRUTH below to see the error directly.");
-        }
-        showTruthEditor();
+        // "off centre" matters most: past MAX_TAG_BEARING_DEG the filter throws the
+        // fix away, because an edge-of-frame tag measured 4x worse (2026-11-13).
+        telemetry.addData("QUALITY", "%d tags, spread %.2f in, %.0f in away, %.0f deg off centre",
+                lastFix.tagsUsed, lastFix.spread, lastFix.tagRange, lastFix.tagBearingDeg);
+        telemetry.addData("FILTER", "%s%s", lastVerdict,
+                lastFix.turret.believable ? "" : "   TURRET BASE NOT BELIEVABLE");
+        telemetry.addData("hive tilt", "%s   |   turret %+.1f   |   loop %.0f ms",
+                lastFix.turret.hiveTilt, turret.getAngle(), dt * 1000);
         showSweep();
-        telemetry.addData("Loop", "%.0f ms", dt * 1000);
         telemetry.update();
     }
 
