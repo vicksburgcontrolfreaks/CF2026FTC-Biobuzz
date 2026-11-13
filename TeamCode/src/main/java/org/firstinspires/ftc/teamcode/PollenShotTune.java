@@ -128,6 +128,13 @@ public class PollenShotTune extends OpMode {
 
     private final AutoMenu menu = new AutoMenu();
     private final AutoMenu.Choice<Alliance> alliance = menu.add("Alliance", Alliance.RED, Alliance.BLUE);
+    // Where the aim comes from. The option order here is NOT the default -- init()
+    // sets that from RobotProfile, because these field initializers run before
+    // RobotProfile.install() has had a chance to say which robot this is.
+    private final AutoMenu.Choice<TurretDirector.AimSource> aimSource =
+            menu.add("Aim by", TurretDirector.AimSource.CAMERA, TurretDirector.AimSource.ODOMETRY)
+                    .summary("aim %s")
+                    .allowWhen(TurretDirector.AimSource::isAvailable);
 
     private RobotHardware hw;
     private Follower follower;
@@ -136,7 +143,7 @@ public class PollenShotTune extends OpMode {
     private Deflector deflector;
     private Turret turret;
     private TurretCamera camera;
-    // Camera-only until TurretDirector.USE_ODOMETRY_AIM is turned on; see that class.
+    // Camera or odometry, per the "Aim by" menu row; see TurretDirector.AimSource.
     private TurretDirector aim;
     private FieldAprilTags.Cell targetCell;
     private boolean turretParked = false;
@@ -177,6 +184,9 @@ public class PollenShotTune extends OpMode {
     @Override
     public void init() {
         RobotProfile.install();   // this robot's turret and camera numbers
+        // AFTER install(), so the row starts on this robot's default. The drive
+        // team can still change it; start() is what makes the pick live.
+        aimSource.set(TurretDirector.AimSource.fromDefault());
         hw = new RobotHardware();
         hw.init(hardwareMap, false);   // TurretCamera owns the webcam
         follower = Constants.createFollower(hardwareMap);
@@ -237,6 +247,13 @@ public class PollenShotTune extends OpMode {
 
     @Override
     public void start() {
+        // Apply the menu pick ONCE here, not every loop: USE_ODOMETRY_AIM is also
+        // editable live in Panels, and rewriting it each loop would stomp that.
+        // NOTE this pose is an ASSUMPTION -- field centre, facing away from the
+        // drivers -- and nothing measures it. Odometry aiming from here is only
+        // meaningful if the robot really is sitting there, which is why "aim by
+        // odometry" is a deliberate pick in this op mode and not the default.
+        aimSource.get().apply();
         follower.setStartingPose(new Pose(FieldConstants.CENTER, FieldConstants.CENTER,
                 alliance.get().awayFromDriversHeading()));
         targetCell = cellFor(true);

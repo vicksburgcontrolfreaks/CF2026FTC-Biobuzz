@@ -69,10 +69,61 @@ public class TurretDirector {
      * false = camera-only aiming, what TurretAim did alone.
      *
      * DEFAULT FALSE on purpose: odometry aiming is only as good as the pose, and
-     * the pose wants retuning after the current mechanical changes. Turn it on
-     * per robot once the pose is trustworthy.
+     * the pose wants retuning after the current mechanical changes.
+     *
+     * WHO SETS THIS. RobotProfile sets it per robot at op-mode init -- but that is
+     * only the DEFAULT for the "Aim by" row in the INIT menu, which writes it
+     * again at Start from whatever the drive team picked. See AimSource. Changing
+     * which way a robot aims should not need a redeploy while the pose is still
+     * being chased.
      */
     public static boolean USE_ODOMETRY_AIM = false;
+
+    /**
+     * Where the turret's aim comes from, as the INIT menu offers it.
+     *
+     * CAMERA is the AprilTags: the turret only knows where the hive is when a tag
+     * is in frame. ODOMETRY is the pose: it tracks continuously whether or not a
+     * tag is visible, and is therefore only as good as the pose underneath it.
+     *
+     * This is a menu row and not just the boolean so the Driver Station reads
+     * "camera (tags)" instead of "false", which nobody should have to translate
+     * in the pits.
+     */
+    public enum AimSource {
+        CAMERA("camera (tags)"),
+        ODOMETRY("odometry (pose)");
+
+        private final String label;
+
+        AimSource(String label) {
+            this.label = label;
+        }
+
+        /** What RobotProfile's default works out to. Read AFTER RobotProfile.install(). */
+        public static AimSource fromDefault() {
+            return USE_ODOMETRY_AIM ? ODOMETRY : CAMERA;
+        }
+
+        /**
+         * Can this robot actually do it? ODOMETRY needs TURRET_OFFSET_X/Y measured
+         * -- without them TurretDirector falls straight back to the camera, so
+         * offering the option would be a lie. Feed this to the menu's allowWhen().
+         */
+        public boolean isAvailable() {
+            return this != ODOMETRY || TurretGeometry.forRobot().isConfigured();
+        }
+
+        /** Make this the live choice. Call once at Start, not every loop. */
+        public void apply() {
+            USE_ODOMETRY_AIM = this == ODOMETRY;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
 
     /** Let the camera correct the odometry aim angle. Only read when aiming from odometry. */
     public static boolean USE_CAMERA_TRIM = true;

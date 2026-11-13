@@ -102,12 +102,23 @@ public final class RobotProfile {
         // 1 / (servo deg/sec * Turret.kP), and both differ between robots.
         AimLead.LEAD_SEC = 0.12;
 
-        // THE SWITCH. false = camera-only aiming, which is what has been driven in
-        // matches. Odometry aiming is only as good as the pose, and 6494's is due a
-        // retune after the current mechanical changes -- so flip this to true once
-        // the pose is trustworthy again, and check the Aim line on the Driver
-        // Station says "odometry" rather than "camera". See TurretDirector.
-        TurretDirector.USE_ODOMETRY_AIM = true;
+        // THE DEFAULT for the "Aim by" row in the INIT menu -- no longer the final
+        // word, so it can be overridden at the robot without a redeploy.
+        //
+        // false = camera/tags, which is what has been driven in matches.
+        //
+        // Turned ON 2026-11-11 (e9b9bc0) and never driven. Turned back OFF
+        // 2026-11-12: at Start the turret aimed from the pose, which in TeleOp and
+        // Pollen Shot Tune FALLS BACK TO FIELD CENTRE when no auto handed one over.
+        // Aiming at the hive from a pose the robot isn't at put the command outside
+        // the +/-90 travel, so it clipped and sat pinned on a soft limit, ignoring
+        // the tags (Shane, at the robot). Odometry aiming is only as good as the
+        // pose, and 6494's drift is the open item -- see
+        // docs/turret-odometry-aim-status.md.
+        //
+        // To try it again: pick "odometry (pose)" in the INIT menu rather than
+        // editing this, and confirm the Turret telemetry line says odometry.
+        TurretDirector.USE_ODOMETRY_AIM = false;
     }
 
     // ---- 5618 ---------------------------------------------------------------
@@ -142,9 +153,11 @@ public final class RobotProfile {
         // Test, watch Aim error PEAK, stop when it stops improving.
         AimLead.LEAD_SEC = 0.0;
 
-        // Same switch. 5618 also needs TURRET_OFFSET_X/Y measured before this can do
-        // anything -- TurretDirector falls back to the camera while the geometry is
-        // NaN and says so, so turning it on early is harmless but pointless.
+        // Same default. 5618 also needs TURRET_OFFSET_X/Y measured before this can
+        // do anything -- TurretDirector falls back to the camera while the geometry
+        // is NaN and says so. The INIT menu won't even offer "odometry (pose)" on a
+        // robot whose geometry is unmeasured, so on 5618 this row is camera-only
+        // until the offsets are written above.
         TurretDirector.USE_ODOMETRY_AIM = false;
     }
 

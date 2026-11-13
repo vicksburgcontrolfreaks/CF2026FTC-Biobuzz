@@ -66,6 +66,10 @@ import java.util.List;
  *                the other alliance's hive.
  *   Scoring / Audience - that cell only.
  *
+ * AIM BY (INIT menu): camera/tags or odometry/pose. RobotProfile sets the default
+ * per robot; this row is how you change it without a redeploy. See
+ * TurretDirector.AimSource.
+ *
  * TURRET: aims at our cell by camera whenever it's in view (TurretAim). Not
  * homed at Start (no auto since power-up)? It homes itself -- so the turret must
  * start roughly forward, same rule as Turret Test.
@@ -113,6 +117,15 @@ public class DriveTeleOp extends OpMode {
     private final AutoMenu.Choice<AimCell> aimCell =
             menu.add("Aim at", AimCell.CAMERA, AimCell.SCORING, AimCell.AUDIENCE, AimCell.BY_SIDE)
                     .allowWhen(c -> c != AimCell.BY_SIDE || startPose.get() == StartPose.FROM_AUTO);
+    // WHERE the aim comes from, as opposed to aimCell's WHICH CELL. The option
+    // order here is NOT the default -- init() sets that from RobotProfile, because
+    // these field initializers run before RobotProfile.install() knows the robot.
+    // Deliberately not restricted to FROM_AUTO: picking odometry off a FACING_AWAY
+    // pose is a legitimate experiment, and init_loop() warns rather than forbids.
+    private final AutoMenu.Choice<TurretDirector.AimSource> aimSource =
+            menu.add("Aim by", TurretDirector.AimSource.CAMERA, TurretDirector.AimSource.ODOMETRY)
+                    .summary("aim %s")
+                    .allowWhen(TurretDirector.AimSource::isAvailable);
 
     private RobotHardware hardware;
     private Follower follower;
@@ -151,6 +164,9 @@ public class DriveTeleOp extends OpMode {
         // This robot's turret and camera numbers, before anything aims. Throws if
         // the config name does not say which robot this is -- see RobotProfile.
         RobotProfile.install();
+        // AFTER install(), so the row starts on this robot's default. start() is
+        // what makes the pick live.
+        aimSource.set(TurretDirector.AimSource.fromDefault());
 
         hardware = new RobotHardware();
         hardware.init(hardwareMap, false);   // TurretCamera owns the webcam
@@ -213,6 +229,10 @@ public class DriveTeleOp extends OpMode {
 
     @Override
     public void start() {
+        // Apply the menu pick ONCE here, not every loop: USE_ODOMETRY_AIM is also
+        // editable live in Panels, and rewriting it each loop would stomp that.
+        aimSource.get().apply();
+
         Pose start;
         boolean poseFromAuto = startPose.get() == StartPose.FROM_AUTO && PoseHandoff.has();
         if (poseFromAuto) {
