@@ -707,3 +707,145 @@ answer on 5618).
 
 Steps, per Shane: Shot Map nudge 10 RPM, rungs 25. Pollen Shot Tune's
 flywheel step went 50 -> 25, fine stays 10.
+
+---
+
+# 2026-11-13, at school: the tag-count scare was never the camera
+
+Shane on the robot. Short version: **detection was fine the whole time.** The
+localization chain was throwing away 3 of every 4 good tags, silently, and two
+sessions of camera archaeology were chasing it.
+
+## READ THE RIGHT FIELD. This cost us half a session.
+
+Two numbers on Tag Pose Test look like "how many tags" and mean different things:
+
+| field | is | answers |
+|---|---|---|
+| `TAGS` | tags the DECODER read off the image | is the CAMERA working? |
+| `QUALITY`'s "N tags" | `lastFix.tagsUsed`, tags that survived into the fix | is the CHAIN working? |
+
+`TAGS` read **4** while `QUALITY` bounced **1-2**. Claude had said to read
+QUALITY for the tag count, which sent the whole investigation at the camera.
+Shane caught it by noticing they disagreed.
+
+There is now a **`FUNNEL`** line so this cannot happen again:
+
+    FUNNEL  decoded 4 -> posed 4 -> believable 1 -> used 1
+
+and `TAGS` shows each tag's own z plus why it was dropped:
+
+    TAGS 4: 34@+12 z+3.4   35@+8 z+4.5 FLOOR   36@+2 z+5.1 FLOOR   37@-2 z+3.8
+
+## WHERE THE TAGS GO: the floor test, and it is not protecting anything
+
+`TagLocalizer.solve()` returns null for any tag failing
+
+    believable = levelErrorDeg <= LEVEL_TOLERANCE_DEG (8) && floorError <= FLOOR_TOLERANCE (4)
+
+Measured at (57, 9), all four tags of RED_AUDIENCE: z **+3.4, +4.5, +5.1, +3.8**.
+Same sign every tag, mean ~+4.2, against a 4 in limit. So tags scatter across
+the threshold and get dropped one at a time with nothing on screen.
+
+**DO NOT RAISE `FLOOR_TOLERANCE`.** With a systematic +3.5 to +4 offset it has no
+margin left to catch what it is for -- a flipped single-tag solve, which misses
+by ~HIVE_SWING_DEG. Raising it turns a visible bug into an invisible one. Fix
+the offset.
+
+`combine()` is innocent: the "combine() dropped outliers" flag never fired.
+
+## THE CAMERA SETTINGS: measured at last, and 6 ms was right
+
+Swept live on gamepad 2 (new; see below) at (57, 9):
+
+- **6 ms / gain 250: 4 tags.** Degrades as exposure rises, gone by ~14 ms.
+- **AUTO: unstable, and diagnostically so.** Jogging the turret flashed 3-4
+  tags; stopping settled to 1, consistently. Blur never helps a decoder, so
+  that is the AE loop CONVERGING -- a bright background meters exposure down,
+  and these tags are on a downward face in their own cell's shadow. Motion kept
+  AE chasing, which is why moving looked better.
+
+So `def6062`'s values were **correct**; only its stated reason ("auto was why we
+could hold one tag") was wrong. Manual 6 ms is now the default with the
+measurement behind it, not an assumption. Claude's "auto was the known-good
+config, 6 ms is the regression" was wrong and is retracted.
+
+Decimation did not matter: 4 tags at the detector's own default.
+
+## THE VERTICAL CHAIN: three of four numbers now CONFIRMED, and z still +3.5
+
+| number | value | status 2026-11-13 |
+|---|---|---|
+| `CAMERA_PITCH_DEG` | 38 | **CLEARED.** `lvl` reads +0.8..+1.3 deg. Was ~3 at pitch 35, so 35->38 was a GOOD change. A 4 in z error at 60 in would need ~3.8 deg. |
+| `CAMERA_UP` | 14.5 | **CONFIRMED**, tape, vertically to the lens from the tiles. |
+| tag centre height | 49.70 modeled | **CONFIRMED** 49-50, tape, repeatedly. Claude kept re-asking for a measurement Shane had already given; that is on Claude. |
+| `CAMERA_FORWARD` | 4.5 | Cannot cause a z error. The camera pose is a RIGID transform -- position in world axes, THEN the 38 deg rotation -- so a forward-offset error lands in y, not z. (The version that would bite: measuring 4.5 ALONG the tilted body, which implies a lens at 17.3, ruled out by the tape above.) |
+
+z measured **+3.1..+4.0** with level at ~1 deg. So it is a flat vertical offset
+with no home left in the mount numbers.
+
+### The surviving theory: RANGE SCALE, ~10% short
+
+The tag sits ~35 deg above the lens at that spot. Range reading SHORT puts the
+camera closer to the tag, therefore HIGHER:
+
+    3.5 / sin(35 deg) ~ 6 in of range error at ~60 in  ->  about 10% short
+
+Which is exactly the "range reads ~10% short" figure from the five-spot run that
+this document told everyone to stop reasoning from. **It may have been real; what
+was wrong was attributing it to pose ambiguity.** Prime suspect is the camera
+CALIBRATION (focal length), and note `PIN_RESOLUTION` was set **false** during
+this session, so the C270 may be streaming a size the SDK has no calibration for.
+Put the pin back to 640x480 before testing this.
+
+**THE TEST, not yet run, and it is cheap:** read per-tag z at two clearly
+different ranges. **z grows with range -> scale error, confirmed. z flat -> not
+scale**, and the vertical chain needs a new idea. The per-tag z comes from
+`turretFixOf()`, which runs BEFORE the believable test, so every tag reports its
+z even while being dropped -- no tolerance needs touching to collect this.
+
+## WHY THIS DOES NOT BLOCK THE ODOMETRY RE-ANCHOR
+
+Checked in the code, not assumed: **`WallFix` is immune to all of the above.**
+
+- `TagPoseTest.solveWall()` calls `turretFixOf()` and reads **only
+  `tf.hiveTilt`**. It never checks `believable`, so all four tags reach the wall
+  fix today, floor test or no floor test.
+- `WallFix` works from **bearing only** -- `ftcPose` -> bearing, plus pitch/yaw
+  to rotate it and `CAMERA_FORWARD`/`CAMERA_LEFT` for the lever arm. **No
+  `CAMERA_UP`, no range, no tag height.**
+
+So the z bug blocks **full `TagLocalizer` pose localization** and nothing else.
+Shane's call: move on, and spend no more time on being right about z for its own
+sake. The one cheap thing left is the two-range z reading above, because a 10%
+range error would also explain the ~7 in position error chased across two
+sessions.
+
+## NEW TOOLING IN TAG POSE TEST (all read-only)
+
+- **`FUNNEL`** line: decoded -> posed -> believable -> used, plus a flag when
+  `combine()` is the one dropping tags.
+- **`TAGS`** line: per tag `id@bearing z±n`, with `FLOOR` / `LVL` naming the
+  failed test, and `(nopose)` / `(nofix)` for the other two failure modes.
+- **Gamepad 2 camera controls, live:** A auto/manual, D-pad U/D exposure +/-2 ms,
+  L/R gain +/-25, X decimation (detector default -> 1 -> 2 -> 3). Exposure used
+  to LATCH after one write, so every value cost a redeploy, which is why nobody
+  ever swept it.
+- **`PIN_RESOLUTION`** switch, read at INIT (change it and re-init).
+- Two traps found in the SDK source, both the same shape and both worth knowing:
+  `ExposureControl.Mode.Auto` is SINGLE-TRIGGER auto exposure (`ContinuousAuto`
+  is the continuous one), and "set it to auto" is not "never set it" --
+  `AprilTagProcessorImpl` leaves `needToSetDecimation` false until the setter
+  runs, so an untouched detector keeps a native default this code never sees.
+  Both now have a genuinely untouched path.
+
+## NEXT
+
+1. **`DriveTeleOp` camera aiming, after pitch 35 -> 38.** Still the one
+   outstanding MATCH risk. Set **`Aim by` = `CAMERA`** at INIT, `Aim test` =
+   `NORMAL`. Odometry OFF on purpose: in ODOMETRY mode the camera only supplies
+   a trim, so a camera error is absorbed and cannot be read -- and the pose is
+   6494's known-bad component. `TurretAim` line 543 uses `CAMERA_PITCH_DEG` to
+   build the bearing, so this is exactly the path the pitch change touched.
+2. Put `PIN_RESOLUTION` back to true.
+3. The two-range z reading, whenever convenient.

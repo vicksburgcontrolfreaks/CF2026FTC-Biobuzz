@@ -117,12 +117,32 @@ import java.util.List;
  * that the turret base came out level and on the floor -- it does NOT mean the
  * fix is accurate.
  *
- * CAMERA: 6 ms manual exposure and gain 250, matching TurretCamera, with
- * DECIMATION 1 instead of 2 -- lower decimation buys detection range on a small
- * tag at a CPU cost this bench test can afford. It used to run AUTO exposure at
- * the default decimation and could only hold ONE tag at a time, and a one-tag
- * fix is the unreliable kind: planar pose ambiguity put z at ~3 in on one tag
- * and ~0 on four.
+ * CAMERA: live on GAMEPAD 2, because this has now been got wrong twice by
+ * assumption and never once measured.
+ *   A            auto <-> manual exposure
+ *   D-pad U / D  exposure +/- 2 ms
+ *   D-pad L / R  gain +/- 25
+ *   X            decimation: detector default -> 1 -> 2 -> 3 -> default
+ *
+ * The history, because both wrong answers looked right:
+ *   - AUTO (the original) is UNSTABLE here. Shane, 2026-11-13: jogging the
+ *     turret flashes 3-4 tags and stopping it settles to 1, consistently. Blur
+ *     never helps a decoder, so that is the AE loop converging -- a bright
+ *     background meters the exposure DOWN, and these tags are on a downward
+ *     face in their own cell's shadow. Moving keeps AE chasing, which is why
+ *     motion looked better.
+ *   - 6 ms / gain 250 (copied from TurretCamera on 2026-11-13) is too DARK.
+ *     Those values buy motion-blur immunity with darkness, which TurretCamera
+ *     needs because it slews. A parked bench test has no motion to freeze, so
+ *     it paid the darkness for nothing.
+ *
+ * So the target is manual, LONGER than 6 ms, at the lowest gain that holds the
+ * tags. A parked robot can afford a long exposure. Do not transplant whatever
+ * wins here into TurretCamera unchanged -- that one really does need to freeze
+ * motion.
+ *
+ * Why the tag count matters at all: a one-tag fix is the unreliable kind.
+ * Planar pose ambiguity put z at ~3 in on one tag and ~0 on four.
  */
 @Configurable
 @TeleOp(name = "Tag Pose Test", group = "Test")
@@ -170,7 +190,12 @@ public class TagPoseTest extends OpMode {
     // So AUTO is the default again. Manual is still reachable, live, on gamepad
     // 2, because "what exposure do these tags actually want" is worth knowing
     // and has never been measured -- only assumed, twice, in both directions.
-    public static boolean FORCE_MANUAL_EXPOSURE = false;
+    // MEASURED on the robot, Shane 2026-11-13, sweeping this live at (57, 9):
+    // 6 ms decodes 4 tags, and it DEGRADES as exposure rises (gone by ~14 ms).
+    // Auto is worse still and unstable. So manual 6 ms is the measured best, not
+    // an assumption any more -- and the detection scare was never the camera:
+    // 4 tags decode fine, the localization chain drops them (see FUNNEL).
+    public static boolean FORCE_MANUAL_EXPOSURE = true;
     public static int EXPOSURE_MS = 6;
     public static int CAMERA_GAIN = 250;
     /**
@@ -192,7 +217,7 @@ public class TagPoseTest extends OpMode {
      * Read at INIT (the portal is built once), so change it and re-init -- it is
      * NOT live like the exposure controls. See the note at the builder.
      */
-    public static boolean PIN_RESOLUTION = true;
+    public static boolean PIN_RESOLUTION = false;
     public static int RESOLUTION_WIDTH = 640;
     public static int RESOLUTION_HEIGHT = 480;
 
@@ -305,6 +330,8 @@ public class TagPoseTest extends OpMode {
 
     /** The per-tag line, rebuilt each loop. */
     private String perTag = "";
+    /** How many of this frame's tags passed the believable test, from describe(). */
+    private int believableTags = 0;
 
     private String decimationNote() {
         if (appliedDecimation < 0) return "?";
@@ -323,6 +350,7 @@ public class TagPoseTest extends OpMode {
      * looking at decides where to go next, and guessing wrong costs a session.
      */
     private String describe(List<AprilTagDetection> detections) {
+        believableTags = 0;
         if (detections.isEmpty()) return "none decoded";
         StringBuilder sb = new StringBuilder();
         for (AprilTagDetection d : detections) {
@@ -331,7 +359,29 @@ public class TagPoseTest extends OpMode {
             if (d.ftcPose != null) {
                 sb.append(String.format("@%+.0f", d.ftcPose.bearing));
             }
-            if (d.robotPose == null) sb.append("(nopose)");
+            if (d.robotPose == null) {
+                sb.append("(nopose)");
+                continue;
+            }
+            // Each tag's OWN z and level, and whether TagLocalizer.solve() will
+            // keep it. This is the line that was missing: solve() returns null for
+            // an unbelievable tag with no explanation, so a frame could decode 4
+            // tags, drop 3 on the floor test, and look like a detection problem.
+            TagLocalizer.TurretFix tf = TagLocalizer.turretFixOf(d);
+            if (tf == null) {
+                sb.append("(nofix)");
+                continue;
+            }
+            sb.append(String.format(" z%+.1f", tf.z));
+            if (!tf.believable) {
+                // Say WHICH test failed: z past FLOOR_TOLERANCE and level past
+                // LEVEL_TOLERANCE_DEG mean different things went wrong.
+                sb.append(tf.floorError > TagLocalizer.FLOOR_TOLERANCE ? " FLOOR" : "")
+                  .append(tf.levelErrorDeg > TagLocalizer.LEVEL_TOLERANCE_DEG
+                          ? String.format(" LVL%.0f", tf.levelErrorDeg) : "");
+            } else {
+                believableTags++;
+            }
         }
         return sb.toString();
     }
@@ -953,6 +1003,16 @@ public class TagPoseTest extends OpMode {
         // the whole point is to watch the tag list respond as you change settings.
         telemetry.addData("CAM", "%s | dec %s | %s", cameraNote, decimationNote(), resolutionNote);
         telemetry.addData("TAGS", "%d: %s", tagsSeen, perTag);
+        // THE FUNNEL, and the reason this line exists: "4 tags on TAGS but 1 on
+        // QUALITY" is the whole diagnosis, and until 2026-11-13 nothing showed the
+        // middle of it. decoded -> had a field pose -> believable -> kept by
+        // combine(). Whichever arrow loses the tags is the bug; they have nothing
+        // to do with each other.
+        telemetry.addData("FUNNEL", "decoded %d -> posed %d -> believable %d -> used %d%s",
+                tagsSeen, withPose, believableTags,
+                lastFix == null ? 0 : lastFix.tagsUsed,
+                believableTags > 0 && lastFix != null && lastFix.tagsUsed < believableTags
+                        ? "   <- combine() dropped outliers" : "");
 
         showTruthEditor();
 
