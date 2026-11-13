@@ -89,6 +89,63 @@ public class Launcher {
     private final NectarGuard guard = new NectarGuard();
     private final ElapsedTime clock = new ElapsedTime();
 
+    /**
+     * DIRECT FEED -- the simple mode, and the default since 2026-11-13.
+     *
+     * Shane, during a driver session: "our current state is really more of a do
+     * what we say kind of mode where we hold a button and it does exactly that
+     * for as long as we want it to." The old path does not do that, and five
+     * specific things in it stop the indexer WHILE THE BUTTON IS STILL HELD:
+     *
+     *   1. NO_BALL_SEC -- no 60 RPM dip within 6 s and it zeroes the queue and
+     *      quits, saying "no ball?";
+     *   2. RECOVERING waits for the wheels to be at speed AGAIN after every ball,
+     *      so a flywheel that does not recover parks the indexer indefinitely;
+     *   3. one ball per queue slot with a pause between, so it stutters by design;
+     *   4. DIP_RPM doubles as the ball COUNTER, so a dip that does not match
+     *      reality miscounts shots and feeds back into 1 and 2;
+     *   5. NectarGuard's jam backstop can latch FAULT and allStop() both motors
+     *      until someone presses Y.
+     *
+     * 1-4 are last year's flipper sequence translated onto the indexer motor and
+     * never validated against this mechanism. 5 is real protection but a false
+     * trip costs the rest of the match.
+     *
+     * Also: WE ARE NOT HANDLING NECTAR at the next competition (Shane), so the
+     * nectar detection and gap switching have nothing to do.
+     *
+     * WHAT DIRECT MODE DOES: while fire/allForward is held, run the indexer
+     * forward, continuously, until it is let go. No queue, no dip detection, no
+     * recovery pause, no no-ball timeout. The ONE piece of cleverness kept is a
+     * one-time spin-up gate -- see spunUpThisHold.
+     *
+     * WHY THIS IS A FLAG AND NOT A DELETION: ShooterLogicTest (22 tests) and
+     * NectarGuardTest (24) encode the old behaviour, nectar comes back later in
+     * the season, and this is the match-critical path with a competition close --
+     * so it reverts in one line at the event. Set false for the old behaviour.
+     */
+    public static boolean DIRECT_FEED = true;
+
+    /**
+     * Direct mode only. The flywheel stops when the fire button is released
+     * (Shane's call, 2026-11-13: "stop when released", chosen over the latch).
+     *
+     * Y still works, and is now a PRE-SPIN rather than an on/off latch: spin up
+     * early and the next press feeds with no wait, since the gate below is
+     * already satisfied. That buys back most of what stop-on-release gives up.
+     */
+    private boolean flywheelPreSpin = false;
+
+    /**
+     * Direct mode only. True once the wheels have reached speed during THIS hold.
+     *
+     * The gate is one-time on purpose. Holding the first ball until the wheels
+     * are up stops a weak first shot; re-checking per ball is item 2 above, which
+     * is the behaviour we are removing. So once it latches, the indexer keeps
+     * running until the button is released no matter what the wheels do.
+     */
+    private boolean spunUpThisHold = false;
+
     private boolean flywheelOn = false;
     private Gap appliedGap = null;
     private Motion indexerCmd = null;    // null = unknown, forces the next write
@@ -112,8 +169,20 @@ public class Launcher {
         applyGap(guard.gap());
     }
 
-    /** Y. On/off (B/RT also turn it on). After a FAULT, the first press clears it and spins back up. */
+    /**
+     * Y. In DIRECT_FEED mode this is a PRE-SPIN toggle, not an on/off latch: the
+     * flywheel runs while fire is held regardless, and this holds it on in
+     * between so the next press feeds with no spin-up wait. Pressing it while
+     * pre-spun turns the pre-spin back off.
+     *
+     * In the old mode it is the on/off latch it always was, and after a FAULT the
+     * first press clears the fault and spins back up.
+     */
     public void toggleFlywheel() {
+        if (DIRECT_FEED) {
+            flywheelPreSpin = !flywheelPreSpin;
+            return;
+        }
         if (guard.isFault()) {
             guard.reset();
             flywheelOn = true;
@@ -124,6 +193,10 @@ public class Launcher {
 
     /** Auto: flywheel on/off directly (pre-spin before a launch spot, off after the last one). */
     public void setFlywheel(boolean on) {
+        if (DIRECT_FEED) {
+            flywheelPreSpin = on;
+            return;
+        }
         if (!guard.isFault()) flywheelOn = on;
     }
 
@@ -139,6 +212,11 @@ public class Launcher {
         if (guard.isFault()) {
             allStop();
             updateCollector(c);   // the driver keeps the collector even during a jam fault
+            return;
+        }
+
+        if (DIRECT_FEED) {
+            updateDirect(c, now);
             return;
         }
 
@@ -203,6 +281,73 @@ public class Launcher {
             return;
         }
         applyGap(guard.gap());
+    }
+
+    /**
+     * DIRECT MODE. Held means running; released means stopped. That is the whole
+     * contract, and it is the point -- see DIRECT_FEED.
+     *
+     * The Shooter is demoted to a flywheel controller here. We never queue a shot,
+     * so ShooterLogic never enters FEEDING, so ownsIndexer() stays false and it
+     * never touches the indexer. This method is the only thing driving it, which
+     * is why there is no handover dance like the old path has.
+     *
+     * Reading at-speed off getState() == READY is deliberate rather than lazy:
+     * spinUp() walks IDLE -> SPINNING_UP -> READY on exactly the tolerance and
+     * settle time the old path used, so the gate keeps that tuning instead of
+     * inventing a second definition of "at speed".
+     */
+    private void updateDirect(Controls c, double now) {
+        boolean want = c.fire || c.allForward;
+
+        // ---- Flywheel: on while held, or while pre-spun with Y ---------------
+        flywheelOn = want || flywheelPreSpin;
+        if (flywheelOn) {
+            shooter.spinUp(FLYWHEEL_RPM);
+        } else {
+            shooter.stop();
+        }
+        shooter.update();   // writes the wheels only; it never owns the indexer here
+
+        // ---- The one-time spin-up gate --------------------------------------
+        if (!want) {
+            spunUpThisHold = false;   // next hold re-gates
+        } else if (shooter.getState() == ShooterLogic.State.READY) {
+            spunUpThisHold = true;
+        }
+
+        // ---- Indexer ---------------------------------------------------------
+        // Backward wins: it is the jam-clearing control and the driver reaching
+        // for it is already unhappy. Forward needs the gate; nothing else can
+        // stop it while held.
+        Motion wantIndexer;
+        if (c.allBack || c.indexerBack) {
+            wantIndexer = Motion.BACK;
+        } else if (want && spunUpThisHold) {
+            wantIndexer = Motion.FORWARD;
+        } else {
+            wantIndexer = Motion.STOP;
+        }
+        if (wantIndexer != indexerCmd) {
+            if (wantIndexer == Motion.FORWARD) collection.feed();
+            else if (wantIndexer == Motion.BACK) collection.unjam();
+            else collection.stopIndexer();
+            indexerCmd = wantIndexer;
+        }
+        indexerForward = wantIndexer == Motion.FORWARD;
+
+        updateCollector(c);
+
+        // ---- Diagnostics only ------------------------------------------------
+        // The amps still go on the Driver Station because they are how the nectar
+        // threshold was measured and how a jam would be spotted by eye. Nothing
+        // ACTS on them in this mode: no latching fault can take the shooter away
+        // mid-match. The guard is not consulted and not updated, and the pivot
+        // stays wherever start() put it, which is the pollen gap.
+        indexerAmps = indexerForward
+                ? collection.getIndexerCurrentAmps() * (12.0 / Math.max(battery.getVoltage(), 1.0))
+                : 0;
+        lastShotsFired = shooter.getShotsFired();
     }
 
     /** Collector: triggers win over buttons. Runs even during a jam fault. */

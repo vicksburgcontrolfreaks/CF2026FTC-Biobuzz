@@ -38,15 +38,17 @@ import java.util.List;
  *                (was BACK until 2026-11-06; BACK didn't register reliably on 6494)
  *
  * GAMEPAD 2 (operator)                             (all "hold" = only while held)
- *   B  (hold)    FIRE: starts the flywheel if it's off, then one ball at a time
- *                once it's at speed, pausing for it to recover after each shot
+ *   B  (hold)    FIRE. Spins the flywheel up, waits for it to reach speed ONCE,
+ *                then runs the indexer for as long as you hold it. Release and
+ *                both stop. No queue, no pauses, no timeouts -- see
+ *                Launcher.DIRECT_FEED for what was removed and why.
  *   A  (hold)    collector in            X (hold)   collector out
- *   RT (hold)    collector + indexer forward: starts the flywheel and FIRES like
- *                B, with the collector helping push balls up
- *   LT (hold)    collector + indexer backward (the only indexer-backward control)
- *   Y            flywheel on / off. B/RT turn it on; it STAYS on until Y.
- *                (After a JAM fault: clears it and spins up.)
- *                Backward controls (LT, X) never start or stop it.
+ *   RT (hold)    same as B, with the collector helping push balls up
+ *   LT (hold)    collector + indexer backward (the only indexer-backward control).
+ *                Backward WINS over fire -- it is the jam-clearing control.
+ *   Y            PRE-SPIN the flywheel on / off. Not needed to shoot: B and RT
+ *                spin it up themselves. Use it before a volley so the first shot
+ *                does not wait for spin-up. Press again to stop pre-spinning.
  *   Bumpers      unused (2026-11-06: they don't register well on our gamepads;
  *                fire moved RB -> B, indexer-only backward (LB) dropped)
  *   Right stick X  turret by hand -- overrides aiming while held
@@ -99,9 +101,10 @@ import java.util.List;
  *       RT (hold)    collector + indexer forward
  *       LT (hold)    collector + indexer BACKWARD -- backing a ball out is the
  *                    job collector-out would have done, so this one stays
- *       Y            flywheel on / off (and clears a JAM fault)
+ *       Y            PRE-SPIN the flywheel on / off
  *       D-pad Up     park the turret / resume aiming
- *       D-pad Down   "a NECTAR is next"
+ *       D-pad Down   "a NECTAR is next" -- DOES NOTHING in DIRECT_FEED mode, and
+ *                    we are not handling nectar at the next competition anyway
  *       D-pad L / R  aim at our AUDIENCE / SCORING cell
  *       Rumble       same three signals, on gamepad 1
  *
@@ -638,8 +641,26 @@ public class DriveTeleOp extends OpMode {
                 launcher.isFlywheelOn() ? "ON" : "off", launcher.getShooter().getNote(),
                 launcher.getShooter().getLeftRpm(), launcher.getShooter().getRightRpm(),
                 launcher.getShooter().getTargetRpm());
-        telemetry.addData("Gap", "%s  | guard %s: %s", launcher.isPivotBlocked() ? "PIVOT BLOCKED" : launcher.getGap(),
-                guard.getState(), guard.getNote());
+        // In DIRECT_FEED the guard is neither updated nor consulted, so printing
+        // its state would be reporting a machine that is not running. Say so
+        // instead -- a stale CLEAR is worse than no number.
+        if (Launcher.DIRECT_FEED) {
+            telemetry.addData("Gap", "%s  | guard OFF (direct feed)",
+                    launcher.isPivotBlocked() ? "PIVOT BLOCKED" : launcher.getGap());
+        } else {
+            telemetry.addData("Gap", "%s  | guard %s: %s",
+                    launcher.isPivotBlocked() ? "PIVOT BLOCKED" : launcher.getGap(),
+                    guard.getState(), guard.getNote());
+        }
+        // The raw operator inputs, as this op mode reads them, and WHICH gamepad
+        // they came from. Added 2026-11-13 after an hour lost to the indexer
+        // running with "nobody holding anything": the fire controls are on
+        // gamepad 2 unless solo mode was picked, a drifting trigger past 0.5
+        // reads as held, and neither was visible anywhere on this screen.
+        telemetry.addData("Op input", "%s | B %s  RT %.2f  LT %.2f  A %s",
+                solo ? "gamepad1 (SOLO)" : "gamepad2",
+                op().b ? "HELD" : "-", op().right_trigger, op().left_trigger,
+                op().a ? "HELD" : "-");
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
         // Which path is aiming, and the distance odometry gives that the camera never

@@ -334,15 +334,26 @@ public abstract class RouteAuto extends OpMode {
         double firing = t - fireStartSec;
         double stepFireSec = route.steps.get(step).fireSec;
         double maxSec = Double.isNaN(stepFireSec) ? LAUNCH_MAX_SEC : stepFireSec;   // per-route override
-        if (LAUNCH_FULL_TIME) {
-            // Fixed time: the Launcher re-queues a shot whenever none is pending,
-            // so it keeps feeding through "no ball" until the time is up.
+        // DIRECT_FEED FORCES THE TIME PATH, and that is not a preference.
+        // Direct feed never queues a shot, so ShooterLogic never enters FEEDING,
+        // never counts a dip, and getShotsFired() stays where it started --
+        // meaning the "shots >= LAUNCH_SHOTS" path below can never be satisfied
+        // and wasNoBall() never fires. It would fall through to the maxSec
+        // timeout and report "TIMED OUT at 0 shots" on a launch that worked
+        // perfectly. Better to take the time path deliberately and say why.
+        boolean countingImpossible = Launcher.DIRECT_FEED;
+        if (LAUNCH_FULL_TIME || countingImpossible) {
+            // Fixed time: with direct feed the indexer simply runs for the whole
+            // window; with the old path the Launcher re-queued a shot whenever
+            // none was pending, so it kept feeding through "no ball" regardless.
+            String counted = countingImpossible
+                    ? "shots not counted (direct feed)" : shots + " shots counted";
             if (firing >= maxSec) {
-                launchNote = String.format("done: %.0f s, %d shots counted", maxSec, shots);
+                launchNote = String.format("done: %.0f s, %s", maxSec, counted);
                 return true;
             }
-            launchNote = String.format("firing %.1f / %.0f s, %d counted  (%s)", firing, maxSec,
-                    shots, launcher.getShooter().getNote());
+            launchNote = String.format("firing %.1f / %.0f s, %s  (%s)", firing, maxSec,
+                    counted, launcher.getShooter().getNote());
             return false;
         }
         if (shots >= LAUNCH_SHOTS) {
