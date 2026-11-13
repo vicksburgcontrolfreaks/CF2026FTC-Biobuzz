@@ -55,9 +55,29 @@ import java.util.List;
  * PITCH are measured; LEFT and YAW are still assumed 0. On 5618 all five are
  * inherited guesses.
  *
- * !!!! HiveTags is still mostly MADE-UP: RED_HIVE_X, CELL_ARM and CELL_DROP.  !!!!
- * !!!! HIVE_SWING_DEG was measured 2026-11-11. A tag fix is only as good as    !!!!
- * !!!! those, so check TurretFix.believable before trusting one.               !!!!
+ * WHAT IS AND IS NOT MEASURED (updated 2026-11-13 -- the old version of this
+ * banner still called CELL_ARM and CELL_DROP made up long after Shane had
+ * measured them, and it sent two separate debugging sessions at the hive when
+ * the hive was fine. Keep it current.)
+ *
+ * THE HIVE IS MEASURED. CELL_ARM (14.0, measured and cross-checked against the
+ * manual's back-face spacing), CELL_DROP (1.44, solved from tape against the
+ * levelled pivot), HIVE_SWING_DEG (60), HIVE_PIVOT_HEIGHT (~44) and the cell's
+ * box and face layout all come from Shane's 2026-11-11 session. PIVOT_Y = 72
+ * was confirmed with a tape 2026-11-13. RED_HIVE_X stays at the manual's 59.6
+ * on purpose even though our field measures 58 -- see HiveTags.
+ *
+ * !!!! WHAT IS NOT MEASURED IS ON THE ROBOT, NOT THE HIVE:                     !!!!
+ * !!!!   - the webcam's INTRINSICS. Suspected in two separate findings: a      !!!!
+ * !!!!     ~10% range under-read (2026-11-13 accuracy run) and a bias that     !!!!
+ * !!!!     grows toward the edges of the frame (2026-11-13 sweep). Focal       !!!!
+ * !!!!     length and distortion would explain both.                          !!!!
+ * !!!!   - CAMERA_YAW_DEG, assumed 0. Fixes came back with a steady -2 to -3   !!!!
+ * !!!!     deg heading error, which is what a small yaw looks like.            !!!!
+ * !!!!   - CAMERA_LEFT, assumed 0.                                             !!!!
+ *
+ * Check TurretFix.believable before trusting a fix, and see
+ * docs/turret-odometry-aim-status.md for the measurements behind all of this.
  */
 public class TagLocalizer {
 
