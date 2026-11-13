@@ -11,6 +11,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.ExposureControl;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.GainControl;
 import org.firstinspires.ftc.teamcode.Auton.Waypoints;
 import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
@@ -22,6 +24,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 import java.util.List;
 
 /**
@@ -107,8 +110,12 @@ import java.util.List;
  * that the turret base came out level and on the floor -- it does NOT mean the
  * fix is accurate.
  *
- * Runs on AUTO EXPOSURE, unlike TurretCamera's manual 6 ms. That is fine here
- * and only here: the robot is parked, so there is no motion blur to beat.
+ * CAMERA: 6 ms manual exposure and gain 250, matching TurretCamera, with
+ * DECIMATION 1 instead of 2 -- lower decimation buys detection range on a small
+ * tag at a CPU cost this bench test can afford. It used to run AUTO exposure at
+ * the default decimation and could only hold ONE tag at a time, and a one-tag
+ * fix is the unreliable kind: planar pose ambiguity put z at ~3 in on one tag
+ * and ~0 on four.
  */
 @Configurable
 @TeleOp(name = "Tag Pose Test", group = "Test")
@@ -132,6 +139,18 @@ public class TagPoseTest extends OpMode {
     /** Inches (or degrees) per second while a trigger is held, editing the truth. */
     public static double TRUTH_EDIT_PER_SEC = 15.0;
 
+    // ---- Camera, matching TurretCamera's tuned values ----------------------
+    // This op mode originally ran on AUTO exposure and default decimation, on
+    // the reasoning that a parked robot has no motion blur to beat. That was
+    // wrong for a different reason: exposure and gain also decide whether the
+    // decoder can READ a tag at all, and TurretCamera's 6 ms / gain 250 were
+    // tuned on these tags. Running auto here meant this op mode detected worse
+    // than the match camera does, which is backwards for a bring-up tool.
+    public static int EXPOSURE_MS = 6;
+    public static int CAMERA_GAIN = 250;
+    /** 1, not TurretCamera's 2: detection range matters more than CPU on a bench. */
+    public static int DECIMATION = 1;
+
     private static final int MAX_SAMPLES = 8;
     private static final double STICK_DEADZONE = 0.1;
 
@@ -144,6 +163,39 @@ public class TagPoseTest extends OpMode {
     private VisionPortal portal;
 
     private boolean homingStarted = false;
+
+    // Manual exposure can only be set once the camera is STREAMING, and the mode
+    // change needs a moment to take before the values stick -- same sequence and
+    // same 50 ms settle TurretCamera uses. One-shot; a failure here is not fatal,
+    // it just means auto exposure and worse detection.
+    private boolean exposureSet = false;
+    private String cameraNote = "starting";
+    private final ElapsedTime exposureSettle = new ElapsedTime();
+    private boolean modeSet = false;
+
+    private void setUpExposure() {
+        if (exposureSet || portal.getCameraState() != VisionPortal.CameraState.STREAMING) return;
+        try {
+            ExposureControl exposure = portal.getCameraControl(ExposureControl.class);
+            if (!modeSet) {
+                if (exposure.getMode() != ExposureControl.Mode.Manual) {
+                    exposure.setMode(ExposureControl.Mode.Manual);
+                }
+                exposureSettle.reset();
+                modeSet = true;
+                return;
+            }
+            if (exposureSettle.milliseconds() < 50) return;
+            exposure.setExposure(EXPOSURE_MS, TimeUnit.MILLISECONDS);
+            portal.getCameraControl(GainControl.class).setGain(CAMERA_GAIN);
+            exposureSet = true;
+            cameraNote = String.format("%d ms, gain %d, decimation %d",
+                    EXPOSURE_MS, CAMERA_GAIN, DECIMATION);
+        } catch (RuntimeException e) {
+            exposureSet = true;   // stop retrying
+            cameraNote = "AUTO exposure (manual failed: " + e.getMessage() + ")";
+        }
+    }
 
     // For VisionPoseFilter.check(), which wants to know if the robot is moving.
     private final ElapsedTime loopTimer = new ElapsedTime();
@@ -244,10 +296,17 @@ public class TagPoseTest extends OpMode {
         // THE WHOLE POINT: the localization library (tags know where they are on
         // the field) plus the camera's pose on the turret. Without both of these
         // the SDK leaves detection.robotPose null.
+        // DECIMATION 1, not the default 2. Decimation downsamples before the
+        // detector runs, which is fast but costs detection range on a small tag
+        // -- and ours are 3.25 in. seen from 30-60 in. On 2026-11-13 this op mode
+        // could only hold ONE tag at a time, and a 1-tag fix is the unreliable
+        // kind (planar pose ambiguity: z came out ~3 in on one tag and ~0 on
+        // four). This is a bench test with CPU to spare, so buy the detections.
         processor = TagLocalizer.configure(new AprilTagProcessor.Builder())
                 .setDrawTagOutline(true)
                 .setDrawTagID(true)
                 .build();
+        processor.setDecimation((float) DECIMATION);
         portal = new VisionPortal.Builder()
                 .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
                 // PINNED, and it matters. Our camera is a Logitech C270, and the
@@ -274,10 +333,11 @@ public class TagPoseTest extends OpMode {
 
     @Override
     public void init_loop() {
+        setUpExposure();
         telemetry.addLine("TAG POSE TEST -- read only, writes nothing");
         BuildInfo.show(telemetry);
         telemetry.addData("Robot", WhichRobot.number());
-        telemetry.addData("Camera", portal.getCameraState());
+        telemetry.addData("Camera", "%s   %s", portal.getCameraState(), cameraNote);
         telemetry.addLine();
         telemetry.addLine("Park on a spot you can measure. Point the camera at a hive.");
         telemetry.addLine("At Start, press Y to HOME THE TURRET -- fixes are wrong until you do.");
@@ -319,6 +379,7 @@ public class TagPoseTest extends OpMode {
     public void loop() {
         double dt = loopTimer.seconds();
         loopTimer.reset();
+        setUpExposure();
         follower.update();
 
         if (gamepad1.yWasPressed() && !homingStarted && Turret.isMeasured()) {
@@ -386,7 +447,7 @@ public class TagPoseTest extends OpMode {
             framesWithFix++;
             lastFixAgeMs = (System.nanoTime() - fix.frameNanos) / 1e6;
             lastVerdict = VisionPoseFilter.check(turret.isOnTarget(), speed, turnRate,
-                    lastFixAgeMs, fix.tagRange, fix.tagBearingDeg, pose, fix.robot);
+                    lastFixAgeMs, fix.tagRange, fix.tagBearingDeg, fix.tagsUsed, pose, fix.robot);
         } else if (!detections.isEmpty() && withPose == 0) {
             framesWithoutPose++;
         }

@@ -50,6 +50,23 @@ public class VisionPoseFilter {
      * inaccurate ones. The real fix is a proper camera calibration.
      */
     public static double MAX_TAG_BEARING_DEG = 10;    // deg off the camera centreline
+
+    /**
+     * How many tags a fix needs before it is believed.
+     *
+     * OBSERVED ON 6494, 2026-11-13: with FOUR tags the turret base solved to
+     * z ~ 0, which is where it physically is. With ONE tag it solved to z ~ 3 in.
+     * That is planar pose ambiguity -- a single AprilTag has two nearly equally
+     * good solutions and the solver picks the wrong one a fair fraction of the
+     * time, which also showed up as z swinging -2..+4 in frame to frame.
+     *
+     * combine() already drops a single flipped tag as an outlier when there are
+     * others to out-vote it. It cannot do anything when there is only one, so
+     * the fix has to be refused here instead.
+     *
+     * 2 is the floor; 3 or 4 is better. Raise it if bad fixes still get through.
+     */
+    public static int MIN_TAGS = 2;
     // A fix this far from odometry is more likely a bad frame than a real error.
     public static double MAX_JUMP = 18;               // in
     public static double MAX_HEADING_JUMP = 20;       // deg
@@ -65,6 +82,7 @@ public class VisionPoseFilter {
         FRAME_TOO_OLD,
         TAG_OUT_OF_RANGE,
         TAG_OFF_CENTRE,
+        TOO_FEW_TAGS,
         TOO_FAR_FROM_ODOMETRY
     }
 
@@ -82,15 +100,17 @@ public class VisionPoseFilter {
      *   3. frameAgeMs > MAX_FRAME_AGE_MS                 -> FRAME_TOO_OLD
      *   4. tagRange outside MIN_TAG_RANGE..MAX_TAG_RANGE -> TAG_OUT_OF_RANGE
      *   5. |tagBearingDeg| > MAX_TAG_BEARING_DEG         -> TAG_OFF_CENTRE
+     *   6. tagsUsed < MIN_TAGS                           -> TOO_FEW_TAGS
+     *   7. vision too far from odometry                  -> TOO_FAR_FROM_ODOMETRY
      *   6. vision is more than MAX_JUMP inches from odometry, OR its heading is
      *      more than MAX_HEADING_JUMP degrees off       -> TOO_FAR_FROM_ODOMETRY
      *
-     * Rule 5 was added 2026-11-13 after measuring that a tag at the edge of the
+     * Rules 5 and 6 were added 2026-11-13 after measuring that a tag at the edge of the
      * frame gives a fix about 4x worse than one in the middle -- see
-     * MAX_TAG_BEARING_DEG. It sits before rule 6 because it judges the FIX on its
+     * MAX_TAG_BEARING_DEG. They sit before rule 7 because it judges the FIX on its
      * own, and only rule 6 needs to drag odometry into it.
      *
-     * Careful in rule 6: headings of 359 deg and 1 deg are only 2 deg apart.
+     * Careful in rule 7: headings of 359 deg and 1 deg are only 2 deg apart.
      * (TurretGeometry.wrapDegrees helps.)
      *
      * @param speed          robot speed, in/s   @param turnRate deg/s, either direction
@@ -99,13 +119,14 @@ public class VisionPoseFilter {
      *                       tag (TagLocalizer.Fix.tagBearingDeg)
      */
     public static Verdict check(boolean turretSettled, double speed, double turnRate,
-                                double frameAgeMs, double tagRange, double tagBearingDeg,
+                                double frameAgeMs, double tagRange, double tagBearingDeg, int tagsUsed,
                                 Pose odometry, Pose vision) {
         if (!turretSettled) return Verdict.TURRET_MOVING;
         if (speed > MAX_ROBOT_SPEED || Math.abs(turnRate) > MAX_ROBOT_TURN_RATE) return Verdict.ROBOT_MOVING;
         if (frameAgeMs > MAX_FRAME_AGE_MS) return Verdict.FRAME_TOO_OLD;
         if (tagRange < MIN_TAG_RANGE || tagRange > MAX_TAG_RANGE) return Verdict.TAG_OUT_OF_RANGE;
         if (Math.abs(tagBearingDeg) > MAX_TAG_BEARING_DEG) return Verdict.TAG_OFF_CENTRE;
+        if (tagsUsed < MIN_TAGS) return Verdict.TOO_FEW_TAGS;
         double jump = Math.hypot(vision.getX() - odometry.getX(), vision.getY() - odometry.getY());
         double headingJump = TurretGeometry.wrapDegrees(Math.toDegrees(vision.getHeading() - odometry.getHeading()));
         if (jump > MAX_JUMP || Math.abs(headingJump) > MAX_HEADING_JUMP) return Verdict.TOO_FAR_FROM_ODOMETRY;
