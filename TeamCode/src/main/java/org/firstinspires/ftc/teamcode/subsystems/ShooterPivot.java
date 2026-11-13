@@ -243,13 +243,19 @@ public class ShooterPivot {
     private static void loadRobotNumbers() {
         switch (WhichRobot.get()) {
             case R5618:
-                // RE-MEASURED 2026-11-11, Pivot Jog Test on 5618 (pollen-only
-                // rebuild): open 0.486, closed 0.896, pollen 0.846.
-                // (Was 2026-11-06: stops 0.1268 / 0.65, pollen 0.568, nectar 0.17.)
-                MIN_SAFE_POSITION = 0.486;    // widest (open end)
-                MAX_SAFE_POSITION = 0.896;    // tightest (closed end)
-                OPEN_POSITION = 0.486;
-                POLLEN_POSITION = 0.846;
+                // RE-MEASURED 2026-11-13 after the linkage SLIPPED, Pivot Jog
+                // Test on 5618: open hard stop 0.478, pollen 0.9375. Pollen IS
+                // the tight end of travel now, so it doubles as MAX_SAFE. If the
+                // servo buzzes while holding pollen, it's pressing the stop:
+                // back POLLEN and MAX_SAFE off together by a few thousandths.
+                // Note the open end barely moved (0.486 -> 0.478) but pollen
+                // moved +0.09, so this was not a clean one-tooth slip.
+                // (Was 2026-11-11: open 0.486, closed 0.896, pollen 0.846.
+                //  Was 2026-11-06: stops 0.1268 / 0.65, pollen 0.568, nectar 0.17.)
+                MIN_SAFE_POSITION = 0.478;    // widest (open hard stop)
+                MAX_SAFE_POSITION = 0.9375;   // tightest = the pollen grip
+                OPEN_POSITION = 0.478;
+                POLLEN_POSITION = 0.9375;
                 // NOT MEASURED: robot is pollen-only for now. 0.6 is a placeholder
                 // (Pivot Jog Test's 5618 start spot) -- re-measure before shooting nectar.
                 NECTAR_POSITION = 0.6;
