@@ -613,3 +613,31 @@ convention, and it needs the turret flipped -- back-first puts the camera facing
 the wall. Guards to add: robot stopped + turret settled before accepting, refuse
 an answer on a flower segment or off the field, rumble accept/refuse, and on
 accept reset poseTrusted and clear the trim (TurretDirector.resetPhase).
+
+## Next thread, proposed 2026-11-13: distance -> RPM, and the flywheel offset
+
+Not built. Waiting on answers to the questions below.
+
+- **Localization is not the limit.** Range goes roughly as v^2 at a fixed
+  launch angle, so a distance error of 2 in at 60 in (3%) needs about 1.7%
+  RPM, roughly 40 RPM at 2400. Flywheel consistency (PIDF untuned, dip and
+  recovery between shots) is likely worse than that.
+  `shooting/ShotTable.java` already does distance -> RPM interpolation and
+  is EMPTY.
+- **The flywheel offset depends on TURRET ANGLE, not heading or bearing**,
+  IF the flywheels are fixed to the chassis and fire up through the turret
+  hole onto the deflector (confirm this). A ~0.75 in offset to the robot's
+  left lands sideways on the deflector at turret 0 (left/right aim bias), and
+  fore/aft at +/-90 (long one way, short the other). So the model is: a
+  ShotTable over distance, plus small corrections of the form
+  a*cos(turret) + b*sin(turret) for both aim and RPM. That is two or three
+  numbers each, NOT a 2-D grid.
+- **Proposed "Shot Map" test:** live distance and turret angle on screen,
+  outcome buttons (HIT/SHORT/LONG/LEFT/RIGHT), and every shot logged to CSV
+  with pose, distance, turret angle, RPM of both wheels at release, deflector
+  angle and shot number in the volley. Find the EDGES of the hit band at each
+  distance, not one RPM that happened to work; the middle of the band is the
+  table value, and its width is the tolerance.
+- **Questions for Shane:** is the layout above right? Is the bad flywheel
+  encoder fixed (the velocity loop depends on it)? RPM only with the deflector
+  fixed, or both? A new branch?
