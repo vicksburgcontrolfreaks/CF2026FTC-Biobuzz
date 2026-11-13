@@ -102,7 +102,7 @@ public class PollenShotTune extends OpMode {
         //        label        unit    step  fine   min  max   format
         COLLECTOR("Collector", "RPM",  25,   5,     0,   300,  "%.0f"),
         INDEXER  ("Indexer",   "RPM",  10,   2,     10,  200,  "%.0f"),
-        FLYWHEEL ("Flywheel",  "RPM",  50,   10,    500, 2500, "%.0f"),
+        FLYWHEEL ("Flywheel",  "RPM",  25,   10,    500, 2500, "%.0f"),   // 50 was too coarse at ~1200-1300 (Shane, 2026-11-13)
         PIVOT    ("Pivot",     "pos",  0.01, 0.005, 0,   1,    "%.3f"),   // limits = ShooterPivot safe band
         DEFLECTOR("Deflector", "deg",  1,    0.5,   0,   90,   "%.1f");
 

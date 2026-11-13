@@ -1,40 +1,49 @@
 package org.firstinspires.ftc.teamcode.shooting;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 /*
  * ShotMap: the bookkeeping behind Shot Map Test. Plain numbers, no hardware,
  * tested on a laptop (ShotMapTest).
  *
- * THE IDEA: FIND THE EDGES, NOT ONE GOOD SHOT
- * "2300 scored" tells you almost nothing -- 2200 and 2400 might have scored too,
- * or 2300 might be one lucky ball on the edge of missing. So at each spot we hunt
- * for the two EDGES of the hit band: the RPM where shots stop landing short, and
- * the RPM where they start going long. The middle of the band is what goes in
- * ShotTable. The WIDTH of the band is the tolerance -- how much RPM (or
- * localization) error the shot forgives -- which is the number that says whether
- * any of this is worth more precision.
+ * BALLS ARE RANDOM, SO EVERY RPM IS A PROBABILITY (Shane, 2026-11-13)
+ * At ~1250 RPM the ball-to-ball scatter (ball condition, feed, wheel recovery)
+ * is likely bigger than one 25 RPM step. So one ball at an RPM proves nothing:
+ * a short ball at 1260 between hits at 1240 and 1280 is just a bad ball. An
+ * earlier version kept only the extremes and was wrecked by exactly that.
  *
- * Bracket does the hunting. Every outcome narrows one of the two gaps:
+ * So: a LADDER. Rungs every RUNG RPM, several balls on each, and a tally of
+ * short / hit / long per rung:
  *
- *     too low ... maxLow  [gap]  minHit ... maxHit  [gap]  minHigh ... too high
+ *     1300   L L H L    hit 25%   score +0.75
+ *     1275   H L H H    hit 75%   score +0.25
+ *     1250   H H S H    hit 75%   score -0.25
+ *     1225   S H S S    hit 25%   score -0.75
  *
- * suggest() probes the middle of the wider gap until both are narrower than the
- * resolution. Before there is a hit it steps toward one; once there is a hit with
- * nothing past it, it steps outward to find the far side.
+ * score = (longs - shorts) / balls, from -1 (all short) to +1 (all long).
  *
- * The same Bracket works for the aim trim, with LEFT/RIGHT in place of
- * SHORT/LONG.
+ * THE ANSWER is the BALANCE POINT, where score crosses 0 -- longs and shorts
+ * cancel. It is interpolated between rungs and uses EVERY ball, misses
+ * included, so a few lucky hits can't drag it. Two more numbers come free:
+ *   - best hit rate: if the best rung only hits 60%, the limit is the balls and
+ *     the mechanism, not the RPM, and a finer table buys nothing;
+ *   - transition width: RPM from score -0.5 to +0.5 -- how spread out the
+ *     misses are, i.e. how much RPM (or distance) error the shot forgives.
  *
- * THE FLYWHEEL OFFSET (Shane, 2026-11-13)
+ * The same Ladder does the aim trim, with LEFT/RIGHT as low/high.
+ *
+ * THE FLYWHEEL OFFSET
  * On 6494 the flywheels sit ~0.5-1 in left of the turret's centre. The ball
  * comes up at a fixed spot on the ROBOT and the deflector turns with the turret,
- * so where the ball lands on the deflector -- and so its effect -- depends only on
- * the TURRET ANGLE: sideways at 0 (a left/right aim bias), fore/aft at +-90 (long
- * one way, short the other). That is a sine/cosine in turret angle, so fit() finds
- * a handful of numbers, not a grid. On 5618 the turret is centred over the
- * flywheels and the fit should come out near zero -- which is worth confirming,
- * not assuming.
+ * so its effect depends only on the TURRET ANGLE: sideways at 0, fore/aft at
+ * +-90. That is a cos/sin in turret angle -- fit() finds a handful of numbers,
+ * WITH a +- on each so it is clear whether the effect beats the noise. On 5618
+ * the turret is centred over the flywheels and the terms should come out
+ * inside their +-.
  */
 public final class ShotMap {
 
@@ -44,210 +53,392 @@ public final class ShotMap {
     public enum Outcome {
         HIT, SHORT, LONG, LEFT, RIGHT;
 
-        /** What this means for the RPM search, or null if it says nothing about RPM. */
-        public Bracket.Result forRpm() {
+        /** What this ball says about the RPM, or null if nothing (it went sideways). */
+        public Ladder.Result forRpm() {
             switch (this) {
-                case HIT:   return Bracket.Result.HIT;
-                case SHORT: return Bracket.Result.LOW;
-                case LONG:  return Bracket.Result.HIGH;
+                case HIT:   return Ladder.Result.HIT;
+                case SHORT: return Ladder.Result.LOW;
+                case LONG:  return Ladder.Result.HIGH;
                 default:    return null;
             }
         }
 
         /**
-         * What this means for the AIM-TRIM search. Trim is + = turret further
-         * counter-clockwise (left), so a ball that went LEFT had too much.
+         * What this ball says about the AIM. Trim + = turret further
+         * counter-clockwise (left), so a ball that went LEFT had too much. A
+         * short or long ball was on line, so it counts as centred for the aim.
          */
-        public Bracket.Result forAim() {
+        public Ladder.Result forAim() {
             switch (this) {
-                case HIT:   return Bracket.Result.HIT;
-                case LEFT:  return Bracket.Result.HIGH;
-                case RIGHT: return Bracket.Result.LOW;
-                default:    return null;
+                case LEFT:  return Ladder.Result.HIGH;
+                case RIGHT: return Ladder.Result.LOW;
+                default:    return Ladder.Result.HIT;
+            }
+        }
+
+        public char letter() {
+            switch (this) {
+                case HIT:   return 'H';
+                case SHORT: return 'S';
+                case LONG:  return 'L';
+                case LEFT:  return '<';
+                default:    return '>';
             }
         }
     }
 
     // ==========================================================================
-    // Bracket: hunt for the edges of a "hit" band in one variable.
+    // Ladder
     // ==========================================================================
 
-    public static final class Bracket {
+    public static final class Ladder {
 
         public enum Result { LOW, HIT, HIGH }
 
-        private double maxLow = Double.NaN;    // highest value that was too low
-        private double minHigh = Double.NaN;   // lowest value that was too high
-        private double minHit = Double.NaN;
-        private double maxHit = Double.NaN;
-        private int lows, hits, highs;
+        /** One rung: every ball shot at this value, in order. */
+        public static final class Rung {
+            public final double value;
+            private int lows, hits, highs;
+            private final StringBuilder seq = new StringBuilder();
 
-        public void record(double value, Result result) {
+            Rung(double value) { this.value = value; }
+
+            public int n()     { return lows + hits + highs; }
+            public int lows()  { return lows; }
+            public int hits()  { return hits; }
+            public int highs() { return highs; }
+            /** (highs - lows) / n: -1 all low, +1 all high. */
+            public double score() { return n() == 0 ? 0 : (double) (highs - lows) / n(); }
+            public double hitRate() { return n() == 0 ? 0 : (double) hits / n(); }
+            public boolean mostlyLow()  { return lows * 2 > n(); }
+            public boolean mostlyHigh() { return highs * 2 > n(); }
+            public String sequence() { return seq.toString(); }
+        }
+
+        private final TreeMap<Double, Rung> rungs = new TreeMap<>();
+        private final double spacing;
+        private final int ballsPerRung;
+        private final boolean explore;
+
+        /**
+         * @param spacing      rung spacing (RPM, or degrees of trim)
+         * @param ballsPerRung balls before a rung counts as measured
+         * @param explore      true = step outward to find BOTH sides even when the
+         *                     current rung is mostly hits (the RPM search). False =
+         *                     only move when the rung is mostly low or high (the aim:
+         *                     we want its centre, and deliberately missing sideways
+         *                     wastes balls)
+         */
+        public Ladder(double spacing, int ballsPerRung, boolean explore) {
+            this.spacing = spacing;
+            this.ballsPerRung = Math.max(1, ballsPerRung);
+            this.explore = explore;
+        }
+
+        /** Values are rounded to 0.01 so 1250 and 1250.0000001 are one rung. */
+        public void record(double value, Result result, char letter) {
+            double key = Math.round(value * 100) / 100.0;
+            Rung r = rungs.get(key);
+            if (r == null) {
+                r = new Rung(key);
+                rungs.put(key, r);
+            }
             switch (result) {
-                case LOW:
-                    maxLow = Double.isNaN(maxLow) ? value : Math.max(maxLow, value);
-                    lows++;
-                    break;
-                case HIGH:
-                    minHigh = Double.isNaN(minHigh) ? value : Math.min(minHigh, value);
-                    highs++;
-                    break;
-                case HIT:
-                    minHit = Double.isNaN(minHit) ? value : Math.min(minHit, value);
-                    maxHit = Double.isNaN(maxHit) ? value : Math.max(maxHit, value);
-                    hits++;
-                    break;
+                case LOW:  r.lows++;  break;
+                case HIT:  r.hits++;  break;
+                case HIGH: r.highs++; break;
             }
+            r.seq.append(letter);
         }
 
-        public int lows()  { return lows; }
-        public int hits()  { return hits; }
-        public int highs() { return highs; }
-        public boolean isEmpty() { return lows + hits + highs == 0; }
-        public double maxLow()  { return maxLow; }
-        public double minHigh() { return minHigh; }
-        public double minHit()  { return minHit; }
-        public double maxHit()  { return maxHit; }
+        public boolean isEmpty() { return rungs.isEmpty(); }
 
-        /**
-         * True when the record contradicts itself: something too LOW at or above
-         * a hit, or too HIGH at or below one. That is the shot not being
-         * repeatable at this value -- worth knowing, and a reason to take more
-         * shots before trusting the band.
-         */
-        public boolean isNoisy() {
-            return (!Double.isNaN(maxLow) && !Double.isNaN(minHit) && maxLow >= minHit)
-                    || (!Double.isNaN(minHigh) && !Double.isNaN(maxHit) && minHigh <= maxHit)
-                    || (!Double.isNaN(maxLow) && !Double.isNaN(minHigh) && maxLow >= minHigh);
+        public int balls() {
+            int n = 0;
+            for (Rung r : rungs.values()) n += r.n();
+            return n;
         }
 
-        /** Lower edge of the band, halfway across the gap; NaN until both sides are seen. */
-        public double lowEdge() {
-            return Double.isNaN(maxLow) || Double.isNaN(minHit) ? Double.NaN : (maxLow + minHit) / 2;
+        /** Rungs, LOWEST value first. */
+        public List<Rung> rungs() { return new ArrayList<>(rungs.values()); }
+
+        public Rung rungAt(double value) {
+            return rungs.get(Math.round(value * 100) / 100.0);
         }
 
-        /** Upper edge of the band, halfway across the gap; NaN until both sides are seen. */
-        public double highEdge() {
-            return Double.isNaN(minHigh) || Double.isNaN(maxHit) ? Double.NaN : (maxHit + minHigh) / 2;
+        private boolean full(Rung r) { return r.n() >= ballsPerRung; }
+
+        /** Highest full rung that is mostly LOW, or null. */
+        public Rung highestLow() {
+            Rung best = null;
+            for (Rung r : rungs.values()) if (full(r) && r.mostlyLow()) best = r;
+            return best;
         }
 
-        /** Both edges found: the band's middle and width are real, not provisional. */
+        /** Lowest full rung that is mostly HIGH, or null. */
+        public Rung lowestHigh() {
+            for (Rung r : rungs.values()) if (full(r) && r.mostlyHigh()) return r;
+            return null;
+        }
+
+        /** A mostly-low rung below a mostly-high one: the balance point is pinned between them. */
         public boolean isBounded() {
-            return !Double.isNaN(lowEdge()) && !Double.isNaN(highEdge());
+            Rung lo = highestLow(), hi = lowestHigh();
+            return lo != null && hi != null && lo.value < hi.value;
+        }
+
+        /** A mostly-low rung at or ABOVE a mostly-high one: the shot isn't repeatable here. */
+        public boolean isNoisy() {
+            Rung lo = highestLow(), hi = lowestHigh();
+            return lo != null && hi != null && lo.value >= hi.value;
         }
 
         /**
-         * Best estimate of the middle of the band. With both edges, the middle of
-         * them; with hits only, the middle of the hits (provisional); with no hit
-         * yet, NaN.
+         * Where score crosses `level`, interpolated between rungs. If it crosses
+         * more than once (noise, or a plateau of all-hit rungs), the middle of the
+         * first and last crossing. NaN if it never does.
          */
-        public double centre() {
-            if (isBounded()) return (lowEdge() + highEdge()) / 2;
-            if (hits > 0) return (minHit + maxHit) / 2;
-            return Double.NaN;
-        }
-
-        /** Band width between the edges, or NaN until bounded. */
-        public double width() {
-            return isBounded() ? highEdge() - lowEdge() : Double.NaN;
-        }
-
-        /** True once both gaps are narrower than the resolution. Nothing left to probe. */
-        public boolean isDone(double resolution) {
-            return isBounded() && !isNoisy()
-                    && minHit - maxLow <= resolution && minHigh - maxHit <= resolution;
-        }
-
-        /**
-         * The next value to try.
-         *
-         * @param current    what is set now; returned when there is nothing to go on
-         * @param step       how far to step when exploring outward (no edge seen yet)
-         * @param resolution stop splitting a gap narrower than this; answers are rounded to it
-         */
-        public double suggest(double current, double step, double resolution) {
-            if (isEmpty()) return current;
-
-            if (hits == 0) {
-                if (!Double.isNaN(maxLow) && !Double.isNaN(minHigh)) {
-                    // Short below, long above, nothing in between yet: split it.
-                    return round(maxLow < minHigh ? (maxLow + minHigh) / 2 : current, resolution);
+        public double crossing(double level) {
+            List<Rung> rs = rungs();
+            double first = Double.NaN, last = Double.NaN;
+            for (int i = 0; i + 1 < rs.size(); i++) {
+                Rung a = rs.get(i), b = rs.get(i + 1);
+                double sa = a.score() - level, sb = b.score() - level;
+                if (sa == 0 && sb == 0) continue;       // flat on the level: its ends are counted
+                if (sa <= 0 && sb >= 0) {
+                    double x = a.value + (-sa) / (sb - sa) * (b.value - a.value);
+                    if (Double.isNaN(first)) first = x;
+                    last = x;
                 }
-                return round(!Double.isNaN(maxLow) ? maxLow + step : minHigh - step, resolution);
             }
-
-            // Have a hit. Work on whichever side is less known: unexplored first,
-            // then the wider gap. Exploring outward from the hits finds the far side.
-            double lowGap = Double.isNaN(maxLow) ? Double.POSITIVE_INFINITY : minHit - maxLow;
-            double highGap = Double.isNaN(minHigh) ? Double.POSITIVE_INFINITY : minHigh - maxHit;
-            if (lowGap <= resolution && highGap <= resolution) return round(centre(), resolution);
-
-            if (lowGap >= highGap) {
-                return round(Double.isNaN(maxLow) ? minHit - step : (maxLow + minHit) / 2, resolution);
+            // A single rung sitting exactly on the level with nothing either side.
+            if (Double.isNaN(first) && rs.size() == 1 && rs.get(0).score() == level) {
+                return rs.get(0).value;
             }
-            return round(Double.isNaN(minHigh) ? maxHit + step : (maxHit + minHigh) / 2, resolution);
+            return Double.isNaN(first) ? Double.NaN : (first + last) / 2;
         }
 
-        /** One line for the Driver Station. */
-        public String describe(String unit) {
-            if (isEmpty()) return "no shots yet";
-            StringBuilder sb = new StringBuilder();
-            sb.append(Double.isNaN(maxLow) ? "low ?" : fmt("low<=%.0f", maxLow));
-            sb.append(hits == 0 ? " | no hit" : fmt(" | hit %.0f-%.0f (%d)", minHit, maxHit, hits));
-            sb.append(Double.isNaN(minHigh) ? " | high ?" : fmt(" | high>=%.0f", minHigh));
-            if (isBounded()) sb.append(fmt("  => %.0f +-%.0f %s", centre(), width() / 2, unit));
-            if (isNoisy()) sb.append("  NOISY");
-            return sb.toString();
+        /** The answer: where longs and shorts cancel. NaN until it crosses. */
+        public double balance() { return crossing(0); }
+
+        /**
+         * balance() when there is one; otherwise a rough guess from whatever is
+         * there -- each rung nudged by its score toward the side it is missing
+         * (all-high = about a rung too far up), averaged by balls. For the AIM,
+         * which only moves when a rung is mostly sideways and so often never
+         * crosses. NaN only when empty.
+         */
+        public double estimate() {
+            double b = balance();
+            if (!Double.isNaN(b)) return b;
+            double sum = 0;
+            int n = 0;
+            for (Rung r : rungs.values()) {
+                sum += (r.value - r.score() * spacing) * r.n();
+                n += r.n();
+            }
+            return n == 0 ? Double.NaN : sum / n;
         }
 
-        private static double round(double v, double resolution) {
-            return resolution > 0 ? Math.round(v / resolution) * resolution : v;
+        /** RPM from score -0.5 to +0.5: how spread the misses are. NaN until both cross. */
+        public double transitionWidth() {
+            double lo = crossing(-0.5), hi = crossing(0.5);
+            return Double.isNaN(lo) || Double.isNaN(hi) ? Double.NaN : hi - lo;
+        }
+
+        /** Best hit rate on any FULL rung (0 if none). */
+        public double bestHitRate() {
+            double best = 0;
+            for (Rung r : rungs.values()) if (full(r)) best = Math.max(best, r.hitRate());
+            return best;
+        }
+
+        /**
+         * Rough 1-sigma uncertainty of balance(): the transition width over
+         * 2 * sqrt(balls in the transition). Used to WEIGHT spots in fit(), not as
+         * a statistic to quote. Falls back to the rung spacing when there is no
+         * width yet.
+         */
+        public double balanceSigma() {
+            Rung lo = highestLow(), hi = lowestHigh();
+            int n = 0;
+            for (Rung r : rungs.values()) {
+                if ((lo == null || r.value >= lo.value) && (hi == null || r.value <= hi.value)) n += r.n();
+            }
+            double w = transitionWidth();
+            if (Double.isNaN(w) || w <= 0) w = spacing;
+            return w / (2 * Math.sqrt(Math.max(1, n)));
+        }
+
+        /** Nothing left to shoot: bounded, and every rung between the two edges is full. */
+        public boolean isDone() {
+            if (isNoisy()) return true;
+            return isBounded() && gapToFill() == null;
+        }
+
+        /** The first value between the edges still needing balls, or null. */
+        private Double gapToFill() {
+            Rung lo = highestLow(), hi = lowestHigh();
+            if (lo == null || hi == null) return null;
+            double prev = lo.value;
+            for (Rung r : rungs.subMap(lo.value, false, hi.value, false).values()) {
+                if (!full(r)) return r.value;                       // finish a partial rung
+                if (r.value - prev > 1.5 * spacing) return mid(prev, r.value);
+                prev = r.value;
+            }
+            if (hi.value - prev > 1.5 * spacing) return mid(prev, hi.value);
+            return null;
+        }
+
+        private double mid(double a, double b) {
+            // Keep to the rung grid measured from `a`, so rungs line up.
+            return a + Math.max(1, Math.round((b - a) / 2 / spacing)) * spacing;
+        }
+
+        /** Snap to an existing rung within half a spacing, so a nudged value rejoins it. */
+        private double snap(double v) {
+            Map.Entry<Double, Rung> e = rungs.floorEntry(v + spacing / 2);
+            if (e != null && Math.abs(e.getKey() - v) < spacing / 2) return e.getKey();
+            return v;
+        }
+
+        /**
+         * The value to shoot next. Stays on `current` until its rung is full;
+         * then climbs if it was mostly low, drops if mostly high, fills in between
+         * once both sides are found, and (explore only) steps outward from a rung
+         * of mostly hits toward whichever side looks nearer.
+         */
+        public double next(double current) {
+            Rung here = rungAt(current);
+            if (here == null || !full(here)) return current;
+            if (isNoisy()) return current;
+
+            Double fill = gapToFill();
+            if (fill != null) return snap(fill);
+            if (isBounded()) return current;   // done
+
+            Rung lo = highestLow(), hi = lowestHigh();
+            double minFull = Double.NaN, maxFull = Double.NaN;
+            for (Rung r : rungs.values()) {
+                if (!full(r)) continue;
+                if (Double.isNaN(minFull)) minFull = r.value;
+                maxFull = r.value;
+            }
+            if (lo != null) return snap(maxFull + spacing);   // need the high side: go above everything measured
+            if (hi != null) return snap(minFull - spacing);   // need the low side
+
+            // Every full rung is mostly hits (or mixed). Only the RPM search explores.
+            if (!explore) {
+                if (here.mostlyLow()) return snap(current + spacing);
+                if (here.mostlyHigh()) return snap(current - spacing);
+                return current;
+            }
+            double sUp = rungAt(maxFull).score(), sDown = rungAt(minFull).score();
+            double toHigh = 0.5 - sUp, toLow = 0.5 + sDown;   // how far each end is from "mostly"
+            return toHigh <= toLow ? snap(maxFull + spacing) : snap(minFull - spacing);
         }
     }
 
     // ==========================================================================
-    // fit: least squares for  value = c0 + c1*x1 + c2*x2 + ...
+    // fit: weighted least squares for  value = c0 + c1*x1 + ...
     // ==========================================================================
 
+    /** Coefficients and a 1-sigma +- on each. */
+    public static final class Fit {
+        public final double[] coef;
+        public final double[] sigma;
+        /** Weighted RMS of the residuals, in the value's units; NaN with no spare rows. */
+        public final double rms;
+
+        Fit(double[] coef, double[] sigma, double rms) {
+            this.coef = coef;
+            this.sigma = sigma;
+            this.rms = rms;
+        }
+    }
+
     /**
-     * Ordinary least squares. rows[i] is one observation's regressors (put a 1.0
-     * first for a constant term); values[i] is what was measured. Returns the
-     * coefficients, or null if there are too few rows or the regressors don't
-     * vary enough to tell the terms apart (all spots at one turret angle, say).
+     * Weighted least squares. rows[i] are one observation's regressors (put 1.0
+     * first for a constant); values[i] what was measured; weights[i] its weight
+     * (1/sigma^2), or null for all equal. Returns null with too few rows or when
+     * the regressors can't be told apart (every spot at one turret angle, say).
+     *
+     * The +- uses the scatter of the residuals (not the weights' absolute size),
+     * so it is honest even when the per-spot sigmas are only rough. With exactly
+     * as many rows as terms there is no scatter to measure and the +- is NaN.
      */
-    public static double[] fit(double[][] rows, double[] values) {
+    public static Fit fit(double[][] rows, double[] values, double[] weights) {
         int n = rows.length;
-        if (n == 0 || n != values.length) return null;
+        if (n == 0 || n != values.length || (weights != null && weights.length != n)) return null;
         int k = rows[0].length;
         if (n < k) return null;
 
-        // Normal equations: (A^T A) c = A^T y
-        double[][] m = new double[k][k + 1];
+        double[][] ata = new double[k][k];
+        double[] aty = new double[k];
         for (int r = 0; r < n; r++) {
+            double w = weights == null ? 1 : weights[r];
             for (int i = 0; i < k; i++) {
-                for (int j = 0; j < k; j++) m[i][j] += rows[r][i] * rows[r][j];
-                m[i][k] += rows[r][i] * values[r];
+                for (int j = 0; j < k; j++) ata[i][j] += w * rows[r][i] * rows[r][j];
+                aty[i] += w * rows[r][i] * values[r];
             }
         }
-        // Gaussian elimination with partial pivoting.
+        double[][] inv = invert(ata);
+        if (inv == null) return null;
+
+        double[] c = new double[k];
+        for (int i = 0; i < k; i++) for (int j = 0; j < k; j++) c[i] += inv[i][j] * aty[j];
+
+        double ss = 0, wsum = 0;
+        for (int r = 0; r < n; r++) {
+            double w = weights == null ? 1 : weights[r];
+            double pred = 0;
+            for (int i = 0; i < k; i++) pred += c[i] * rows[r][i];
+            ss += w * (values[r] - pred) * (values[r] - pred);
+            wsum += w;
+        }
+        double[] sigma = new double[k];
+        double rms = Double.NaN;
+        if (n > k) {
+            double s2 = ss / (n - k);
+            for (int i = 0; i < k; i++) sigma[i] = Math.sqrt(Math.max(0, s2 * inv[i][i]));
+            rms = Math.sqrt(ss / wsum);
+        } else {
+            java.util.Arrays.fill(sigma, Double.NaN);
+        }
+        return new Fit(c, sigma, rms);
+    }
+
+    /** Gauss-Jordan with partial pivoting. Null if (nearly) singular. */
+    private static double[][] invert(double[][] a) {
+        int k = a.length;
+        double[][] m = new double[k][2 * k];
+        double scale = 0;
+        for (int i = 0; i < k; i++) {
+            for (int j = 0; j < k; j++) {
+                m[i][j] = a[i][j];
+                scale = Math.max(scale, Math.abs(a[i][j]));
+            }
+            m[i][k + i] = 1;
+        }
         for (int col = 0; col < k; col++) {
             int pivot = col;
             for (int r = col + 1; r < k; r++) {
                 if (Math.abs(m[r][col]) > Math.abs(m[pivot][col])) pivot = r;
             }
-            double scale = 0;
-            for (int j = 0; j < k; j++) scale = Math.max(scale, Math.abs(m[col][j]));
             if (Math.abs(m[pivot][col]) < 1e-9 * Math.max(1, scale)) return null;
             double[] tmp = m[col]; m[col] = m[pivot]; m[pivot] = tmp;
+            double p = m[col][col];
+            for (int j = 0; j < 2 * k; j++) m[col][j] /= p;
             for (int r = 0; r < k; r++) {
                 if (r == col) continue;
-                double f = m[r][col] / m[col][col];
-                for (int j = col; j <= k; j++) m[r][j] -= f * m[col][j];
+                double f = m[r][col];
+                if (f == 0) continue;
+                for (int j = 0; j < 2 * k; j++) m[r][j] -= f * m[col][j];
             }
         }
-        double[] c = new double[k];
-        for (int i = 0; i < k; i++) c[i] = m[i][k] / m[i][i];
-        return c;
+        double[][] out = new double[k][k];
+        for (int i = 0; i < k; i++) System.arraycopy(m[i], k, out[i], 0, k);
+        return out;
     }
 
     /** Regressors for the RPM model:  rpm = c0 + c1*distance + a*cos(turret) + b*sin(turret). */
@@ -306,18 +497,18 @@ public final class ShotMap {
     }
 
     public static final String SPOT_HEADER =
-            "kind,robot,spot,distance_in,turret_deg,shots,rpm_low_edge,rpm_high_edge,rpm_centre,"
-                    + "rpm_width,rpm_noisy,aim_low_edge,aim_high_edge,aim_centre,aim_width,aim_noisy";
+            "kind,robot,spot,distance_in,turret_deg,balls,rpm_balance,rpm_sigma,rpm_width,"
+                    + "rpm_best_hit_rate,rpm_bounded,rpm_noisy,aim_balance,aim_width,aim_noisy";
 
-    /** One finished spot: where it was and the two bands found there. */
+    /** One finished spot: where it was and what the two ladders found there. */
     public static String spotRow(String robot, int spot, double distance, double turretDeg,
-                                 int shots, Bracket rpm, Bracket aim) {
+                                 int balls, Ladder rpm, Ladder aim) {
         return "spot," + csv(robot) + "," + spot + "," + num(distance, 1) + ","
-                + num(turretDeg, 1) + "," + shots + ","
-                + num(rpm.lowEdge(), 0) + "," + num(rpm.highEdge(), 0) + ","
-                + num(rpm.centre(), 0) + "," + num(rpm.width(), 0) + "," + rpm.isNoisy() + ","
-                + num(aim.lowEdge(), 2) + "," + num(aim.highEdge(), 2) + ","
-                + num(aim.centre(), 2) + "," + num(aim.width(), 2) + "," + aim.isNoisy();
+                + num(turretDeg, 1) + "," + balls + ","
+                + num(rpm.balance(), 0) + "," + num(rpm.balanceSigma(), 1) + ","
+                + num(rpm.transitionWidth(), 0) + "," + num(rpm.bestHitRate(), 2) + ","
+                + rpm.isBounded() + "," + rpm.isNoisy() + ","
+                + num(aim.balance(), 2) + "," + num(aim.transitionWidth(), 2) + "," + aim.isNoisy();
     }
 
     private static String num(double v, int decimals) {
@@ -326,9 +517,5 @@ public final class ShotMap {
 
     private static String csv(String s) {
         return s == null ? "" : s.replace(",", ";");
-    }
-
-    private static String fmt(String f, Object... args) {
-        return String.format(Locale.US, f, args);
     }
 }

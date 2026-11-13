@@ -19,7 +19,7 @@ import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.shooting.ShooterLogic;
 import org.firstinspires.ftc.teamcode.shooting.ShotMap;
-import org.firstinspires.ftc.teamcode.shooting.ShotMap.Bracket;
+import org.firstinspires.ftc.teamcode.shooting.ShotMap.Ladder;
 import org.firstinspires.ftc.teamcode.shooting.ShotMap.Outcome;
 import org.firstinspires.ftc.teamcode.subsystems.CollectionSystem;
 import org.firstinspires.ftc.teamcode.subsystems.Deflector;
@@ -58,14 +58,17 @@ import java.util.Locale;
  *      over the flywheels, so its fit should come out near zero -- confirm it.
  *
  * HOW A SPOT GOES
- *   Park somewhere, fire ONE ball, press what it did. The RPM moves to the next
- *   value worth trying by itself (FOLLOW_SUGGESTION). Keep going until the RPM
- *   line says DONE, then press B to save the spot and drive to the next one.
- *   One ball per press: if two go, press for the first and watch the second.
+ *   Park somewhere, fire ONE ball, press what it did. After BALLS_PER_RUNG balls
+ *   at one RPM the ladder moves on by itself (FOLLOW_SUGGESTION): up a rung if
+ *   that rung was mostly short, down if mostly long, outward if mostly hits.
+ *   Keep going until the screen says DONE, then press B to save the spot and
+ *   drive to the next one. One ball per press: if two go, press for the first.
  *
- *   It hunts for the EDGES of the hit band -- where shots stop landing short and
- *   where they start going long -- not one RPM that happened to score. The middle
- *   is the table value; the width is how forgiving the shot is. See ShotMap.
+ *   BALLS ARE RANDOM, so no single ball decides anything. Every RPM gets several
+ *   balls, and the answer is the BALANCE POINT where longs and shorts cancel,
+ *   using every ball. The screen also shows the best hit rate (low everywhere =
+ *   the balls/mechanism are the limit, not the RPM) and the transition width
+ *   (how much RPM error the shot forgives). See ShotMap.
  *
  * WHERE THE ROBOT IS
  *   Odometry, started from the wall start picked in the INIT menu. Park on it
@@ -102,23 +105,22 @@ public class ShotMapTune extends OpMode {
 
     // ---- Knobs ---------------------------------------------------------------
     /** Manual RPM step for the bumpers. */
-    public static double RPM_STEP = 25;
-    /** How far the search steps outward before it has seen an edge. */
-    public static double RPM_EXPLORE_STEP = 100;
+    public static double RPM_STEP = 10;   // fine: shots live at ~1200-1300 RPM (Shane, 2026-11-13)
+    /** Ladder rung spacing: the biggest jump Shane wants at ~1200-1300 RPM. */
+    public static double RPM_RUNG = 25;
     /**
-     * Stop splitting a gap narrower than this. 10 takes ~16 balls a spot on the
-     * laptop tests; 25 roughly halves that. Set it from how wide the bands turn out:
-     * no point resolving 10 RPM inside a 300 RPM band.
+     * Balls on each rung before the ladder moves. 4 found the centre within 15 RPM
+     * in 191/200 laptop runs with scatter as wide as the band: median 16 balls a
+     * spot, 20 at the 90th percentile. Drop to 3 once you have seen how noisy the shooter really is.
      */
-    public static double RPM_RESOLUTION = 25;
+    public static int BALLS_PER_RUNG = 4;
     public static double MIN_RPM = 500;
     /** Pollen Shot Tune's ceiling. Raise only after checking the wheels hold it. */
     public static double MAX_RPM = 2500;
 
     public static double AIM_STEP_DEG = 0.5;
-    /** Trim the search steps when the ball went left/right. */
-    public static double AIM_EXPLORE_STEP_DEG = 1.0;
-    public static double AIM_RESOLUTION_DEG = 0.5;
+    /** Aim ladder rung spacing. It only moves when a rung is mostly left or right. */
+    public static double AIM_RUNG_DEG = 1.0;
 
     /** Move to the suggested RPM / trim automatically after each press. */
     public static boolean FOLLOW_SUGGESTION = true;
@@ -172,8 +174,11 @@ public class ShotMapTune extends OpMode {
     private double baseAimBias = Double.NaN;   // TurretAim.AIM_BIAS_DEG before we touched it; NaN = never started
     private int spotNumber = 1, shotNumber = 0;
     private final List<Press> spotPresses = new ArrayList<>();
-    private Bracket rpmBracket = new Bracket(), aimBracket = new Bracket();
+    private Ladder rpmLadder = newRpmLadder(), aimLadder = newAimLadder();
     private final List<Spot> spots = new ArrayList<>();
+
+    private static Ladder newRpmLadder() { return new Ladder(RPM_RUNG, BALLS_PER_RUNG, true); }
+    private static Ladder newAimLadder() { return new Ladder(AIM_RUNG_DEG, BALLS_PER_RUNG, false); }
     private String lastNote = "fire one ball, then press what it did";
 
     private static final class Press {
@@ -186,13 +191,16 @@ public class ShotMapTune extends OpMode {
     }
 
     private static final class Spot {
-        final int n; final double distance, turretDeg, rpmCentre, rpmWidth, aimCentre;
-        final boolean rpmBounded;
-        Spot(int n, double distance, double turretDeg, Bracket rpm, Bracket aim) {
+        final int n; final double distance, turretDeg, rpmBalance, rpmSigma, rpmWidth, bestHit, aimCentre;
+        final boolean rpmUsable;
+        Spot(int n, double distance, double turretDeg, Ladder rpm, Ladder aim) {
             this.n = n; this.distance = distance; this.turretDeg = turretDeg;
-            this.rpmCentre = rpm.centre(); this.rpmWidth = rpm.width();
-            this.rpmBounded = rpm.isBounded() && !rpm.isNoisy();
-            this.aimCentre = aim.isEmpty() ? Double.NaN : aim.centre();
+            this.rpmBalance = rpm.balance();
+            this.rpmSigma = rpm.balanceSigma();
+            this.rpmWidth = rpm.transitionWidth();
+            this.bestHit = rpm.bestHitRate();
+            this.rpmUsable = rpm.isBounded() && !rpm.isNoisy() && !Double.isNaN(rpmBalance);
+            this.aimCentre = aim.estimate();
         }
     }
 
@@ -364,31 +372,33 @@ public class ShotMapTune extends OpMode {
 
         shotNumber++;
         spotPresses.add(new Press(rpm, aimTrim, distance, turretDeg, outcome));
-        rebuildBrackets();
+        rebuildLadders();
         write(ShotMap.shotRow(getRuntime(), robot, spotNumber, shotNumber, startSpot.get().label,
                 p.getX(), p.getY(), Math.toDegrees(p.getHeading()), distance, turretDeg, rpm,
                 left, right, burst, dip, aimTrim, deflector.getAngle(), aim.isPoseTrusted(), outcome));
 
         String was = String.format(Locale.US, "#%d %s at %.0f", shotNumber, outcome, rpm);
         if (FOLLOW_SUGGESTION) {
-            // RPM follows SHORT/LONG/HIT; the aim follows only LEFT/RIGHT, so the
-            // two never move on the same press and every result means one thing.
-            if (outcome.forRpm() != null) {
-                setRpm(rpmBracket.suggest(rpm, RPM_EXPLORE_STEP, RPM_RESOLUTION));
-            }
-            if (outcome == Outcome.LEFT || outcome == Outcome.RIGHT) {
-                setTrim(aimBracket.suggest(aimTrim, AIM_EXPLORE_STEP_DEG, AIM_RESOLUTION_DEG));
-            }
+            // Each ladder only moves once its current rung has BALLS_PER_RUNG balls,
+            // so no single ball moves anything. A sideways ball says nothing about
+            // RPM and is not counted there; every ball counts for the aim.
+            double nextRpm = rpmLadder.next(rpm);
+            double nextTrim = aimLadder.next(aimTrim);
+            if (nextRpm != rpm) was += String.format(Locale.US, " -> rung %.0f", nextRpm);
+            if (nextTrim != aimTrim) was += String.format(Locale.US, " -> trim %+.1f", nextTrim);
+            setRpm(nextRpm);
+            if (nextTrim != aimTrim) setTrim(nextTrim);
         }
-        lastNote = was + (burst == 0 ? "  (no dip seen -- logged current speeds)" : "");
+        if (rpmLadder.isDone()) was += "  DONE -> B";
+        lastNote = was + (burst == 0 ? "  (no dip seen)" : "");
     }
 
-    private void rebuildBrackets() {
-        rpmBracket = new Bracket();
-        aimBracket = new Bracket();
+    private void rebuildLadders() {
+        rpmLadder = newRpmLadder();
+        aimLadder = newAimLadder();
         for (Press pr : spotPresses) {
-            if (pr.outcome.forRpm() != null) rpmBracket.record(pr.rpm, pr.outcome.forRpm());
-            if (pr.outcome.forAim() != null) aimBracket.record(pr.trim, pr.outcome.forAim());
+            if (pr.outcome.forRpm() != null) rpmLadder.record(pr.rpm, pr.outcome.forRpm(), pr.outcome.letter());
+            aimLadder.record(pr.trim, pr.outcome.forAim(), pr.outcome.letter());
         }
     }
 
@@ -398,7 +408,7 @@ public class ShotMapTune extends OpMode {
             return;
         }
         Press gone = spotPresses.remove(spotPresses.size() - 1);
-        rebuildBrackets();
+        rebuildLadders();
         // The file is append-only, so the undo is a row of its own; anything
         // reading the log drops the shot it names.
         write("undo,," + robot + "," + spotNumber + "," + shotNumber);
@@ -416,16 +426,18 @@ public class ShotMapTune extends OpMode {
         for (Press pr : spotPresses) { d += pr.distance; t += pr.turretDeg; }
         d /= spotPresses.size();
         t /= spotPresses.size();
-        spots.add(new Spot(spotNumber, d, t, rpmBracket, aimBracket));
-        write(ShotMap.spotRow(robot, spotNumber, d, t, spotPresses.size(), rpmBracket, aimBracket));
-        lastNote = String.format(Locale.US, "saved spot %d: %.0f in, turret %+.0f -> %s",
-                spotNumber, d, t, rpmBracket.isBounded()
-                        ? String.format(Locale.US, "%.0f RPM", rpmBracket.centre()) : "NOT BOUNDED");
-        // Start the next spot from this one's answer: the next distance is usually close.
-        if (!Double.isNaN(rpmBracket.centre())) setRpm(rpmBracket.centre());
+        Spot s = new Spot(spotNumber, d, t, rpmLadder, aimLadder);
+        spots.add(s);
+        write(ShotMap.spotRow(robot, spotNumber, d, t, spotPresses.size(), rpmLadder, aimLadder));
+        lastNote = String.format(Locale.US, "saved spot %d: %.0f in, turret %+.0f -> %s", spotNumber, d, t,
+                s.rpmUsable ? String.format(Locale.US, "%.0f RPM", s.rpmBalance)
+                        : rpmLadder.isNoisy() ? "NOISY, not used in the fit" : "NOT BOUNDED, not used in the fit");
+        // Start the next spot from this one's answer, snapped to the rung grid:
+        // the next distance is usually close.
+        if (!Double.isNaN(s.rpmBalance)) setRpm(Math.round(s.rpmBalance / RPM_RUNG) * RPM_RUNG);
         spotNumber++;
         spotPresses.clear();
-        rebuildBrackets();
+        rebuildLadders();
         gamepad1.rumble(200);
     }
 
@@ -518,7 +530,7 @@ public class ShotMapTune extends OpMode {
 
     private void showTelemetry() {
         Pose p = follower.getPose();
-        telemetry.addLine(String.format(Locale.US, "SHOT MAP %s | spot %d, %d shots | %s",
+        telemetry.addLine(String.format(Locale.US, "SHOT MAP %s | spot %d, %d balls | %s",
                 robot, spotNumber, spotPresses.size(), targetCell.displayName));
         telemetry.addLine(">> " + lastNote);
 
@@ -533,19 +545,22 @@ public class ShotMapTune extends OpMode {
         telemetry.addData("RPM", "%.0f  (L %.0f / R %.0f)%s%s", rpm, leftRpm, rightRpm,
                 flywheelOn ? (atSpeed() ? " AT SPEED" : " spinning") : " OFF (Y)",
                 disagree ? "  WHEELS DISAGREE" : "");
-        telemetry.addData("  band", rpmBracket.describe("RPM")
-                + (rpmBracket.isDone(RPM_RESOLUTION) ? "  DONE -> B" : ""));
-        telemetry.addData("Aim trim", "%+.2f deg | %s%s", aimTrim, aimBracket.describe("deg"),
+        showLadder();
+        double est = aimLadder.estimate();
+        telemetry.addData("Aim trim", "%+.2f deg | est %s%s", aimTrim,
+                Double.isNaN(est) ? "--" : String.format(Locale.US, "%+.1f", est),
                 trimReachesTurret() ? "" : "  (NOT APPLIED: " + aim.getSource() + ")");
 
         telemetry.addLine("");
-        telemetry.addLine("SPOTS  dist / turret -> RPM (+-half band) / trim");
+        telemetry.addLine("SPOTS  dist / turret -> balance RPM, width, best hit / trim");
         for (int i = Math.max(0, spots.size() - 5); i < spots.size(); i++) {
             Spot s = spots.get(i);
             telemetry.addLine(String.format(Locale.US, "  %d: %.0f in %+4.0f -> %s / %s", s.n,
                     s.distance, s.turretDeg,
-                    s.rpmBounded ? String.format(Locale.US, "%.0f +-%.0f", s.rpmCentre, s.rpmWidth / 2)
-                            : Double.isNaN(s.rpmCentre) ? "--" : String.format(Locale.US, "~%.0f", s.rpmCentre),
+                    Double.isNaN(s.rpmBalance) ? "--"
+                            : String.format(Locale.US, "%s%.0f, w %s, hit %.0f%%", s.rpmUsable ? "" : "~",
+                            s.rpmBalance, Double.isNaN(s.rpmWidth) ? "?" : String.format(Locale.US, "%.0f", s.rpmWidth),
+                            s.bestHit * 100),
                     Double.isNaN(s.aimCentre) ? "--" : String.format(Locale.US, "%+.1f", s.aimCentre)));
         }
         if (spots.isEmpty()) telemetry.addLine("  none saved yet (B saves one)");
@@ -556,6 +571,36 @@ public class ShotMapTune extends OpMode {
         telemetry.addLine("X undo | B save spot | Y flywheel | RT feed | BACK re-sync pose");
         telemetry.addLine(logError != null ? ">>> LOG FAILED: " + logError : "Log: " + logPath);
         telemetry.update();
+    }
+
+    /**
+     * The RPM ladder, highest rung first:
+     *     1275    LLHL   hit 25%  +0.75
+     *   > 1250    HHSH   hit 75%  -0.25    (shooting here)
+     * then the balance point, the width, and the best hit rate so far.
+     */
+    private void showLadder() {
+        List<Ladder.Rung> rungs = rpmLadder.rungs();
+        boolean hereListed = false;
+        for (int i = rungs.size() - 1; i >= 0; i--) {
+            Ladder.Rung r = rungs.get(i);
+            boolean here = Math.abs(r.value - rpm) < 0.5;
+            hereListed |= here;
+            telemetry.addLine(String.format(Locale.US, "  %s %4.0f   %-6s hit %3.0f%%  %+.2f%s",
+                    here ? ">" : " ", r.value, r.sequence(), r.hitRate() * 100, r.score(),
+                    r.n() < BALLS_PER_RUNG ? String.format(Locale.US, "  (%d/%d)", r.n(), BALLS_PER_RUNG) : ""));
+        }
+        if (!hereListed) {
+            telemetry.addLine(String.format(Locale.US, "  > %4.0f   (no balls yet)", rpm));
+        }
+        double b = rpmLadder.balance();
+        double w = rpmLadder.transitionWidth();
+        telemetry.addLine(String.format(Locale.US, "  balance %s | width %s | best hit %.0f%%%s",
+                Double.isNaN(b) ? "--" : String.format(Locale.US, "%.0f", b),
+                Double.isNaN(w) ? "--" : String.format(Locale.US, "%.0f RPM", w),
+                rpmLadder.bestHitRate() * 100,
+                rpmLadder.isNoisy() ? "  NOISY: rungs contradict -- B saves it as unusable"
+                        : rpmLadder.isDone() ? "  DONE -> B" : ""));
     }
 
     private boolean atSpeed() {
@@ -573,32 +618,39 @@ public class ShotMapTune extends OpMode {
     }
 
     /**
-     * The flywheel-offset fit, once there is enough to fit. RPM model needs 5+
-     * bounded spots over 3+ turret angles (it also has a distance term); aim
-     * model needs 4+ spots with a trim over 3+ angles.
+     * The flywheel-offset fit, with a +- (1 sigma) on each term. A term inside
+     * about 2x its +- is not distinguishable from noise -- on 5618, with the turret
+     * centred, that is the expected answer.
+     *
+     * RPM: usable (bounded, not noisy) spots, weighted by how sure each balance is;
+     * needs 5+ over 3+ turret angles, since it also has a distance term. Aim: 4+
+     * spots over 3+ angles.
      */
     private String fitText() {
         List<Spot> r = new ArrayList<>();
         List<Spot> a = new ArrayList<>();
         for (Spot s : spots) {
-            if (s.rpmBounded) r.add(s);
+            if (s.rpmUsable) r.add(s);
             if (!Double.isNaN(s.aimCentre)) a.add(s);
         }
         StringBuilder sb = new StringBuilder("FIT  ");
-        double[] c = null;
+        ShotMap.Fit c = null;
         if (r.size() >= 5 && angles(r) >= 3) {
             double[][] rows = new double[r.size()][];
             double[] y = new double[r.size()];
+            double[] w = new double[r.size()];
             for (int i = 0; i < r.size(); i++) {
                 rows[i] = ShotMap.rpmRow(r.get(i).distance, r.get(i).turretDeg);
-                y[i] = r.get(i).rpmCentre;
+                y[i] = r.get(i).rpmBalance;
+                w[i] = 1 / Math.max(1, r.get(i).rpmSigma * r.get(i).rpmSigma);
             }
-            c = ShotMap.fit(rows, y);
+            c = ShotMap.fit(rows, y, w);
         }
         sb.append(c == null
-                ? String.format(Locale.US, "rpm: need 5 bounded spots, 3 angles (%d, %d)", r.size(), angles(r))
-                : String.format(Locale.US, "rpm %+.0f cos %+.0f sin (%.1f/in)", c[2], c[3], c[1]));
-        double[] k = null;
+                ? String.format(Locale.US, "rpm: need 5 usable spots, 3 angles (%d, %d)", r.size(), angles(r))
+                : String.format(Locale.US, "rpm cos %s sin %s (%.1f/in)",
+                        pm(c.coef[2], c.sigma[2], "%+.0f"), pm(c.coef[3], c.sigma[3], "%+.0f"), c.coef[1]));
+        ShotMap.Fit k = null;
         if (a.size() >= 4 && angles(a) >= 3) {
             double[][] rows = new double[a.size()][];
             double[] y = new double[a.size()];
@@ -606,11 +658,18 @@ public class ShotMapTune extends OpMode {
                 rows[i] = ShotMap.aimRow(a.get(i).turretDeg);
                 y[i] = a.get(i).aimCentre;
             }
-            k = ShotMap.fit(rows, y);
+            k = ShotMap.fit(rows, y, null);
         }
         sb.append(k == null ? " | aim: need 4 spots, 3 angles"
-                : String.format(Locale.US, " | aim %+.1f %+.1fcos %+.1fsin", k[0], k[1], k[2]));
+                : String.format(Locale.US, " | aim %s, cos %s sin %s",
+                        pm(k.coef[0], k.sigma[0], "%+.1f"), pm(k.coef[1], k.sigma[1], "%+.1f"),
+                        pm(k.coef[2], k.sigma[2], "%+.1f")));
         return sb.toString();
+    }
+
+    private static String pm(double v, double sigma, String fmt) {
+        String s = String.format(Locale.US, fmt, v);
+        return Double.isNaN(sigma) ? s : s + "+-" + String.format(Locale.US, "%.1f", sigma);
     }
 
     private static int angles(List<Spot> spots) {

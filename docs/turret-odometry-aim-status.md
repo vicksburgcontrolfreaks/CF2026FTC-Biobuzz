@@ -679,3 +679,30 @@ Set it from the band widths you actually see.
 
 **Not built yet:** using the table and fit in DriveTeleOp (spinUp(lookup(d)) +
 the turret-angle corrections). Do it after a table exists.
+
+### Revised the same day: the LADDER (Shane asked how it copes with random balls)
+
+It didn't. The first version kept only extremes (highest short, lowest long),
+so one bad ball between two hits permanently wrecked the band. At ~1200-1300
+RPM with 25 RPM steps, ball-to-ball scatter is likely bigger than a step, so
+that would have been the normal case. Replaced before any data was taken.
+
+**Now:** rungs every `RPM_RUNG` (25), `BALLS_PER_RUNG` (4) balls on each,
+short/hit/long tallied per rung. The ladder only moves once a rung is full:
+up if mostly short, down if mostly long, outward if mostly hits, then fills
+any gap. The answer is the BALANCE POINT where longs and shorts cancel,
+interpolated between rungs, using every ball. The screen also shows:
+- **best hit rate**: low on every rung = the balls/mechanism are the limit,
+  not the RPM, and a finer table buys nothing;
+- **transition width** (score -0.5 to +0.5): how much RPM or distance error the
+  shot forgives.
+
+Laptop simulation (scatter about as wide as the hit band): within 15 RPM of
+the true centre in 191/200 runs, median 16 balls a spot, 20 at the 90th
+percentile. Aim uses the same ladder but only moves when a rung is mostly
+left or right. The offset fit is now weighted by each spot's certainty and
+prints a +- on every term: a term inside ~2x its +- is noise (the expected
+answer on 5618).
+
+Steps, per Shane: Shot Map nudge 10 RPM, rungs 25. Pollen Shot Tune's
+flywheel step went 50 -> 25, fine stays 10.
