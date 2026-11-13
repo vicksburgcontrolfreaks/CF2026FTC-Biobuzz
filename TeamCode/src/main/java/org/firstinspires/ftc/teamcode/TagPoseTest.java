@@ -178,6 +178,45 @@ public class TagPoseTest extends OpMode {
     private boolean poseSeeded = false;
     private String poseOrigin = "";
 
+    // ---- Is this reading STEADY, or is it bouncing? -------------------------
+    // 2026-11-13: z was reported as "+3.8" at one spot and "-2 to +4" at
+    // another, and only the second report mentioned the swing. A single sample
+    // of a bouncing quantity looks exactly like a measurement, which cost a
+    // whole prediction test. So show the RANGE over the last second, not the
+    // instant value -- a wide range means the solve is unstable (oblique view,
+    // AprilTag pose ambiguity) and nothing on the screen should be written down.
+    private static final double STEADY_WINDOW_SEC = 1.0;
+    private final ElapsedTime steadyWindow = new ElapsedTime();
+    private double zMin = Double.NaN, zMax = Double.NaN;
+    private double levelMin = Double.NaN, levelMax = Double.NaN;
+    private double errMin = Double.NaN, errMax = Double.NaN;
+
+    /** Fold this frame into the min/max, restarting the window when it expires. */
+    private void trackSteadiness(double z, double level, double err) {
+        if (steadyWindow.seconds() > STEADY_WINDOW_SEC || Double.isNaN(zMin)) {
+            steadyWindow.reset();
+            zMin = zMax = z;
+            levelMin = levelMax = level;
+            errMin = errMax = err;
+            return;
+        }
+        zMin = Math.min(zMin, z);
+        zMax = Math.max(zMax, z);
+        levelMin = Math.min(levelMin, level);
+        levelMax = Math.max(levelMax, level);
+        if (!Double.isNaN(err)) {
+            errMin = Double.isNaN(errMin) ? err : Math.min(errMin, err);
+            errMax = Double.isNaN(errMax) ? err : Math.max(errMax, err);
+        }
+    }
+
+    private static String range(double lo, double hi, String unit) {
+        if (Double.isNaN(lo)) return "--";
+        double swing = hi - lo;
+        return String.format("%+.1f..%+.1f%s%s", lo, hi, unit,
+                swing > 1.5 ? "  BOUNCING" : "");
+    }
+
     /**
      * Editing the truth FROM THE GAMEPAD, because TRUTH_X/Y are @Configurable and
      * Panels is not something everyone on this team uses. D-pad Up/Down picks the
@@ -584,6 +623,11 @@ public class TagPoseTest extends OpMode {
         showTruthEditor();
 
         Pose v = lastFix == null ? null : lastFix.robot;
+        if (v != null) {
+            boolean haveTruth = !Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y);
+            trackSteadiness(lastFix.turret.z, lastFix.turret.levelErrorDeg,
+                    haveTruth ? Math.hypot(v.getX() - TRUTH_X, v.getY() - TRUTH_Y) : Double.NaN);
+        }
         if (v != null && !Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y)) {
             double ex = v.getX() - TRUTH_X;
             double ey = v.getY() - TRUTH_Y;
@@ -624,9 +668,10 @@ public class TagPoseTest extends OpMode {
         // comes with a horizontal range error -- which is the open question as of
         // 2026-11-13. I had compacted these two off the screen; that was a
         // mistake, they are the cheapest diagnostic here.
-        telemetry.addData("BASE", "z %+.2f in | level %.1f deg | %s | turret %+.1f",
-                lastFix.turret.z, lastFix.turret.levelErrorDeg, lastFix.turret.hiveTilt,
-                turret.getAngle());
+        telemetry.addData("BASE 1s", "z %s | level %s",
+                range(zMin, zMax, "in"), range(levelMin, levelMax, "deg"));
+        telemetry.addData("err 1s", "%s | %s | turret %+.1f",
+                range(errMin, errMax, "in"), lastFix.turret.hiveTilt, turret.getAngle());
         showSweep();
         telemetry.update();
     }
