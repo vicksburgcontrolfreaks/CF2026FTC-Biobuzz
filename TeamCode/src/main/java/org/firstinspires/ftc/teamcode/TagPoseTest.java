@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import android.util.Size;
+
 import com.bylazar.configurables.PanelsConfigurables;
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
@@ -97,11 +99,13 @@ import java.util.List;
  *   Triggers       move the picked TRUTH value (RT up, LT down)
  *   X              load GARDEN_EDGE_START as the truth (red coordinates)
  *
- * WHAT TO DISTRUST
- * HiveTags still carries made-up numbers (RED_HIVE_X, CELL_ARM, CELL_DROP), and
- * TagLocalizer's CAMERA_LEFT and CAMERA_YAW_DEG are assumed 0 on both robots. A
- * fix is only as good as those. "Believable" only checks that the turret base
- * came out level and on the floor -- it does NOT mean the fix is accurate.
+ * WHAT TO DISTRUST (updated 2026-11-13)
+ * The HIVE is measured -- CELL_ARM, CELL_DROP, HIVE_SWING_DEG and PIVOT_Y all
+ * have tape behind them now. What is still assumed is on the ROBOT:
+ * TagLocalizer's CAMERA_LEFT and CAMERA_YAW_DEG are both 0 by assumption, and
+ * the camera calibration is whatever the SDK picks. "Believable" only checks
+ * that the turret base came out level and on the floor -- it does NOT mean the
+ * fix is accurate.
  *
  * Runs on AUTO EXPOSURE, unlike TurretCamera's manual 6 ms. That is fine here
  * and only here: the robot is parked, so there is no motion blur to beat.
@@ -207,6 +211,24 @@ public class TagPoseTest extends OpMode {
                 .build();
         portal = new VisionPortal.Builder()
                 .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
+                // PINNED, and it matters. Our camera is a Logitech C270, and the
+                // SDK's built-in calibration for it exists at 640x480 ONLY
+                // (focalLength 822.317, distortion -0.045 / 1.173 / -3.632 --
+                // see TeamCode/src/main/res/xml/teamwebcamcalibrations.xml, where
+                // the same entry is commented out because the SDK ships it).
+                //
+                // Nothing here used to ask for a resolution, so we were trusting
+                // the default to land on the calibrated one. Two measurements on
+                // 2026-11-13 say it did not: range read about 10% short, and the
+                // fix got ~4x worse toward the edges of the frame. Both are what
+                // you get when the focal length and distortion coefficients are
+                // NOT being applied, and that big a radial term should have been
+                // corrected away if they were.
+                //
+                // If pinning this fixes those two, the same line belongs in
+                // TurretCamera -- but that one feeds match aiming through
+                // TurretAim, so measure here first.
+                .setCameraResolution(new Size(640, 480))
                 .addProcessor(processor)
                 .build();
     }
