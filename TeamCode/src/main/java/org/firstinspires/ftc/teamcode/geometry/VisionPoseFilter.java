@@ -30,6 +30,26 @@ public class VisionPoseFilter {
     // TODO(measure, Phase 3): the distances where tag fixes are actually good.
     public static double MIN_TAG_RANGE = 12;          // in
     public static double MAX_TAG_RANGE = 84;          // in
+
+    /**
+     * How far off the camera's centreline a tag may sit and still be believed.
+     *
+     * MEASURED ON 6494, 2026-11-13, and this is the biggest error in the whole
+     * chain. Parked, with the turret aimed at the cell so the tags sat near the
+     * middle of the image, repeated fixes spread 1.26 in. Over the SAME range of
+     * turret angles but with the tags walked out to the edges of the frame, 4.2
+     * in. Four times worse, from nothing but where the tag landed in the image.
+     * The likely cause is uncorrected lens distortion, which bites hardest at
+     * the edges.
+     *
+     * 10 deg against a usable FOV of roughly 50 deg keeps the tag inside the
+     * middle 40% of the frame. Normal operation passes this easily, because the
+     * turret is pointed at the cell it is shooting at.
+     *
+     * Raising this to "get more fixes" is a bad trade: the extra fixes are the
+     * inaccurate ones. The real fix is a proper camera calibration.
+     */
+    public static double MAX_TAG_BEARING_DEG = 10;    // deg off the camera centreline
     // A fix this far from odometry is more likely a bad frame than a real error.
     public static double MAX_JUMP = 18;               // in
     public static double MAX_HEADING_JUMP = 20;       // deg
@@ -44,6 +64,7 @@ public class VisionPoseFilter {
         ROBOT_MOVING,
         FRAME_TOO_OLD,
         TAG_OUT_OF_RANGE,
+        TAG_OFF_CENTRE,
         TOO_FAR_FROM_ODOMETRY
     }
 
@@ -60,21 +81,31 @@ public class VisionPoseFilter {
      *                                                    -> ROBOT_MOVING
      *   3. frameAgeMs > MAX_FRAME_AGE_MS                 -> FRAME_TOO_OLD
      *   4. tagRange outside MIN_TAG_RANGE..MAX_TAG_RANGE -> TAG_OUT_OF_RANGE
-     *   5. vision is more than MAX_JUMP inches from odometry, OR its heading is
+     *   5. |tagBearingDeg| > MAX_TAG_BEARING_DEG         -> TAG_OFF_CENTRE
+     *   6. vision is more than MAX_JUMP inches from odometry, OR its heading is
      *      more than MAX_HEADING_JUMP degrees off       -> TOO_FAR_FROM_ODOMETRY
      *
-     * Careful in rule 5: headings of 359 deg and 1 deg are only 2 deg apart.
+     * Rule 5 was added 2026-11-13 after measuring that a tag at the edge of the
+     * frame gives a fix about 4x worse than one in the middle -- see
+     * MAX_TAG_BEARING_DEG. It sits before rule 6 because it judges the FIX on its
+     * own, and only rule 6 needs to drag odometry into it.
+     *
+     * Careful in rule 6: headings of 359 deg and 1 deg are only 2 deg apart.
      * (TurretGeometry.wrapDegrees helps.)
      *
-     * @param speed    robot speed, in/s       @param turnRate  deg/s, either direction
+     * @param speed          robot speed, in/s   @param turnRate deg/s, either direction
+     * @param tagBearingDeg  how far off the camera's centreline the tag sat; sign
+     *                       does not matter, and a combined fix passes its WORST
+     *                       tag (TagLocalizer.Fix.tagBearingDeg)
      */
     public static Verdict check(boolean turretSettled, double speed, double turnRate,
-                                double frameAgeMs, double tagRange,
+                                double frameAgeMs, double tagRange, double tagBearingDeg,
                                 Pose odometry, Pose vision) {
         if (!turretSettled) return Verdict.TURRET_MOVING;
         if (speed > MAX_ROBOT_SPEED || Math.abs(turnRate) > MAX_ROBOT_TURN_RATE) return Verdict.ROBOT_MOVING;
         if (frameAgeMs > MAX_FRAME_AGE_MS) return Verdict.FRAME_TOO_OLD;
         if (tagRange < MIN_TAG_RANGE || tagRange > MAX_TAG_RANGE) return Verdict.TAG_OUT_OF_RANGE;
+        if (Math.abs(tagBearingDeg) > MAX_TAG_BEARING_DEG) return Verdict.TAG_OFF_CENTRE;
         double jump = Math.hypot(vision.getX() - odometry.getX(), vision.getY() - odometry.getY());
         double headingJump = TurretGeometry.wrapDegrees(Math.toDegrees(vision.getHeading() - odometry.getHeading()));
         if (jump > MAX_JUMP || Math.abs(headingJump) > MAX_HEADING_JUMP) return Verdict.TOO_FAR_FROM_ODOMETRY;

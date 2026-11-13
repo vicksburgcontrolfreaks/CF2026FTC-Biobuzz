@@ -20,7 +20,14 @@ public class TagLocalizerCombineTest {
     private static final double EPS = 1e-9;
 
     private static TagLocalizer.Fix fix(int id, double x, double y, double headingDeg, double range) {
-        return new TagLocalizer.Fix(new Pose(x, y, Math.toRadians(headingDeg)), null, id, range, 1234L);
+        return fix(id, x, y, headingDeg, range, 0);
+    }
+
+    /** With a bearing, for the tests that care how combine() carries it. */
+    private static TagLocalizer.Fix fix(int id, double x, double y, double headingDeg,
+                                        double range, double bearingDeg) {
+        return new TagLocalizer.Fix(new Pose(x, y, Math.toRadians(headingDeg)), null, id, range,
+                bearingDeg, 1234L);
     }
 
     private static double headingDeg(TagLocalizer.Fix f) {
@@ -48,6 +55,17 @@ public class TagLocalizerCombineTest {
         assertEquals(90.0, headingDeg(f), EPS);
         assertEquals(33.0, f.tagRange, EPS);
         assertEquals(1234L, f.frameNanos);
+    }
+
+    @Test public void bearingTakesTheWorstTagNotTheAverage() {
+        // Range averages, bearing does NOT: one tag out at the frame edge is
+        // enough to bias the solve, so the combined fix has to be judged by it.
+        TagLocalizer.Fix f = TagLocalizer.combine(Arrays.asList(
+                fix(30, 50.0, 40.0, 90, 30, 1.0),
+                fix(31, 50.4, 40.2, 91, 32, 2.0),
+                fix(32, 49.8, 39.6, 89, 34, 24.0),
+                fix(33, 50.2, 40.2, 90, 36, 3.0)));
+        assertEquals(24.0, f.tagBearingDeg, EPS);
     }
 
     @Test public void aFlippedTagIsDropped() {

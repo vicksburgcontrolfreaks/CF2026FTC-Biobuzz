@@ -325,7 +325,7 @@ public class TagPoseTest extends OpMode {
             framesWithFix++;
             lastFixAgeMs = (System.nanoTime() - fix.frameNanos) / 1e6;
             lastVerdict = VisionPoseFilter.check(turret.isOnTarget(), speed, turnRate,
-                    lastFixAgeMs, fix.tagRange, pose, fix.robot);
+                    lastFixAgeMs, fix.tagRange, fix.tagBearingDeg, pose, fix.robot);
         } else if (!detections.isEmpty() && withPose == 0) {
             framesWithoutPose++;
         }

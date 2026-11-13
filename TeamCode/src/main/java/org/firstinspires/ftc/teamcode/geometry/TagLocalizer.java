@@ -152,20 +152,40 @@ public class TagLocalizer {
         public final TurretFix turret;     // combined fix: the kept tag nearest the average
         public final int tagId;            // combined fix: that same tag
         public final double tagRange;      // in, for VisionPoseFilter's range rule (combined: the mean)
+        /**
+         * How far off the camera's centreline the tag sat, degrees, always
+         * positive. Combined fix: the WORST of the kept tags, because it is the
+         * edge-most tag that biases the solve.
+         *
+         * MEASURED 2026-11-13 on 6494: with tags centred, repeated fixes spread
+         * 1.26 in; with the same turret travel but tags walked to the edges of
+         * the frame, 4.2 in. So where the tag sits in the image is the dominant
+         * error in the whole chain, and VisionPoseFilter gates on this.
+         *
+         * This is ftcPose.bearing, which TurretAim deliberately does NOT use for
+         * aiming (see TurretAim.bearingOf -- it mixes in elevation for a tag seen
+         * steeply from below, so it is a poor ANGLE). As a rough "is the tag near
+         * the middle of the image" gauge it is fine, and that is all it is used
+         * for here. If it ever proves too crude, detection.center in pixels is
+         * the rigorous version.
+         */
+        public final double tagBearingDeg;
         public final long frameNanos;      // when the frame was captured
         public final int tagsUsed;         // 1 from solve(); how many survived in solveFrame()
         public final double spread;        // in, farthest kept fix from the average; 0 for one tag
 
-        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, long frameNanos) {
-            this(robot, turret, tagId, tagRange, frameNanos, 1, 0.0);
+        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, double tagBearingDeg,
+            long frameNanos) {
+            this(robot, turret, tagId, tagRange, tagBearingDeg, frameNanos, 1, 0.0);
         }
 
-        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, long frameNanos,
-            int tagsUsed, double spread) {
+        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, double tagBearingDeg,
+            long frameNanos, int tagsUsed, double spread) {
             this.robot = robot;
             this.turret = turret;
             this.tagId = tagId;
             this.tagRange = tagRange;
+            this.tagBearingDeg = tagBearingDeg;
             this.frameNanos = frameNanos;
             this.tagsUsed = tagsUsed;
             this.spread = spread;
@@ -194,7 +214,8 @@ public class TagLocalizer {
         if (!fix.believable) return null;
 
         Pose robot = turret.robotPoseFromTurret(fix.x, fix.y, fix.headingRad, turretDegAtFrame);
-        return new Fix(robot, fix, detection.id, detection.ftcPose.range, detection.frameAcquisitionNanoTime);
+        return new Fix(robot, fix, detection.id, detection.ftcPose.range,
+                Math.abs(detection.ftcPose.bearing), detection.frameAcquisitionNanoTime);
     }
 
     /**
@@ -261,12 +282,16 @@ public class TagLocalizer {
 
         // Heading: average the offsets from the reference, so 359 and 1 average to 0.
         double sumX = 0, sumY = 0, sumHeadingOff = 0, sumRange = 0;
+        // Bearing takes the WORST, not the mean: one tag out at the frame edge is
+        // enough to bias the solve, so the fix should be judged by it.
+        double worstBearing = 0;
         for (Fix f : kept) {
             sumX += f.robot.getX();
             sumY += f.robot.getY();
             sumHeadingOff += TurretGeometry.wrapDegrees(
                     Math.toDegrees(f.robot.getHeading() - reference.robot.getHeading()));
             sumRange += f.tagRange;
+            worstBearing = Math.max(worstBearing, f.tagBearingDeg);
         }
         int n = kept.size();
         Pose mean = new Pose(sumX / n, sumY / n,
@@ -279,7 +304,8 @@ public class TagLocalizer {
             spread = Math.max(spread, d);
             if (d < distance(nearest.robot, mean.getX(), mean.getY())) nearest = f;
         }
-        return new Fix(mean, nearest.turret, nearest.tagId, sumRange / n, nearest.frameNanos, n, spread);
+        return new Fix(mean, nearest.turret, nearest.tagId, sumRange / n, worstBearing,
+                nearest.frameNanos, n, spread);
     }
 
     private static double distance(Pose p, double x, double y) {
