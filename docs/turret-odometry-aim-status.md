@@ -1059,3 +1059,46 @@ compiles and the math is unchanged -- not that the numbers are right.
 **Shot Map data is void** if any was taken before this. The flip changes the
 deflector's relationship to the chassis flywheels, which is exactly what
 `ShotMap` says voids a robot's table and fit.
+
+## PINNED 2026-11-13: aim goes stale, and wiggling the robot fixes it
+
+Shane, after the MAX_TRIM_DEG 45 deploy: "it seemed to be off occasionally, but
+if I wiggled the robot a little it was more likely to re-aim."
+
+That is a STALE TRIM, and the mechanism is clear. The trim only updates on a
+fresh bearing -- `TRIM_MAX_AGE_MS` 150 and `TRIM_FRESH_SEC` 0.5. With
+intermittent detections the aim holds the last trim it got and looks wrong;
+moving the robot lands a fresh detection and it snaps right.
+
+**PRIME SUSPECT, one line: `TurretCamera.DECIMATION = 2`.** TagPoseTest holds 4
+tags reliably at decimation 1 on the SAME 6 ms / gain 250, so the match camera is
+detecting worse than the bring-up tool -- again, and this time for real.
+Decimation downsamples before detection, so a marginal tag decodes or does not
+depending on sub-pixel alignment, which is exactly why wiggling helps.
+
+NOT a free change, which is why it is pinned rather than done:
+
+- lower decimation costs CPU on the camera that matters in a match;
+- slower frames start failing the 150 ms age gate, which would make the trim MORE
+  intermittent, not less.
+
+So measure, don't guess: watch the loop time and how often the bearing goes stale
+before and after. If decimation 1 is too expensive, the other lever is raising
+`TRIM_MAX_AGE_MS`, since a parked robot's bearing does not go stale in 150 ms.
+
+## NOTE FOR THE SHOT MAP SESSION: "turret near 0" NOW MEANS BACK TO THE HIVE
+
+The session plan above was written before the flip and says to build the distance
+table with "the turret near 0" so distance is isolated from the flywheel offset.
+Turret 0 now points AWAY from the collector, so that means parking with the
+robot's BACK toward the hive. Park it the old way and the turret sits near +/-180,
+which is the opposite end of the offset model and off the travel limits.
+
+The offset sweep (turret about -90/-45/0/+45/+90) is unaffected in form, and
+there is now +/-150 of travel to sweep instead of +/-90 if wider coverage is
+wanted.
+
+READY TO RUN, checked: `ShotMapTune` drives the indexer directly
+(`collection.setIndexerRPM(CollectionSystem.FEED_RPM)`) and never goes through
+Launcher or Shooter, so `DIRECT_FEED` and the now-dead `getShotsFired()` counter
+do not touch it. No prior shot data exists, so the flip voided nothing.
