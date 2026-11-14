@@ -54,8 +54,12 @@ import java.util.List;
  *                then runs the indexer for as long as you hold it. Release and
  *                both stop. No queue, no pauses, no timeouts -- see
  *                Launcher.DIRECT_FEED for what was removed and why.
- *   A  (hold)    collector in            X (hold)   collector out
- *   RT (hold)    same as B, with the collector helping push balls up
+ *   A            COLLECTOR ON / OFF. Press once for on, again for off -- it is a
+ *                LATCH, not a hold (2026-11-14). It keeps running while you drive,
+ *                aim and fire. X (collector out) also turns it off.
+ *   X  (hold)    collector out -- and drops the A latch
+ *   RT (hold)    same as B, with the collector helping push balls up. Works
+ *                whatever the A latch says, and leaves it as it found it.
  *   LT (hold)    collector + indexer backward (the only indexer-backward control).
  *                Backward WINS over fire -- it is the jam-clearing control.
  *   Y            PRE-SPIN the flywheel on / off. Not needed to shoot: B and RT
@@ -109,7 +113,7 @@ import java.util.List;
  *
  *       Left stick   drive              Right stick  turn
  *       X            heading re-reference (as above)
- *       B  (hold)    FIRE               A  (hold)    collector in
+ *       B  (hold)    FIRE               A            collector ON / OFF (latch)
  *       RT (hold)    collector + indexer forward
  *       LT (hold)    collector + indexer BACKWARD -- backing a ball out is the
  *                    job collector-out would have done, so this one stays
@@ -300,6 +304,12 @@ public class DriveTeleOp extends OpMode {
     private Gamepad op() {
         return solo ? gamepad1 : gamepad2;
     }
+    /**
+     * Collector latch (operator A). A press toggles it; X (collector out) drops
+     * it. Not reset anywhere else: it survives the whole TeleOp, and stop()
+     * stops the motors, so it cannot outlive the op mode.
+     */
+    private boolean collectorLatched = false;
     private boolean turretManual = false;
     private boolean wasReady = false;
     private int lastTrips = 0;
@@ -577,12 +587,22 @@ public class DriveTeleOp extends OpMode {
         // guard anyway, and the button is worth more as the wall re-anchor. It is
         // read off gamepad1 directly in loop() so it works in solo too.
 
+        // A LATCHES THE COLLECTOR -- press on, press off (Shane, 2026-11-14). It
+        // was a hold. Collecting is a whole trip down the field, so holding A for
+        // it used up a thumb the operator needs for the turret stick and the
+        // deflector flick. Parallel to Y: both are "leave this motor running".
+        if (op().aWasPressed()) collectorLatched = !collectorLatched;
         controls.fire = op().b;   // was RB -- bumpers don't register well on our gamepads
-        controls.collectIn = op().a;
         // COLLECTOR-OUT IS OFF IN SOLO MODE: x is the driver's heading
         // re-reference on gamepad 1. The && short-circuits, so gamepad 1's X is
         // never even read here -- re-referencing the heading can't also spit a ball.
         controls.collectOut = !solo && op().x;
+        // X DROPS THE LATCH, and it has to: updateCollector() takes collectIn over
+        // collectOut, so a latched collector would have made collector-out a dead
+        // button. Spitting a ball out is also the clearest "stop collecting" there
+        // is. LT needs no such help -- backward already wins over both.
+        if (controls.collectOut) collectorLatched = false;
+        controls.collectIn = collectorLatched;
         controls.allForward = op().right_trigger > TRIGGER_HELD;
         // LT WORKS IN BOTH MODES. The driver doesn't use either trigger, so solo
         // keeps the full backward control -- which is what stands in for the
@@ -757,10 +777,16 @@ public class DriveTeleOp extends OpMode {
         } else {
             telemetry.addLine("Wall re-anchor: not used (gamepad 1 D-pad Down, parked on a wall)");
         }
-        telemetry.addData("Op input", "%s | B %s  RT %.2f  LT %.2f  A %s",
+        telemetry.addData("Op input", "%s | B %s  RT %.2f  LT %.2f  A(raw) %s",
                 solo ? "gamepad1 (SOLO)" : "gamepad2",
                 op().b ? "HELD" : "-", op().right_trigger, op().left_trigger,
                 op().a ? "HELD" : "-");
+        // Its own line, because a LATCHED collector is a motor running with nobody
+        // touching anything, and that should never be a surprise. Same rule as the
+        // Shot Map latch. A(raw) above is the button; this is the state it set.
+        telemetry.addData("Collector", collectorLatched
+                ? "LATCHED ON (A to stop, X also drops it)"
+                : "off -- A latches it on");
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
         // Which path is aiming, and the distance odometry gives that the camera never

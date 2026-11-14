@@ -60,17 +60,19 @@ import java.util.List;
  *   Y              reset the picked knob to its starting value
  *   B              clear the shot log
  *
- * TUNING SOLO? Hold A and tap RT on gamepad 2 and everything forward LATCHES
- * on -- flywheel, indexer and collector keep running with nothing held, so your
- * hands are free for the knobs on gamepad 1. Y or LT stops it, as does holding A
- * and tapping RT again. The screen says so in capitals while it is latched.
+ * TUNING SOLO? Press BACK on gamepad 2 and everything forward LATCHES on --
+ * flywheel, indexer and collector keep running with nothing held, so your hands
+ * are free for the knobs on gamepad 1. Y, LT or BACK again stops it. The screen
+ * says so in capitals while it is latched. (It was "hold A and tap RT" until
+ * 2026-11-14; A is the collector toggle now and cannot also be a modifier.)
  *
  * GAMEPAD 2 (operator) -- same buttons as DriveTeleOp, but direct, no gating:
  *   B  (hold)      flywheel on + indexer forward
  *   RT (hold)      flywheel on + indexer + collector forward
- *   A + RT         LATCH that on (see above). Y or LT drops it.
+ *   BACK           LATCH that on (see above). Y or LT drops it.
  *   LT (hold)      indexer + collector backward
- *   A / X (hold)   collector in / out
+ *   A              collector ON / OFF (latch, same as DriveTeleOp)
+ *   X  (hold)      collector out -- and drops the A latch
  *   Y              flywheel on / off
  *   Right stick X  turret by hand (overrides aiming while held)
  *   Left stick     flick up / down: deflector to the next preset (quick jump)
@@ -156,9 +158,10 @@ public class PollenShotTune extends OpMode {
     private boolean flywheelOn = false;
 
     // RT LATCH: everything forward stays on with nothing held, for tuning solo.
-    // Hold A and tap RT to latch; Y or LT drops it. See operate().
+    // BACK latches it; Y or LT drops it. See operate().
     private boolean latched = false;
-    private boolean rtWasHeld = false;
+    /** Collector latch (A). Press on, press off; X (collector out) drops it. */
+    private boolean collectorLatched = false;
     private double leftRpm, rightRpm;
     private boolean wasAtSpeed = false;
 
@@ -339,13 +342,25 @@ public class PollenShotTune extends OpMode {
         boolean yPressed = gamepad2.yWasPressed();
 
         // RT LATCH -- for tuning solo. You cannot hold RT on gamepad 2 and reach the
-        // knobs on gamepad 1 at the same time, so: HOLD A AND TAP RT and everything
-        // forward latches on, staying on with nothing held.
-        if (gamepad2.a && rtNow && !rtWasHeld) latched = !latched;
+        // knobs on gamepad 1 at the same time, so BACK latches everything forward
+        // on, staying on with nothing held.
+        //
+        // IT WAS "HOLD A AND TAP RT" until 2026-11-14. A is now the collector
+        // toggle, to match DriveTeleOp, so it can no longer serve as a modifier --
+        // pressing it would latch the collector on the way to the combo. BACK is
+        // the only button free on gamepad 2 here, and a latch is a deliberate,
+        // once-a-session press rather than something reached for mid-shot.
+        if (gamepad2.backWasPressed()) latched = !latched;
         // Anything that means "stop" drops the latch: Y, which is already flywheel
         // off, or LT, which is reverse and would fight a latched forward feed.
         if (yPressed || allBack) latched = false;
-        rtWasHeld = rtNow;
+
+        // A LATCHES THE COLLECTOR, press on / press off -- same as DriveTeleOp
+        // (Shane, 2026-11-14). It was a hold AND the modifier for the RT latch.
+        if (gamepad2.aWasPressed()) collectorLatched = !collectorLatched;
+        // X is collector-out, so it means "stop collecting" too. Reversing while a
+        // latch says forward is the one combination that cannot be honoured.
+        if (gamepad2.x) collectorLatched = false;
 
         boolean allForward = rtNow || latched;
 
@@ -390,7 +405,7 @@ public class PollenShotTune extends OpMode {
 
         // Collector
         double coll = value[Knob.COLLECTOR.ordinal()];
-        if (allForward || (gamepad2.a && !allBack)) collection.setCollectorRPM(coll);
+        if (allForward || (collectorLatched && !allBack)) collection.setCollectorRPM(coll);
         else if (allBack || gamepad2.x) collection.setCollectorRPM(-coll);
         else collection.stopCollector();
 
@@ -502,8 +517,12 @@ public class PollenShotTune extends OpMode {
         // Loud, because a latched shooter keeps running with nothing held and that
         // is exactly the thing you do not want to be unsure about.
         if (latched) {
-            telemetry.addLine(">>> RT LATCHED - flywheel, indexer and collector are RUNNING");
-            telemetry.addLine("    Y or LT to stop (or hold A and tap RT again)");
+            telemetry.addLine(">>> BACK LATCHED - flywheel, indexer and collector are RUNNING");
+            telemetry.addLine("    Y, LT or BACK again to stop");
+        }
+        // Same rule, one motor: a latched collector runs with nothing held.
+        if (collectorLatched && !latched) {
+            telemetry.addLine(">>> COLLECTOR LATCHED ON (A to stop, X also drops it)");
         }
         telemetry.addData("Flywheel", "%s  L %.0f / R %.0f  (target %.0f)%s",
                 flywheelOn ? (isAtSpeed() ? "AT SPEED" : "spinning") : "off",
