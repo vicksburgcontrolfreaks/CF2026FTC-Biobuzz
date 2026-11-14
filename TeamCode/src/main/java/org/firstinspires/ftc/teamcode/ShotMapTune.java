@@ -72,6 +72,29 @@ import java.util.Locale;
  *   the balls/mechanism are the limit, not the RPM) and the transition width
  *   (how much RPM error the shot forgives). See ShotMap.
  *
+ * PRESS WHAT THE BALL FLEW, NOT WHAT THE SCOREBOARD SAID
+ *   Shane, 2026-11-13: "there were several shots that were makes, but barely, or
+ *   if they didn't get fired directly into the top of the hive it would have shot
+ *   well over. I'm not sure if that is good or bad."
+ *
+ *   It is not wrong, it is VAGUE, and the difference matters. A rung's score is
+ *   (highs - lows) / n, so HIT counts as ZERO -- it does not pull the answer
+ *   either way, it just adds no information. Call every lucky make a HIT and the
+ *   balance crossing goes soft: more balls, mushier answer, wider apparent band.
+ *
+ *   So when the make and the trajectory disagree, press the TRAJECTORY:
+ *     - went in but clearly sailing high  -> LONG
+ *     - scraped in at the near lip        -> SHORT
+ *     - went in the way you want every ball to go -> HIT
+ *
+ *   Trade-off, so nobody is surprised: "best hit rate" then means CLEAN hits
+ *   rather than scoring hits. That is the more useful number for tuning, but it
+ *   will read lower than the match score would.
+ *
+ *   And the observation is itself a result: if a wide RPM range still scores, the
+ *   hive is forgiving at that distance. That shows up as a large transition
+ *   width, which is the table telling you it does not need to be precise there.
+ *
  * WHERE THE ROBOT IS
  *   Odometry, started from the wall start picked in the INIT menu. Park on it
  *   before Start. Driving between spots drifts the pose a little; to re-sync,
