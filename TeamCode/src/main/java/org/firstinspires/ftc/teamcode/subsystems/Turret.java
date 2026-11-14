@@ -391,6 +391,9 @@ public class Turret {
                 // Check: bandFar = 81.0 + 1.0 * 8.2 = 89.2, matching the 89.3 edge.
                 // IF HOMING PARKS ~8 DEG OFF: the pair is swapped -- use 89.3 with
                 // HOMING_DIRECTION -1 (same note as 6494).
+                // ROBOT-VERIFIED 2026-11-14 (Jade, Turret Test): homes CCW, lands
+                // pointing straight back, repeatable 3x, and the +/-149 limits stop
+                // it short of both hard stops.
                 HOME_SWITCH_ANGLE = 81.0;
                 MAGNET_BAND_DEG = 8.2;
                 // +/-149: 5618 HAS hard stops at +/-152.4, so pulled in ~3 deg like
