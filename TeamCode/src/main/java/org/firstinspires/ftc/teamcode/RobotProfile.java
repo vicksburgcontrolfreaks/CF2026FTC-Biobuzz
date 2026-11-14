@@ -206,14 +206,13 @@ public final class RobotProfile {
         TurretGeometry.TURRET_ZERO_DEG = 180.0;
         TurretGeometry.TURRET_CCW_SIGN = 1.0;
 
-        // INHERITED, NOT MEASURED. These are the values 5618 was already running
-        // before the split, so nothing it does today gets worse -- but every one
-        // of them is 6494's mount or an outright guess. Camera aiming on 5618 is
-        // only as good as these.
-        CAMERA_FORWARD = 4.5;
-        CAMERA_LEFT = 0.0;
-        CAMERA_UP = 12.0;
-        CAMERA_PITCH_DEG = 30.0;
+        // MEASURED on the rebuilt 5618, 2026-11-14 (Jade). Same frame as 6494:
+        // from the turret axis at FLOOR level, turret at 0.
+        // (Was inherited/guessed: forward 4.5, up 12, pitch 30.)
+        CAMERA_FORWARD = -1.25;   // NEGATIVE: the camera sits 1.25 in BEHIND the turret axis
+        CAMERA_LEFT = 0.0;        // centred left to right
+        CAMERA_UP = 17.0;
+        CAMERA_PITCH_DEG = 42.65;
         CAMERA_YAW_DEG = 0.0;
         applyCamera();
 

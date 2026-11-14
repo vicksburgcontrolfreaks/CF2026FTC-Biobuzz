@@ -253,9 +253,14 @@ public class ShooterPivot {
                 // (Was 2026-11-11: open 0.486, closed 0.896, pollen 0.846.
                 //  Was 2026-11-06: stops 0.1268 / 0.65, pollen 0.568, nectar 0.17.)
                 MIN_SAFE_POSITION = 0.478;    // widest (open hard stop)
-                MAX_SAFE_POSITION = 0.9375;   // tightest = the pollen grip
+                MAX_SAFE_POSITION = 0.9375;   // tightest
                 OPEN_POSITION = 0.478;
-                POLLEN_POSITION = 0.9375;
+                // 0.928: the KEEPER pollen grip after the full 5618 rebuild
+                // (Jade, 2026-11-14). Fixed -- tune RPMs around it, not this.
+                // NOTE: the two ends above are from 11-13, BEFORE the rebuild,
+                // and were not re-measured; 0.928 sits inside them so it is not
+                // clipped. Re-measure the ends if the servo ever buzzes.
+                POLLEN_POSITION = 0.928;
                 // NOT MEASURED: robot is pollen-only for now. 0.6 is a placeholder
                 // (Pivot Jog Test's 5618 start spot) -- re-measure before shooting nectar.
                 NECTAR_POSITION = 0.6;

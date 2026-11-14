@@ -53,9 +53,10 @@ public class Launcher {
         try {
             switch (org.firstinspires.ftc.teamcode.WhichRobot.get()) {
                 case R5618:
-                    // 1300 -> 1100: Pollen Shot Tune, Shane, 2026-11-11, pollen-only
-                    // 5618 rebuild (indexer 150, pivot 0.846).
-                    FLYWHEEL_RPM = 1100;
+                    // 1300: starting point after the full 5618 rebuild (Jade,
+                    // 2026-11-14) -- tune from here in Pollen Shot Tune.
+                    // (Was 1100: Shane, 2026-11-11, before the rebuild.)
+                    FLYWHEEL_RPM = 1300;
                     break;
                 case R6494:
                     // 1300 -> 1280: Shane, 2026-11-14. This is the SHOT MAP's answer
