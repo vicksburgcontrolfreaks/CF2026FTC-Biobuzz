@@ -360,12 +360,20 @@ public class Turret {
     private static void loadRobotNumbers() {
         switch (WhichRobot.get()) {
             case R5618:
-                // Turret Range Test, Shane, 2026-11-06: cable stops +-93.3 (travel
-                // 186.6), magnet band -91.0..-83.1 (8 deg), truly forward read 0.0
-                // in the same frame, so no forward correction. Same layout as 6494:
-                // angle falls clockwise, cable slack clockwise, tight counter-clockwise.
-                HOME_SWITCH_ANGLE = -83.1;
-                MAGNET_BAND_DEG = 7.9;
+                // 5618 REBUILD, 2026-11-14 (Jade): turret taken apart and rebuilt,
+                // direction the SAME as 6494 (angle falls clockwise, cable slack
+                // clockwise, tight counter-clockwise -- which is what the signs
+                // below already say). The magnet and cable stops have probably
+                // moved, so the magnet is NaN = "not measured": homing REFUSES
+                // until Turret Range Test is re-run, instead of homing the rebuilt
+                // turret off old numbers and toward the tight end of its cable.
+                // Put the new Range Test numbers here and remove the NaNs.
+                //
+                // Old, pre-rebuild (Turret Range Test, Shane, 2026-11-06): cable
+                // stops +-93.3, magnet band -91.0..-83.1 (HOME_SWITCH_ANGLE -83.1,
+                // band 7.9), forward read 0.0, limits -90 / +85.
+                HOME_SWITCH_ANGLE = Double.NaN;   // was -83.1 -- RE-MEASURE
+                MAGNET_BAND_DEG = Double.NaN;     // was 7.9  -- RE-MEASURE
                 // -90: inside the magnet band (same rule as 6494), 3.3 off the stop.
                 MIN_ANGLE = -90.0;
                 // +85, not +90: +93.3 is the TIGHT cable end, so +90 would leave only
