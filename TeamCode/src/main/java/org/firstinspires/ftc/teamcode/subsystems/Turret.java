@@ -380,19 +380,32 @@ public class Turret {
                 // Old, pre-rebuild, FRONT-facing frame (Turret Range Test, Shane,
                 // 2026-11-06): cable stops +-93.3, magnet band -91.0..-83.1,
                 // HOME_SWITCH_ANGLE -83.1, band 7.9, limits -90 / +85.
-                HOME_SWITCH_ANGLE = Double.NaN;   // RE-MEASURE (rear-facing frame)
-                MAGNET_BAND_DEG = Double.NaN;     // RE-MEASURE
-                // PLACEHOLDERS until the Range Test: the old conservative band, not
-                // 6494's +/-150. 5618's cable has never been checked across +/-150.
-                // Widen these only to what the cable allows on 5618, by hand.
-                MIN_ANGLE = -90.0;
-                MAX_ANGLE = 85.0;
+                // MEASURED 2026-11-14, Turret Range Test on rebuilt 5618 (Jade):
+                //   hard stops        -152.4 / +152.4 (symmetric, so the sweep's
+                //                     middle is taken as straight back -- CHECK
+                //                     that after homing, see RobotProfile)
+                //   magnet band edges  81.0 / 89.3, band ~8.2, centre ~85.2
+                // HOME_SWITCH_ANGLE is the edge homing meets FIRST travelling +1
+                // from centre = 81.0 (the lower edge). The screen said 89.3 because
+                // Range Test still assumes the pre-flip HOMING_DIRECTION -1.
+                // Check: bandFar = 81.0 + 1.0 * 8.2 = 89.2, matching the 89.3 edge.
+                // IF HOMING PARKS ~8 DEG OFF: the pair is swapped -- use 89.3 with
+                // HOMING_DIRECTION -1 (same note as 6494).
+                HOME_SWITCH_ANGLE = 81.0;
+                MAGNET_BAND_DEG = 8.2;
+                // +/-149: 5618 HAS hard stops at +/-152.4, so pulled in ~3 deg like
+                // the original rule, so the turret never rests against a stop.
+                MIN_ANGLE = -149.0;
+                MAX_ANGLE = 149.0;
                 // +1 = CCW, toward the magnet from the rear-facing centre -- same
                 // as 6494 after the flip, assuming the magnet sits in the same spot
                 // on the rebuilt turret. NOTE this is toward the cable's TIGHT side
                 // now, hence the shorter search (6494 uses 110 for the same reason).
-                // If the Range Test puts the magnet on the NEGATIVE side of centre,
-                // this becomes -1.
+                // CONFIRMED by the 2026-11-14 Range Test: magnet at +81..+89.3, the
+                // POSITIVE side of centre, so +1 is right. 110 finds it from roughly
+                // straight back with ~29 deg to spare. Start homing with the turret
+                // roughly REARWARD -- if it's already past +89.3, the magnet is
+                // behind it and homing will run toward the +152.4 hard stop and fail.
                 HOMING_DIRECTION = 1.0;
                 HOMING_SEARCH_MAX_DEG = 110.0;
                 // Original speed, unchanged.
