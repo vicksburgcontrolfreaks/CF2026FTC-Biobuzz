@@ -539,31 +539,12 @@ public class DriveTeleOp extends OpMode {
      */
     private void tryWallReanchor() {
         Pose pose = follower.getPose();
-        List<AprilTagDetection> detections = camera.getDetections();
-
-        // The tilt comes from the operator's aim cell, not from the detection --
-        // see HiveGeometry.tiltWithRaised. TurretCamera has no camera pose, so
-        // detection.robotPose is null and TagLocalizer cannot supply it here.
-        HiveGeometry.Tilt tilt = HiveGeometry.tiltWithRaised(targetCell);
-
-        List<WallFix.Sighting> sightings = new ArrayList<>();
-        if (detections != null) {
-            for (AprilTagDetection d : detections) {
-                if (d.ftcPose == null || FieldAprilTags.Cell.forTag(d.id) == null) continue;
-                Rigid3 tag = HiveTags.tagPose(d.id, tilt);
-                sightings.add(new WallFix.Sighting(tag.x(), tag.y(),
-                        WallFix.bearingDeg(d.ftcPose.x, d.ftcPose.y, d.ftcPose.z,
-                                TagLocalizer.CAMERA_PITCH_DEG, TagLocalizer.CAMERA_YAW_DEG)));
-            }
-        }
 
         // FRONT = collector-first, the only convention that works: back-first puts
         // the camera at the wall. This is what the turret flip bought.
-        WallFix.Face face = WallFix.Face.FRONT;
-        double faceDist = RobotConstants.ROBOT_LENGTH / 2;
-        WallFix.Result fix = WallFix.solve(pose.getHeading(), face, faceDist,
-                turret.getAngle(), TurretGeometry.forRobot(),
-                TagLocalizer.CAMERA_FORWARD, TagLocalizer.CAMERA_LEFT, sightings);
+        WallFix.Result fix = WallReanchor.solveFrom(camera.getDetections(), pose,
+                HiveGeometry.tiltWithRaised(targetCell), turret.getAngle(),
+                WallFix.Face.FRONT, RobotConstants.ROBOT_LENGTH / 2);
 
         WallReanchor.Verdict verdict = WallReanchor.check(fix, robotSpeed, robotTurnRateDeg,
                 turret.isOnTarget());

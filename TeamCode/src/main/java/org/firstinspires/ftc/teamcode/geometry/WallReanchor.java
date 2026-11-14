@@ -2,8 +2,15 @@ package org.firstinspires.ftc.teamcode.geometry;
 
 import com.pedropathing.geometry.Pose;
 
+import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
 import org.firstinspires.ftc.teamcode.field.FieldConstants;
+import org.firstinspires.ftc.teamcode.field.HiveGeometry.Tilt;
+import org.firstinspires.ftc.teamcode.field.HiveTags;
 import org.firstinspires.ftc.teamcode.field.Zone;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Should we accept a wall re-anchor RIGHT NOW? The guard layer between
@@ -110,6 +117,46 @@ public final class WallReanchor {
 
     /** Keep a re-anchor at least this far inside the field walls, inches. */
     public static double FIELD_MARGIN = 2.0;
+
+    /**
+     * Build the sightings from a camera frame and ask WallFix where we are. The
+     * robot-side assembly half; {@link #check} is the part worth unit-testing and
+     * this is the part that needs an SDK frame, so they are kept separate.
+     *
+     * THE TILT COMES FROM THE CALLER, not from the detection. The usual source
+     * (TagLocalizer.turretFixOf, which tries both tilts and keeps the level one)
+     * needs detection.robotPose, and that is null on TurretCamera because its
+     * processor has no camera pose set. HiveGeometry.tiltWithRaised(aimCell) is
+     * the cheap way round it: the operator has already said which cell they are
+     * shooting at, and you shoot at the raised one.
+     *
+     * @param detections   straight from AprilTagProcessor.getDetections(); null is fine
+     * @param pose         current odometry pose -- only its HEADING is used, snapped
+     *                     to the nearest 90, so a drifted position does not matter
+     * @param tilt         how the hive is tipped
+     * @param turretDeg    turret angle now
+     * @param face         which face of the robot is against the wall
+     * @param faceDistance pose origin to that face, inches
+     */
+    public static WallFix.Result solveFrom(List<AprilTagDetection> detections, Pose pose,
+                                           Tilt tilt, double turretDeg,
+                                           WallFix.Face face, double faceDistance) {
+        List<WallFix.Sighting> sightings = new ArrayList<>();
+        if (detections != null) {
+            for (AprilTagDetection d : detections) {
+                // ftcPose null = the SDK had no size for it, so no bearing either.
+                // Not a hive tag = not something HiveTags can place.
+                if (d.ftcPose == null || FieldAprilTags.Cell.forTag(d.id) == null) continue;
+                Rigid3 tag = HiveTags.tagPose(d.id, tilt);
+                sightings.add(new WallFix.Sighting(tag.x(), tag.y(),
+                        WallFix.bearingDeg(d.ftcPose.x, d.ftcPose.y, d.ftcPose.z,
+                                TagLocalizer.CAMERA_PITCH_DEG, TagLocalizer.CAMERA_YAW_DEG)));
+            }
+        }
+        return WallFix.solve(pose.getHeading(), face, faceDistance, turretDeg,
+                TurretGeometry.forRobot(), TagLocalizer.CAMERA_FORWARD,
+                TagLocalizer.CAMERA_LEFT, sightings);
+    }
 
     /**
      * @param fix          what WallFix.solve() returned (may be a refusal, or null)

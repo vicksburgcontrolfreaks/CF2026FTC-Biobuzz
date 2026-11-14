@@ -16,6 +16,8 @@ import org.firstinspires.ftc.teamcode.field.HiveGeometry;
 import org.firstinspires.ftc.teamcode.field.WallStart;
 import org.firstinspires.ftc.teamcode.geometry.FieldCentric;
 import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
+import org.firstinspires.ftc.teamcode.geometry.WallFix;
+import org.firstinspires.ftc.teamcode.geometry.WallReanchor;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.shooting.ShooterLogic;
 import org.firstinspires.ftc.teamcode.shooting.ShotMap;
@@ -73,9 +75,13 @@ import java.util.Locale;
  * WHERE THE ROBOT IS
  *   Odometry, started from the wall start picked in the INIT menu. Park on it
  *   before Start. Driving between spots drifts the pose a little; to re-sync,
- *   park back on the same start and press BACK on gamepad 1. The "Pose" line
- *   shows the camera's opinion: a trim of several degrees, or NOT TRUSTED, means
- *   the pose has drifted and the distances being logged are off -- re-sync.
+ *   park back on the same start and press BACK, or press LT + BACK at ANY wall.
+ *
+ *   WATCH "cam trim" ON THE Pose LINE, not "NOT TRUSTED". MAX_TRIM_DEG went to 45
+ *   on 2026-11-13, so the pose stays "trusted" through drift that used to trip it.
+ *   A trim of several degrees means the pose has drifted and THE DISTANCES BEING
+ *   LOGGED ARE WRONG -- re-sync. The trim corrects the AIM, so the shot still looks
+ *   good while the number going into the table is off. That is the trap here.
  *
  * WHAT STAYS FIXED: pivot at POLLEN_POSITION, deflector at DEFAULT_SHOT_DEG,
  * indexer at FEED_RPM. RPM is the only knob (Shane's call, 2026-11-13). POLLEN
@@ -92,7 +98,12 @@ import java.util.Locale;
  *   LT + RB / LB   aim trim left / right by AIM_STEP_DEG
  *   X              undo the last press
  *   B              save this spot, start the next
- *   BACK (gp1)     "I'm parked on the start spot" -- re-sync the pose
+ *   BACK (gp1)     "I'm parked on the start spot" -- re-sync the pose exactly
+ *   LT + BACK      "I'm parked on a wall, collector-first" -- re-anchor from the
+ *                  wall plus the camera's bearing. Works at ANY wall, so you do
+ *                  not have to drive back to the start spot between spots. Prefer
+ *                  plain BACK when you ARE on the start spot: that pose is known,
+ *                  this one is measured.
  *
  * THE LOG: /sdcard/FIRST/shotmap/shotmap-<robot>-<date>.csv, one "shot" row per
  * press and one "spot" row per B. Pull it with
@@ -285,14 +296,51 @@ public class ShotMapTune extends OpMode {
         showTelemetry();
     }
 
+    // ---- Pose repair ------------------------------------------------------------------
+
+    /**
+     * LT + BACK: re-anchor on whatever wall we are parked against, collector-first.
+     *
+     * WHY THIS EARNED A SPOT IN A TUNING OP MODE. ShotTable is keyed on DISTANCE,
+     * and distance comes from the pose -- so a drifted pose logs a wrong distance
+     * into every row of the table. The camera trim hides it: it corrects the AIM,
+     * so the shot looks good while the number being recorded is wrong. Plain BACK
+     * fixes it exactly but only works parked on the start spot, which is a long
+     * drive back from the fifth shooting position. This works at any wall.
+     *
+     * Prefer plain BACK when you ARE on the start spot: that pose is known, this
+     * one is measured.
+     */
+    private void wallReanchor() {
+        Pose pose = follower.getPose();
+        WallFix.Result fix = WallReanchor.solveFrom(camera.getDetections(), pose,
+                HiveGeometry.tiltWithRaised(targetCell), turret.getAngle(),
+                WallFix.Face.FRONT, RobotConstants.ROBOT_LENGTH / 2);
+        // Parked and tuning, so motion is zero by assumption -- but pass the real
+        // turret state, because a slewing turret makes the bearing stale.
+        WallReanchor.Verdict verdict = WallReanchor.check(fix, 0, 0, turret.isOnTarget());
+        lastNote = "wall re-anchor: " + WallReanchor.describe(verdict, fix);
+        if (verdict.accepted()) {
+            follower.setPose(fix.robot);
+            aim.resetPhase();
+            gamepad1.rumble(400);
+        } else {
+            gamepad1.rumbleBlips(2);
+        }
+    }
+
     // ---- Driving ----------------------------------------------------------------------
 
     private void drive() {
         if (gamepad1.backWasPressed()) {
-            follower.setPose(startSpot.get().pose);
-            aim.resetPhase();
-            lastNote = "pose re-synced to " + startSpot.get().label;
-            gamepad1.rumble(300);
+            if (gamepad1.left_trigger > 0.5) {
+                wallReanchor();
+            } else {
+                follower.setPose(startSpot.get().pose);
+                aim.resetPhase();
+                lastNote = "pose re-synced to " + startSpot.get().label;
+                gamepad1.rumble(300);
+            }
         }
         double[] r = FieldCentric.toRobot(-gamepad1.left_stick_y, gamepad1.left_stick_x,
                 follower.getPose().getHeading(), alliance.awayFromDriversHeading());
