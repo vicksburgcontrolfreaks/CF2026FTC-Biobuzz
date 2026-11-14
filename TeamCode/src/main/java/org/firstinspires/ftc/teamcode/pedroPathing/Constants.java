@@ -135,6 +135,8 @@ public class Constants {
                 // Localization Test on 5618, 2026-11-05: forward push read y down 24,
                 // same as 6494, so the forward pod is REVERSED. 2026-11-06: strafe OK
                 // (right 24 -> y -24), one turn -> 6.3, x/y back near 0. PASSED.
+                // RE-CHECKED after the full 5618 rebuild, 2026-11-14 (Jade,
+                // Localization Test): PASSED, no changes needed.
                 return sharedLocalizer()
                         .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
                         .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
