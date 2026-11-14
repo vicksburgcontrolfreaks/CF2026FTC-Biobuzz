@@ -53,10 +53,11 @@ public class Launcher {
         try {
             switch (org.firstinspires.ftc.teamcode.WhichRobot.get()) {
                 case R5618:
-                    // 1300: starting point after the full 5618 rebuild (Jade,
-                    // 2026-11-14) -- tune from here in Pollen Shot Tune.
+                    // 1275: Jade, 2026-11-14, after the full 5618 rebuild (started
+                    // at 1300). Used by DriveTeleOp AND the autos, and is Pollen
+                    // Shot Tune's starting value.
                     // (Was 1100: Shane, 2026-11-11, before the rebuild.)
-                    FLYWHEEL_RPM = 1300;
+                    FLYWHEEL_RPM = 1275;
                     break;
                 case R6494:
                     // 1300 -> 1280: Shane, 2026-11-14. This is the SHOT MAP's answer
