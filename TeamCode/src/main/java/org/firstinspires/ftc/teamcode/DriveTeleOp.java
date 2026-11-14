@@ -12,8 +12,14 @@ import org.firstinspires.ftc.teamcode.Auton.Waypoints;
 import org.firstinspires.ftc.teamcode.field.Alliance;
 import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
 import org.firstinspires.ftc.teamcode.field.HiveGeometry;
+import org.firstinspires.ftc.teamcode.field.HiveTags;
 import org.firstinspires.ftc.teamcode.field.PoseHandoff;
 import org.firstinspires.ftc.teamcode.geometry.FieldCentric;
+import org.firstinspires.ftc.teamcode.geometry.Rigid3;
+import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
+import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
+import org.firstinspires.ftc.teamcode.geometry.WallFix;
+import org.firstinspires.ftc.teamcode.geometry.WallReanchor;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.shooting.NectarGuard;
 import org.firstinspires.ftc.teamcode.subsystems.Deflector;
@@ -24,6 +30,7 @@ import org.firstinspires.ftc.teamcode.subsystems.TurretDirector;
 import org.firstinspires.ftc.teamcode.vision.TurretCamera;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /*
@@ -36,6 +43,11 @@ import java.util.List;
  *                DRIVING sticks only, rumbles. It does NOT move the pose, so it
  *                cannot throw the turret's aim off (see driverHeadingOffset).
  *                (was BACK until 2026-11-06; BACK didn't register reliably on 6494)
+ *   D-pad Down   WALL RE-ANCHOR: "we are square on this wall, collector-first."
+ *                Fixes a drifted pose from the wall plus the camera's bearing to
+ *                the hive tags. Long rumble = taken, two blips = refused (the
+ *                screen says why). Drive squarely into the wall, STOP, then press.
+ *                Works on gamepad 1 in both layouts.
  *
  * GAMEPAD 2 (operator)                             (all "hold" = only while held)
  *   B  (hold)    FIRE. Spins the flywheel up, waits for it to reach speed ONCE,
@@ -56,7 +68,7 @@ import java.util.List;
  *                lower -- 0 / 67.5 / 70 / 72.5 / 75 / 80 / 90 deg. Return to center between
  *                flicks. Needs the pre-match zero (see Deflector).
  *   D-pad Up     park the turret forward / resume aiming
- *   D-pad Down   "a NECTAR is next": nectar gap until the next shot
+ *   D-pad Down   (gamepad 1 only now -- wall re-anchor, see above)
  *   D-pad L / R  aim at our AUDIENCE / SCORING cell (with "Our side": until the
  *                robot next crosses the middle of the field)
  *   Rumble       short = ready (at speed + on target); 3 blips = nectar detected;
@@ -103,8 +115,7 @@ import java.util.List;
  *                    job collector-out would have done, so this one stays
  *       Y            PRE-SPIN the flywheel on / off
  *       D-pad Up     park the turret / resume aiming
- *       D-pad Down   "a NECTAR is next" -- DOES NOTHING in DIRECT_FEED mode, and
- *                    we are not handling nectar at the next competition anyway
+ *       D-pad Down   WALL RE-ANCHOR (same as the driver layout)
  *       D-pad L / R  aim at our AUDIENCE / SCORING cell
  *       Rumble       same three signals, on gamepad 1
  *
@@ -452,6 +463,11 @@ public class DriveTeleOp extends OpMode {
     // ---- Gamepad 1 ------------------------------------------------------------
 
     private void drive() {
+        // Before the button, so a press is judged against motion measured up to
+        // this loop rather than last loop's.
+        trackSpeed(follower.getPose());
+        if (gamepad1.dpadDownWasPressed()) tryWallReanchor();
+
         if (gamepad1.xWasPressed()) {
             // "The robot faces away from me right now." This is a DRIVING
             // reference, so it moves a driving-only offset and DOES NOT TOUCH
@@ -478,12 +494,107 @@ public class DriveTeleOp extends OpMode {
         hardware.rr.setPower((forward + right - turn) / den * DRIVE_SPEED);
     }
 
+    // ---- Wall re-anchor (gamepad 1, D-pad Down) --------------------------------
+    // "We are square on this wall, collector-first." The wall then supplies the
+    // across-wall coordinate and the heading, and the camera's BEARING to the hive
+    // tags supplies the position ALONG the wall. See WallFix.
+    //
+    // WHY THIS AND NOT TAG LOCALIZATION: bearing needs no range, no camera height,
+    // no tag orientation and no camera calibration, so it sidesteps every error
+    // that cost us 2026-11-12/13 -- the ~9% range scale, the vertical chain, the
+    // frame-edge bias, single-tag pose ambiguity. One tag is enough.
+    //
+    // AND WHY IT MATTERS: a drifted pose does NOT heal itself. updateTrim() only
+    // re-trusts the pose when the camera AGREES, so once the pose has wandered
+    // past MAX_TRIM_DEG the turret stays on camera aiming indefinitely, however
+    // many tags it sees. Correcting the pose is the only way back to odometry --
+    // and it comes back on its own, one agreeing frame later.
+
+    private WallReanchor.Verdict lastReanchor = null;
+    private WallFix.Result lastReanchorFix = null;
+    private double lastReanchorAgeSec = -1;
+    private final ElapsedTime sinceReanchor = new ElapsedTime();
+
+    /** Robot speed and turn rate, for the re-anchor's "are we actually parked" guard. */
+    private Pose lastPoseForSpeed = null;
+    private double robotSpeed = 0, robotTurnRateDeg = 0;
+    private final ElapsedTime speedTimer = new ElapsedTime();
+
+    private void trackSpeed(Pose pose) {
+        double dt = speedTimer.seconds();
+        speedTimer.reset();
+        if (lastPoseForSpeed != null && dt > 1e-3) {
+            robotSpeed = Math.hypot(pose.getX() - lastPoseForSpeed.getX(),
+                    pose.getY() - lastPoseForSpeed.getY()) / dt;
+            robotTurnRateDeg = TurretGeometry.wrapDegrees(
+                    Math.toDegrees(pose.getHeading() - lastPoseForSpeed.getHeading())) / dt;
+        }
+        lastPoseForSpeed = pose;
+    }
+
+    /**
+     * One press. Builds a sighting per visible hive tag, asks WallFix where we are
+     * along the wall, asks WallReanchor whether to believe it, and only then writes
+     * the pose. Rumbles either way so the driver knows without reading the screen.
+     */
+    private void tryWallReanchor() {
+        Pose pose = follower.getPose();
+        List<AprilTagDetection> detections = camera.getDetections();
+
+        // The tilt comes from the operator's aim cell, not from the detection --
+        // see HiveGeometry.tiltWithRaised. TurretCamera has no camera pose, so
+        // detection.robotPose is null and TagLocalizer cannot supply it here.
+        HiveGeometry.Tilt tilt = HiveGeometry.tiltWithRaised(targetCell);
+
+        List<WallFix.Sighting> sightings = new ArrayList<>();
+        if (detections != null) {
+            for (AprilTagDetection d : detections) {
+                if (d.ftcPose == null || FieldAprilTags.Cell.forTag(d.id) == null) continue;
+                Rigid3 tag = HiveTags.tagPose(d.id, tilt);
+                sightings.add(new WallFix.Sighting(tag.x(), tag.y(),
+                        WallFix.bearingDeg(d.ftcPose.x, d.ftcPose.y, d.ftcPose.z,
+                                TagLocalizer.CAMERA_PITCH_DEG, TagLocalizer.CAMERA_YAW_DEG)));
+            }
+        }
+
+        // FRONT = collector-first, the only convention that works: back-first puts
+        // the camera at the wall. This is what the turret flip bought.
+        WallFix.Face face = WallFix.Face.FRONT;
+        double faceDist = RobotConstants.ROBOT_LENGTH / 2;
+        WallFix.Result fix = WallFix.solve(pose.getHeading(), face, faceDist,
+                turret.getAngle(), TurretGeometry.forRobot(),
+                TagLocalizer.CAMERA_FORWARD, TagLocalizer.CAMERA_LEFT, sightings);
+
+        WallReanchor.Verdict verdict = WallReanchor.check(fix, robotSpeed, robotTurnRateDeg,
+                turret.isOnTarget());
+        lastReanchor = verdict;
+        lastReanchorFix = fix;
+        sinceReanchor.reset();
+        lastReanchorAgeSec = 0;
+
+        if (verdict.accepted()) {
+            follower.setPose(fix.robot);
+            // The trim was measured against the pose we just replaced, so keeping
+            // it would aim at where the hive WAS. resetPhase() drops it, re-trusts
+            // the pose and clears the rejection state, so odometry aiming resumes
+            // from a clean slate.
+            aim.resetPhase();
+            lastPoseForSpeed = null;   // the jump is not motion; don't report it as speed
+            gamepad1.rumble(400);
+        } else {
+            gamepad1.rumbleBlips(2);
+        }
+    }
+
     // ---- Operator: balls ------------------------------------------------------
     // op() is gamepad 2 normally, gamepad 1 in solo mode. See Gamepads.
 
     private void operateLauncher() {
         if (op().yWasPressed()) launcher.toggleFlywheel();
-        if (op().dpadDownWasPressed()) launcher.requestNectar();
+        // D-PAD DOWN WAS "a NECTAR is next". GONE, 2026-11-13: there is no nectar
+        // mechanism for the next competition (Shane), DIRECT_FEED ignores the
+        // guard anyway, and the button is worth more as the wall re-anchor. It is
+        // read off gamepad1 directly in loop() so it works in solo too.
 
         controls.fire = op().b;   // was RB -- bumpers don't register well on our gamepads
         controls.collectIn = op().a;
@@ -657,6 +768,14 @@ public class DriveTeleOp extends OpMode {
         // running with "nobody holding anything": the fire controls are on
         // gamepad 2 unless solo mode was picked, a drifting trigger past 0.5
         // reads as held, and neither was visible anywhere on this screen.
+        // The last re-anchor, and WHY if it was refused. Stays on screen rather
+        // than flashing: a driver who pressed it mid-match will look afterwards.
+        if (lastReanchor != null) {
+            telemetry.addData("Wall re-anchor", "%.0f s ago: %s",
+                    sinceReanchor.seconds(), WallReanchor.describe(lastReanchor, lastReanchorFix));
+        } else {
+            telemetry.addLine("Wall re-anchor: not used (gamepad 1 D-pad Down, parked on a wall)");
+        }
         telemetry.addData("Op input", "%s | B %s  RT %.2f  LT %.2f  A %s",
                 solo ? "gamepad1 (SOLO)" : "gamepad2",
                 op().b ? "HELD" : "-", op().right_trigger, op().left_trigger,

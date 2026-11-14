@@ -129,6 +129,24 @@ public class HiveGeometry {
     }
 
     /**
+     * The inverse of {@link #upCell}: how the hive must be tipped for this cell to
+     * be the raised one. Alliance-independent -- a SCORING cell is up when the +y
+     * side is up, for both.
+     *
+     * WHY THIS EXISTS: the wall re-anchor needs the hive's tilt to know where a
+     * tag physically is, and the usual way to get it (TagLocalizer.turretFixOf,
+     * which tries both tilts and keeps the level one) needs detection.robotPose --
+     * which is null on TurretCamera, because its processor has no camera pose set.
+     * But the operator has ALREADY told us which cell they are shooting at, and
+     * you shoot at the raised one. So the aim cell gives the tilt for free, with
+     * no camera-pose change on the match camera.
+     */
+    public static Tilt tiltWithRaised(Cell cell) {
+        return (cell == Cell.RED_SCORING || cell == Cell.BLUE_SCORING)
+                ? Tilt.FAR_UP : Tilt.AUDIENCE_UP;
+    }
+
+    /**
      * Half-width (in.) of the band around the midline where sideCell() keeps its
      * current answer, so driving along y = 72 doesn't flip the target back and forth.
      */

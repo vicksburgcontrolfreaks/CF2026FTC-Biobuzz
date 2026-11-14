@@ -395,9 +395,25 @@ public class TurretDirector {
         }
         // No usable bearing this frame: can't judge the pose, so don't. Aiming
         // from odometry with no tags in sight is the whole point of odometry.
-        if (!camera.hasFreshBearing()) return;
-        if (camera.getAgeMs() > TRIM_MAX_AGE_MS) return;
-        if (camera.getSecondsSinceSeen() > TRIM_FRESH_SEC) return;
+        // NO USABLE BEARING: we cannot judge the pose, so say nothing rather than
+        // leaving a stale verdict on the screen.
+        //
+        // `rejecting` used to latch here. One disagreeing frame set it, the tags
+        // then went out of view -- which is normal while driving -- and every loop
+        // after that returned early without touching it, so the Driver Station
+        // showed "about to drop to camera aiming" FOREVER while nothing was being
+        // measured at all. Shane hit exactly that, 2026-11-13, and reasonably read
+        // it as the switch being broken. It was the message, not the switch.
+        //
+        // rejectingSinceSec is deliberately NOT cleared: two disagreements with no
+        // agreement between them are still a sustained disagreement, even if the
+        // camera lost the tags in the middle. So the drop behaviour is unchanged
+        // and only the reporting is fixed.
+        if (!camera.hasFreshBearing() || camera.getAgeMs() > TRIM_MAX_AGE_MS
+                || camera.getSecondsSinceSeen() > TRIM_FRESH_SEC) {
+            rejecting = false;
+            return;
+        }
 
         double measured = trimFrom(turret.getAngle(), camera.getSmoothBearing(),
                 TurretAim.BEARING_SIGN, TurretAim.AIM_BIAS_DEG, monitor.desiredDeg);
