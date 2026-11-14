@@ -37,7 +37,7 @@ public class Launcher {
      * Fixed for now; ShotTable (distance -> RPM) comes with odometry aiming.
      * Per robot -- see loadRobotNumbers(). This bare value is 6494's / the fallback.
      */
-    public static double FLYWHEEL_RPM = 1300;
+    public static double FLYWHEEL_RPM = 1280;
 
     /**
      * This robot's flywheel speed. Every op mode that shoots starts from this
@@ -58,7 +58,13 @@ public class Launcher {
                     FLYWHEEL_RPM = 1100;
                     break;
                 case R6494:
-                    FLYWHEEL_RPM = 1300;
+                    // 1300 -> 1280: Shane, 2026-11-14. This is the SHOT MAP's answer
+                    // rather than a guess -- 263 balls over 8 spots put the balance
+                    // point near 1287 with a mean band width of ~101 RPM, so one RPM
+                    // covers 20-52 in and there is no table to build yet. See
+                    // docs/shot-map-2026-11-13.md. 1280 sits inside every band
+                    // measured.
+                    FLYWHEEL_RPM = 1280;
                     break;
             }
         } catch (IllegalStateException e) {

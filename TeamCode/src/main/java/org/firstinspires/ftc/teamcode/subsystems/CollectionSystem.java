@@ -50,13 +50,13 @@ public class CollectionSystem {
     // full power (~300 RPM) was far too fast (seen on 6494, 2026-11-05).
     // 6494 history: 75 was tried 2026-11-06 and dropped to 25 ("the second ball
     // followed the first with no visible pause"), then found again as the
-    // goldilocks feed on 2026-11-09 with the pivot and deflector tuned. Back at
-    // 75 -- see loadRobotFeedNumbers(). This bare value is only the fallback for
-    // an unknown robot. If you change a feed rate, scale
-    // ShooterLogic.NO_BALL_SEC with it and re-measure NectarGuard.TRIP_AMPS.
+    // goldilocks feed on 2026-11-09 with the pivot and deflector tuned, then
+    // 75 -> 100 on 2026-11-14 (Shane) -- see loadRobotFeedNumbers(). This bare
+    // value is only the fallback for an unknown robot. If you change a feed rate,
+    // scale ShooterLogic.NO_BALL_SEC with it and re-measure NectarGuard.TRIP_AMPS.
     // 6494's value: the catch in loadRobotFeedNumbers() falls back to these, and
     // says so, so this has to track the R6494 case.
-    public static double FEED_RPM = 75.0;   // forward = up into the flywheels
+    public static double FEED_RPM = 100.0;  // forward = up into the flywheels
     public static double UNJAM_RPM = 50.0;  // run in reverse by unjam()
 
     private static final double TICKS_PER_REV = RobotHardware.TICKS_PER_MOTOR_REV;
@@ -85,13 +85,18 @@ public class CollectionSystem {
      *     5618 -- run Indexer Load Test there to confirm.
      *   - ShooterLogic.NO_BALL_SEC 3.0 = same indexer travel as 6 s at 25.
      *
-     * 6494 at 75 RPM (Jade, 2026-11-09, Pollen Shot Tune, shooting real pollen):
-     *   - ShooterLogic.NO_BALL_SEC 2.0 = same indexer travel as 6 s at 25.
+     * 6494 at 100 RPM (Shane, 2026-11-14, going out to test it on the robot):
+     *   - ShooterLogic.NO_BALL_SEC 1.5 = same indexer travel as 6 s at 25.
      *   - NectarGuard.TRIP_AMPS is STILL 2.72, the 25 RPM calibration, so nectar
-     *     detection is uncalibrated until Indexer Load Test is re-run at 75.
-     *     Low risk while 6494 is pollen-only, wrong as soon as it is not.
-     *   - Reverses the 11-06 call that dropped 75 to 25. Both runs are real; the
-     *     11-09 one is newer and the only one with the pivot and deflector tuned.
+     *     detection is uncalibrated until Indexer Load Test is re-run at 100 --
+     *     and now 4x off the speed it was measured at. Low risk while 6494 is
+     *     pollen-only AND Launcher.DIRECT_FEED is true (the direct path never
+     *     consults or updates the guard); wrong the moment either changes.
+     *   - 75 -> 100 continues the direction the 11-09 run found, and the 11-06
+     *     finding is the one to remember if it goes wrong: at 75 "the second ball
+     *     followed the first with no visible pause". 100 is faster still, so
+     *     balls running together is the predicted failure. DIRECT_FEED hides it
+     *     from the shot COUNTER but not from the shot.
      */
     private static void loadRobotFeedNumbers() {
         try {
@@ -112,20 +117,23 @@ public class CollectionSystem {
                     org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = Double.POSITIVE_INFINITY;
                     break;
                 case R6494:
-                    // 25 -> 75: Pollen Shot Tune, Jade, 2026-11-09, shooting real pollen.
-                    // NOTE this reverses the 11-06 call, which dropped 75 to 25 because
-                    // "the second ball followed the first with no visible pause". Both
-                    // runs are real; 11-09 is the newer one and the only one that shot
-                    // at the tuned pivot and deflector. If balls run together again,
-                    // that earlier finding is why.
-                    FEED_RPM = 75.0;
+                    // 75 -> 100: Shane, 2026-11-14, to be tested on the robot. The
+                    // 11-06 finding is the one to watch: at 75 "the second ball
+                    // followed the first with no visible pause", which is why it was
+                    // dropped to 25 then. 100 is faster again, so balls running
+                    // together is the predicted failure mode, not a surprise.
+                    // (25 -> 75 was Jade, 2026-11-09, shooting real pollen with the
+                    // pivot and deflector tuned.)
+                    FEED_RPM = 100.0;
                     // Scaled with the feed rate: same indexer travel as 6.0 s at 25 RPM.
-                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 2.0;
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 1.5;
                     // STILL THE 25 RPM CALIBRATION, so the nectar guard is now
-                    // uncalibrated: the current signature of a ball changes with feed
-                    // speed. Re-measure with Indexer Load Test before trusting nectar
-                    // detection. Low risk for now -- 6494 is pollen-only for the first
-                    // competition -- but it will mis-trip on nectar until re-measured.
+                    // uncalibrated by a factor of FOUR: the current signature of a ball
+                    // changes with feed speed. Re-measure with Indexer Load Test before
+                    // trusting nectar detection. Low risk for now -- 6494 is pollen-only
+                    // for the first competition, and DIRECT_FEED neither consults nor
+                    // updates the guard -- but it will mis-trip on nectar until
+                    // re-measured, and reverting DIRECT_FEED puts it back in the path.
                     org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = 2.72;
                     break;
             }
