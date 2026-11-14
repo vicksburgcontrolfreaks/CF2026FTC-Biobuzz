@@ -141,6 +141,24 @@ public final class Waypoints {
     public static final Pose GARDEN_EDGE_START = new Pose(
             FieldConstants.RED_GARDEN.maxX + HALF_LENGTH, ON_GARDEN_WALL_Y, FACING_BLUE);
 
+    // GARDEN_EDGE_START TURNED ROUND (Shane, 2026-11-14), for Garden Shoot 2X.
+    // Collector facing the RED alliance wall, collector edge on the garden tape
+    // seam (x = 24), side touching the garden wall.
+    //
+    // IT IS THE SAME CENTRE AS GARDEN_EDGE_START, (33, 9), and that is not a
+    // coincidence worth re-deriving: there, the BACK edge is on the seam and the
+    // body runs toward blue; here the COLLECTOR edge is on the seam and the body
+    // runs the same way. Both put the centre half a robot length past x = 24. So
+    // this pose is GARDEN_EDGE_START rotated 180 deg in place, and the two are
+    // interchangeable as far as the wall re-anchor's geometry is concerned.
+    //
+    // WHY FACE THIS WAY: the turret points away from the collector since the
+    // flip, so a collector facing red puts the turret on the hive side with no
+    // turning. From (33, 9) the red hive centre sits about 67 deg off the
+    // turret's zero -- well inside the +/-150 of travel.
+    public static final Pose GARDEN_EDGE_START_FACING_RED = new Pose(
+            GARDEN_EDGE_START.getX(), GARDEN_EDGE_START.getY(), FACING_RED_WALL);
+
     // Same as GARDEN_EDGE_START but on the FAR wall (Shane, 2026-11-08): back
     // edge on the first tile seam (x = 24), touching the far wall, facing blue.
     // Center (33, 135). The robot's front is at x = 42, ~2.7 in. short of the

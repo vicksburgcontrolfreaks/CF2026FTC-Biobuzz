@@ -127,6 +127,53 @@ public final class Routes {
                 .driveTo(facingBlue(park.spot));
     }
 
+    // GARDEN SHOOT 2X (Shane, 2026-11-14). Shoot the preloads where we stand,
+    // sweep the garden wall for more, come back to the same spot, shoot again,
+    // then park facing blue. NOT RUN ON A ROBOT YET.
+    //
+    //   1. Start on GARDEN_EDGE_START_FACING_RED: collector toward the RED wall,
+    //      collector edge on the garden seam, side on the garden wall. The turret
+    //      points away from the collector since the flip, so it already faces the
+    //      hive from here.
+    //   2. launchHere(4): flywheel up, aim, fire 4 s, everything off. No driving
+    //      -- the step has no path at all.
+    //   3. collectTo(GARDEN_CORNER) at 0.2 with a 2 s dwell: 24 in. along the
+    //      wall into the garden corner, collector-first (heading 180 means the
+    //      collector leads), then sit still for 2 s with the collector still
+    //      running before it switches off.
+    //   4. driveTo the start pose again at full speed, same orientation.
+    //   5. launchHere(4) again -- launchFrom() here would be a zero-length path.
+    //   6. Park facing BLUE, which turns the robot 180 deg so the collector
+    //      leads for the drivers. See the note on the TeleOp handoff below.
+    //
+    // THE TELEOP HANDOFF IS NOT A POSE EDIT, deliberately. Red's "away from the
+    // drivers" IS heading 0, and the robot's heading is the direction the
+    // COLLECTOR points (WallFix.Face.FRONT is collector-first), so parking at
+    // facingBlue() already means stick-forward = collector-first-away-from-the-
+    // drivers with DriveTeleOp's driverHeadingOffset left at 0. Nothing has to be
+    // re-oriented. Overwriting the pose heading to force it is the 2026-11-12 bug
+    // that made odometry aiming miss the blue hive -- see
+    // DriveTeleOp.driverHeadingOffset.
+    //
+    // "Don't park" stops after the second shot, still facing RED. The drivers
+    // then press X ("the robot faces away from me now") once in TeleOp, which is
+    // exactly what that button is for. It is not parked and scores no park points.
+    public static final double SHOOT_2X_FIRE_SEC = 4;
+    public static final double SHOOT_2X_COLLECT_SPEED = 0.2;
+    public static final double SHOOT_2X_WALL_DWELL_SEC = 2;
+
+    public static Route gardenShoot2X(Park park) {
+        Route route = Route.startAt(GARDEN_EDGE_START_FACING_RED)
+                .launchHere(SHOOT_2X_FIRE_SEC)                  // shoot where we stand
+                .collectTo(GARDEN_CORNER, SHOOT_2X_COLLECT_SPEED, SHOOT_2X_WALL_DWELL_SEC)
+                .driveTo(GARDEN_EDGE_START_FACING_RED)          // back, same orientation
+                .launchHere(SHOOT_2X_FIRE_SEC);                 // second shooting sequence
+        if (park == Park.NONE) {
+            return route;
+        }
+        return route.driveTo(facingBlue(park.spot));            // turns 180: collector toward blue
+    }
+
     // 2026 ROBOT BACKUP (2026-11-07): Garden Shoot + Park's start, no launch,
     // straight to the park facing blue. For a broken launcher or a partner who
     // needs the shot. Always parks. Laptop path-checked (GardenShootParkTest);

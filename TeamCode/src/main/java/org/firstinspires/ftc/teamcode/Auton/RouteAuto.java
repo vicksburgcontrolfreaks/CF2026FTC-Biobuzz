@@ -128,6 +128,9 @@ public abstract class RouteAuto extends OpMode {
     private Follower follower;
     private Timer pathTimer;
     private boolean collectorOn = false;
+    /** A step is holding on arrival for its dwellSec. See autonomousPathUpdate. */
+    private boolean dwelling = false;
+    private Timer dwellTimer;
 
     // Same pieces as DriveTeleOp, so the nectar guard and at-speed gate come along.
     private Launcher launcher;
@@ -205,6 +208,16 @@ public abstract class RouteAuto extends OpMode {
         startPose = alliance.map(route.start);
         Pose from = startPose;
         for (Route.Step s : route.steps) {
+            // LAUNCH_HERE goes nowhere: NULL path, target = where we already are.
+            // The lists stay index-parallel with route.steps, which everything
+            // here indexes by, and a null path counts as arrived (see
+            // autonomousPathUpdate). A zero-length BezierLine would be the
+            // obvious alternative and is exactly what we are avoiding.
+            if (s.action == Route.Action.LAUNCH_HERE) {
+                targets.add(from);
+                paths.add(null);
+                continue;
+            }
             Pose to = alliance.map(s.target);
             Path path = new Path(new BezierLine(from, to));
             path.setLinearHeadingInterpolation(from.getHeading(), to.getHeading());
@@ -219,6 +232,7 @@ public abstract class RouteAuto extends OpMode {
     private void checkPaths() {
         warnings.addAll(PathSafety.checkStart("Start", route.start)); // red version, see checkStart
         for (int i = 0; i < paths.size(); i++) {
+            if (paths.get(i) == null) continue;   // LAUNCH_HERE: no path to check
             Pose to = targets.get(i);
             String name = String.format("Step %d (to %.0f,%.0f)", i + 1, to.getX(), to.getY());
             warnings.addAll(PathSafety.check(name, paths.get(i)));
@@ -246,8 +260,24 @@ public abstract class RouteAuto extends OpMode {
             }
         }
 
-        // isBusy() is true until the robot reaches the end of the step.
-        if (!follower.isBusy()) {
+        // isBusy() is true until the robot reaches the end of the step. A
+        // LAUNCH_HERE step has no path, so it is arrived from the first loop.
+        boolean arrived = paths.get(step) == null || !follower.isBusy();
+        if (arrived) {
+            // DWELL: hold on arrival with whatever the step was doing still
+            // running, BEFORE the collector is switched off below. For a COLLECT
+            // step that is the point -- the balls that reached the wall with us
+            // still have to be swept up.
+            Route.Step current = route.steps.get(step);
+            if (!Double.isNaN(current.dwellSec) && current.dwellSec > 0) {
+                if (!dwelling) {
+                    dwelling = true;
+                    dwellTimer.resetTimer();
+                }
+                if (dwellTimer.getElapsedTimeSeconds() < current.dwellSec) {
+                    return;   // still dwelling -- collector (if any) stays on
+                }
+            }
             collectorOn = false;
 
             // LAUNCH / TIP_LAUNCH step: we've arrived, so launch, and stay put until it's done.
@@ -405,11 +435,13 @@ public abstract class RouteAuto extends OpMode {
     }
 
     private static boolean isLaunch(Route.Action a) {
-        return a == Route.Action.LAUNCH || a == Route.Action.TIP_LAUNCH;
+        return a == Route.Action.LAUNCH || a == Route.Action.TIP_LAUNCH
+                || a == Route.Action.LAUNCH_HERE;
     }
 
     private boolean routeLaunches() {
-        return route.has(Route.Action.LAUNCH) || route.has(Route.Action.TIP_LAUNCH);
+        return route.has(Route.Action.LAUNCH) || route.has(Route.Action.TIP_LAUNCH)
+                || route.has(Route.Action.LAUNCH_HERE);
     }
 
     /**
@@ -433,7 +465,14 @@ public abstract class RouteAuto extends OpMode {
 
     private void startStep(int newStep) {
         step = newStep;
-        follower.followPath(paths.get(step), true); // true = hold position at the end
+        dwelling = false;
+        // PER-STEP SPEED. Set every step, not just the slow ones, or a slow leg
+        // would quietly stay slow for the rest of the route.
+        Route.Step s = route.steps.get(step);
+        follower.setMaxPower(Double.isNaN(s.speed) ? MAX_POWER : s.speed);
+        if (paths.get(step) != null) {
+            follower.followPath(paths.get(step), true); // true = hold position at the end
+        }
         pathTimer.resetTimer();
     }
 
@@ -442,6 +481,7 @@ public abstract class RouteAuto extends OpMode {
         org.firstinspires.ftc.teamcode.RobotProfile.install();   // this robot's turret and camera numbers
         pathTimer = new Timer();
         launchTimer = new Timer();
+        dwellTimer = new Timer();
         runTimer = new Timer();
 
         RobotHardware hw = new RobotHardware();
