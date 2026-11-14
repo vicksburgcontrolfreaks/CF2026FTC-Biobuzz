@@ -91,6 +91,8 @@ import java.util.Locale;
  *   Left stick / right stick X   drive (gamepad 1 only, field-centric)
  *   RT (hold)      feed: indexer + collector forward
  *   Y              flywheel on / off
+ *   LT + Y         COLLECTOR latch on / off -- runs hands-free so one person can
+ *                  keep loading. RT still sends exactly one ball.
  *   A              HIT
  *   D-pad Down     SHORT          D-pad Up     LONG
  *   D-pad Left     went LEFT      D-pad Right  went RIGHT
@@ -176,6 +178,8 @@ public class ShotMapTune extends OpMode {
     private double peakDrop, steadyLeft = Double.NaN, steadyRight = Double.NaN;
     private int inBurst = 0;
     private boolean feeding = false;
+    /** LT + Y: collector runs hands-free so a solo operator can keep loading. */
+    private boolean collectorLatched = false;
     /** The last detected ball, waiting for its outcome press. Null = none since the last press. */
     private double[] pendingShot = null;   // {left, right, dip, inBurst}
     private double lastTargetRpm = -1;
@@ -375,9 +379,17 @@ public class ShotMapTune extends OpMode {
         if (right) record(Outcome.RIGHT);
         if (x) undo();
         if (b) finishSpot();
-        if (y) flywheelOn = !flywheelOn;
+        // Y alone is the flywheel; LT + Y latches the COLLECTOR. Parallel on
+        // purpose -- both are "leave this motor running".
+        if (y && !ltHeld) flywheelOn = !flywheelOn;
 
         if (ltHeld) {
+            if (y) {
+                collectorLatched = !collectorLatched;
+                lastNote = collectorLatched
+                        ? "collector LATCHED ON -- RT still feeds one ball"
+                        : "collector latch off";
+            }
             if (rb) setTrim(aimTrim + AIM_STEP_DEG);
             if (lb) setTrim(aimTrim - AIM_STEP_DEG);
         } else {
@@ -514,15 +526,32 @@ public class ShotMapTune extends OpMode {
         rightRpm = ticksPerSecToRpm(hw.shooterRight.getVelocity());
     }
 
+    /**
+     * RT feeds a ball. The COLLECTOR can also be latched on by itself.
+     *
+     * Shane, running this solo: "I need a control to keep the collector running so
+     * I can keep feeding balls. I'm only one person and don't have enough hands
+     * for all this." Fair -- a spot is 16-20 balls, and holding RT to run the
+     * collector also runs the INDEXER, which fires.
+     *
+     * So the two are split: the collector latches (LT + Y), the indexer stays on
+     * RT. Balls stack up at the indexer with the collector running, and RT sends
+     * exactly one. The latch survives between spots and is dropped at stop().
+     */
     private void runFeed() {
         boolean feed = held(gamepad1.right_trigger) || held(gamepad2.right_trigger);
         if (feed && !feeding) inBurst = 0;
         feeding = feed;
+
         if (feed) {
             collection.setIndexerRPM(CollectionSystem.FEED_RPM);
-            collection.setCollectorRPM(COLLECTOR_RPM);
         } else {
             collection.stopIndexer();
+        }
+
+        if (feed || collectorLatched) {
+            collection.setCollectorRPM(COLLECTOR_RPM);
+        } else {
             collection.stopCollector();
         }
     }
@@ -593,6 +622,10 @@ public class ShotMapTune extends OpMode {
         telemetry.addData("RPM", "%.0f  (L %.0f / R %.0f)%s%s", rpm, leftRpm, rightRpm,
                 flywheelOn ? (atSpeed() ? " AT SPEED" : " spinning") : " OFF (Y)",
                 disagree ? "  WHEELS DISAGREE" : "");
+        // On screen because a latched collector is a motor running with nobody
+        // touching anything, which should never be a surprise.
+        telemetry.addData("Collector", collectorLatched
+                ? "LATCHED ON (LT+Y to stop)" : "off -- LT+Y to latch, RT feeds");
         showLadder();
         double est = aimLadder.estimate();
         telemetry.addData("Aim trim", "%+.2f deg | est %s%s", aimTrim,
