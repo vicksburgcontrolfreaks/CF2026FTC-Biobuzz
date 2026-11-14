@@ -1,0 +1,18 @@
+kind,time_s,robot,spot,shot,start,x,y,heading_deg,distance_in,turret_deg,target_rpm,left_rpm,right_rpm,in_burst,dip_rpm,aim_trim_deg,deflector_deg,pose_trusted,outcome
+kind,robot,spot,distance_in,turret_deg,balls,rpm_balance,rpm_sigma,rpm_width,rpm_best_hit_rate,rpm_bounded,rpm_noisy,aim_balance,aim_width,aim_noisy
+shot,311.86,6494,1,1,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1300,1286,1271,3,71,0.00,0.0,true,RIGHT
+shot,313.93,6494,1,2,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1300,0,-0,0,,0.00,0.0,true,LEFT
+shot,315.91,6494,1,3,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1300,0,-0,0,,0.00,0.0,true,RIGHT
+shot,316.92,6494,1,4,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1300,0,-0,0,,0.00,0.0,true,LEFT
+undo,,6494,1,4
+undo,,6494,1,4
+undo,,6494,1,4
+undo,,6494,1,4
+shot,350.49,6494,1,5,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1300,0,-0,0,,0.00,0.0,true,HIT
+shot,351.72,6494,1,6,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1300,0,-0,0,,0.00,0.0,true,HIT
+shot,353.20,6494,1,7,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1300,0,-0,0,,0.00,0.0,true,HIT
+shot,357.87,6494,1,8,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1300,1300,1300,0,,0.00,0.0,true,HIT
+shot,359.10,6494,1,9,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1325,1314,1329,0,,0.00,0.0,true,HIT
+shot,360.37,6494,1,10,red; audience wall,42.6,27.2,-91.1,28.8,-9.8,1325,1314,1314,0,,0.00,0.0,true,HIT
+shot,364.28,6494,1,11,red; audience wall,42.6,27.2,-91.0,28.8,-9.8,1325,1329,1329,0,,0.00,0.0,true,HIT
+shot,365.93,6494,1,12,red; audience wall,42.6,27.2,-91.0,28.8,-9.8,1325,1343,1329,0,,0.00,0.0,true,HIT

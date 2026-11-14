@@ -130,10 +130,18 @@ import java.util.Locale;
  *                  plain BACK when you ARE on the start spot: that pose is known,
  *                  this one is measured.
  *
- * THE LOG: /sdcard/FIRST/shotmap/shotmap-<robot>-<date>.csv, one "shot" row per
- * press and one "spot" row per B. Pull it with
- *     adb pull /sdcard/FIRST/shotmap
- * or from the Control Hub's file manager. The screen shows the path.
+ * THE LOG: /sdcard/shotmap/shotmap-<robot>-<date>.csv -- NOT under FIRST/, because
+ * AppUtil.ROOT_FOLDER is /sdcard and FIRST_FOLDER is /sdcard/FIRST. This comment
+ * said FIRST/ until 2026-11-13 and cost Shane a search. The screen prints the real
+ * absolute path; trust that. One "shot" row per press and one "spot" row per B.
+ *
+ * IT IS ON THE CONTROL HUB, NOT THE DRIVER STATION. AppUtil runs on the robot
+ * controller. Plugging the Driver Station into a laptop will never show it.
+ * Pull it over WIFI -- no cable needed, join the hub's network first:
+ *     adb connect 192.168.43.1:5555
+ *     adb pull /sdcard/shotmap
+ * The hub does not appear as a drive in a file browser; Android does not expose
+ * /sdcard as mass storage, so adb (or the REV Hardware Client) is the only way.
  */
 @Configurable
 @TeleOp(name = "Shot Map", group = "Tune")

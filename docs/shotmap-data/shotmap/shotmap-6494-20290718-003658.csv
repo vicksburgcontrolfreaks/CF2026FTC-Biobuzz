@@ -1,0 +1,2 @@
+kind,time_s,robot,spot,shot,start,x,y,heading_deg,distance_in,turret_deg,target_rpm,left_rpm,right_rpm,in_burst,dip_rpm,aim_trim_deg,deflector_deg,pose_trusted,outcome
+kind,robot,spot,distance_in,turret_deg,balls,rpm_balance,rpm_sigma,rpm_width,rpm_best_hit_rate,rpm_bounded,rpm_noisy,aim_balance,aim_width,aim_noisy
