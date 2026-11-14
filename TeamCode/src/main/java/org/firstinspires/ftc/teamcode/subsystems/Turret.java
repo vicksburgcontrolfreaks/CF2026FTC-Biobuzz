@@ -361,27 +361,40 @@ public class Turret {
         switch (WhichRobot.get()) {
             case R5618:
                 // 5618 REBUILD, 2026-11-14 (Jade): turret taken apart and rebuilt,
-                // direction the SAME as 6494 (angle falls clockwise, cable slack
-                // clockwise, tight counter-clockwise -- which is what the signs
-                // below already say). The magnet and cable stops have probably
-                // moved, so the magnet is NaN = "not measured": homing REFUSES
-                // until Turret Range Test is re-run, instead of homing the rebuilt
-                // turret off old numbers and toward the tight end of its cable.
-                // Put the new Range Test numbers here and remove the NaNs.
+                // and FLIPPED TO FACE REARWARD like 6494 (2026-11-13, d4b228a):
+                // turret 0 points BACKWARD, away from the collector. The frame
+                // flip itself is TURRET_ZERO_DEG = 180 in RobotProfile.install5618().
                 //
-                // Old, pre-rebuild (Turret Range Test, Shane, 2026-11-06): cable
-                // stops +-93.3, magnet band -91.0..-83.1 (HOME_SWITCH_ANGLE -83.1,
-                // band 7.9), forward read 0.0, limits -90 / +85.
-                HOME_SWITCH_ANGLE = Double.NaN;   // was -83.1 -- RE-MEASURE
-                MAGNET_BAND_DEG = Double.NaN;     // was 7.9  -- RE-MEASURE
-                // -90: inside the magnet band (same rule as 6494), 3.3 off the stop.
+                // The magnet and cable limits have to be re-measured in the NEW
+                // frame, so the magnet is NaN = "not measured": homing REFUSES
+                // until Turret Range Test is re-run, instead of homing the rebuilt
+                // turret off old, front-facing numbers. Put the Range Test numbers
+                // here and remove the NaNs.
+                //
+                // Range Test reports angles from the MIDDLE of the sweep, and its
+                // HOME_SWITCH_ANGLE line uses the class default HOMING_DIRECTION
+                // (-1, pre-flip). So take BOTH band edges plus the angle it reads
+                // pointing straight BACK, and pick the edge homing meets first
+                // travelling +1 (the lower edge), shifted so straight back = 0.
+                //
+                // Old, pre-rebuild, FRONT-facing frame (Turret Range Test, Shane,
+                // 2026-11-06): cable stops +-93.3, magnet band -91.0..-83.1,
+                // HOME_SWITCH_ANGLE -83.1, band 7.9, limits -90 / +85.
+                HOME_SWITCH_ANGLE = Double.NaN;   // RE-MEASURE (rear-facing frame)
+                MAGNET_BAND_DEG = Double.NaN;     // RE-MEASURE
+                // PLACEHOLDERS until the Range Test: the old conservative band, not
+                // 6494's +/-150. 5618's cable has never been checked across +/-150.
+                // Widen these only to what the cable allows on 5618, by hand.
                 MIN_ANGLE = -90.0;
-                // +85, not +90: +93.3 is the TIGHT cable end, so +90 would leave only
-                // 3.3 deg for overshoot. 8.3 deg of margin instead.
                 MAX_ANGLE = 85.0;
-                HOMING_DIRECTION = -1.0;   // toward the slack (clockwise)
-                // Finds the magnet from any start between it and +66.9 (-83.1 + 150).
-                HOMING_SEARCH_MAX_DEG = 150.0;
+                // +1 = CCW, toward the magnet from the rear-facing centre -- same
+                // as 6494 after the flip, assuming the magnet sits in the same spot
+                // on the rebuilt turret. NOTE this is toward the cable's TIGHT side
+                // now, hence the shorter search (6494 uses 110 for the same reason).
+                // If the Range Test puts the magnet on the NEGATIVE side of centre,
+                // this becomes -1.
+                HOMING_DIRECTION = 1.0;
+                HOMING_SEARCH_MAX_DEG = 110.0;
                 // Original speed, unchanged.
                 kP = 0.010;
                 MAX_POWER = 0.55;

@@ -197,10 +197,13 @@ public final class RobotProfile {
         // then write the numbers here.
         TurretGeometry.TURRET_OFFSET_X = Double.NaN;
         TurretGeometry.TURRET_OFFSET_Y = Double.NaN;
-        // Same turret design on both robots, so these two carry over -- but
-        // neither has been checked on 5618. The range test in TurretRangeTest
-        // settles CCW_SIGN in a minute if the turret ever behaves backwards.
-        TurretGeometry.TURRET_ZERO_DEG = 0.0;
+        // FLIPPED 2026-11-14 for the 5618 rebuild (Jade), matching 6494's
+        // 2026-11-13 flip: turret 0 points BACKWARD, away from the collector.
+        // The magnet/limit numbers for this frame live in Turret.loadRobotNumbers().
+        // Check after homing: does the camera point straight BACK? If not, this
+        // (or the homing numbers) is off. CCW_SIGN carries over from 6494 --
+        // Turret Aim Test settles it if the turret ever behaves backwards.
+        TurretGeometry.TURRET_ZERO_DEG = 180.0;
         TurretGeometry.TURRET_CCW_SIGN = 1.0;
 
         // INHERITED, NOT MEASURED. These are the values 5618 was already running
