@@ -71,7 +71,7 @@ import java.util.List;
  *   Left stick   FLICK up / down: deflector (shot arc) one position higher /
  *                lower -- 0 / 67.5 / 70 / 72.5 / 75 / 80 / 90 deg. Return to center between
  *                flicks. Needs the pre-match zero (see Deflector).
- *   D-pad Up     park the turret forward / resume aiming
+ *   D-pad Up     park the turret straight back (turret 0, since the flip) / resume aiming
  *   D-pad Down   (gamepad 1 only now -- wall re-anchor, see above)
  *   D-pad L / R  aim at our AUDIENCE / SCORING cell (with "Our side": until the
  *                robot next crosses the middle of the field)
@@ -89,7 +89,7 @@ import java.util.List;
  *
  * TURRET: aims at our cell by camera whenever it's in view (TurretAim). Not
  * homed at Start (no auto since power-up)? It homes itself -- so the turret must
- * start roughly forward, same rule as Turret Test.
+ * start roughly BACKWARD (turret 0 faces the rear since the 2026-11-13 flip).
  *
  * NECTAR SAFETY: Launcher runs every ball through NectarGuard -- see that class.
  * TRIP_AMPS comes from the 25 RPM Indexer Load Test on 6494 (see NectarGuard).
@@ -377,7 +377,7 @@ public class DriveTeleOp extends OpMode {
         }
         telemetry.addData("Turret", "%s (%s)", turret.getState(), turret.getStatusNote());
         if (!turret.isHomed() && Turret.isMeasured()) {
-            telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
+            telemetry.addLine("Turret will HOME at Start -- make sure it points roughly BACKWARD.");
         }
         // Odometry aiming points the turret using the POSE, not the tags. With no
         // auto handoff the pose is an assumption (field centre), so the turret will

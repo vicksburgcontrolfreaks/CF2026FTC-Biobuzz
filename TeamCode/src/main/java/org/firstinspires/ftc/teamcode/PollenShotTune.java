@@ -242,7 +242,7 @@ public class PollenShotTune extends OpMode {
                     deflector.getAngle(), Deflector.DEFAULT_SHOT_DEG);
         }
         if (!turret.isHomed() && Turret.isMeasured()) {
-            telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
+            telemetry.addLine("Turret will HOME at Start -- make sure it points roughly BACKWARD.");
         }
         telemetry.addLine("Point the robot AWAY from the " + alliance.get() + " drivers before Start.");
         telemetry.update();

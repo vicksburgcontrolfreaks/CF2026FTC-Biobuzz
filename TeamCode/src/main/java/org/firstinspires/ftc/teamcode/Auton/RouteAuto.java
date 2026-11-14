@@ -584,7 +584,7 @@ public abstract class RouteAuto extends OpMode {
                 telemetry.addData("Turret", "%s%s -- %s", turret.getState(),
                         turret.isHomed() ? " (homed)" : "", turret.getStatusNote());
                 if (!turret.isHomed() && turret.getState() != Turret.State.HOMING) {
-                    telemetry.addLine("    LOCK the menu (A) to home it. Face it roughly forward first.");
+                    telemetry.addLine("    LOCK the menu (A) to home it. Point it roughly BACKWARD first.");
                 }
             }
             if (deflector.isPresent()) {
