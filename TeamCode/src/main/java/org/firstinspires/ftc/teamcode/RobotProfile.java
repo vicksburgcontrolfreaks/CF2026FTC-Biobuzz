@@ -103,26 +103,55 @@ public final class RobotProfile {
         TurretGeometry.TURRET_CCW_SIGN = 1.0;   // turret-bringup.md range test: ticks rise CCW
 
         // Camera on the turret, from the turret axis at FLOOR level, turret at 0.
-        CAMERA_FORWARD = 4.5;    // MEASURED, Shane 2026-11-10
-        CAMERA_LEFT = 0.0;       // NOT MEASURED -- assumed centred on the turret axis
-        CAMERA_UP = 14.5;        // MEASURED, re-checked with a tape 2026-11-13
-        // 35 -> 38, MEASURED with a phone inclinometer against the camera body,
-        // Shane 2026-11-13. (30 by hand 2026-10-22, 35 "approx" 2026-11-11.)
         //
-        // TWO INDEPENDENT NUMBERS AGREE ON THE 3 DEG. Tag Pose Test solves where
-        // the turret BASE is, and the base is physically on the floor and level.
-        // It was coming out 3 deg off level and +3.8 in off the floor -- the
-        // level error is the camera's declared orientation being wrong by that
-        // much, and 3 deg of pitch at the ~60 in slant range to a tag is about
-        // 2.6 in of height, most of the 3.8.
+        // ALL OF THESE WERE RE-MEASURED 2026-11-14 (Shane) after the camera was
+        // PHYSICALLY REMOUNTED on 6494. The previous mount sat 4.5 in ahead of
+        // the turret axis in the direction the camera looks, which is where the
+        // ball exits -- balls were striking the camera and its cord at large
+        // turret angles (see docs/shot-map-2026-11-13.md). Every number below
+        // belongs to the new mount; none of them is carried over.
+
+        // NEGATIVE: the lens is now 1.25 in toward the COLLECTOR from the turret
+        // axis, and turret-0 points AWAY from the collector since the flip, so
+        // along the pointing direction the camera sits BEHIND the axis. The sign
+        // is the whole content of this number -- a +1.25 here is a 2.5 in error
+        // in every tag fix and every wall re-anchor, leaning one way.
+        CAMERA_FORWARD = -1.25;  // MEASURED, Shane 2026-11-14
+        CAMERA_LEFT = 0.0;       // NOT MEASURED -- assumed centred on the turret axis
+        CAMERA_UP = 16.0;        // MEASURED to the lens, Shane 2026-11-14 (was 14.5)
+        // 38 -> 35 for the new mount, MEASURED with a phone inclinometer against
+        // the camera body, Shane 2026-11-14. (30 by hand 2026-10-22, 35 "approx"
+        // 2026-11-11, 38 inclinometer 2026-11-13 on the OLD mount.)
+        //
+        // THE ROBOT MEASURES THIS BETTER THAN THE INCLINOMETER DOES, and that is
+        // the check to run rather than re-reading the phone: Tag Pose Test solves
+        // where the turret BASE is, the base is physically on the floor and level,
+        // so its `lvl` reading IS the declared-vs-actual pitch error. It read
+        // +0.8..+1.3 on the old mount at 38. If it comes back near +3 at 35, the
+        // mount is really nearer 38 and the inclinometer is the wrong one.
         //
         // NOTE THIS ALSO MOVES CAMERA AIMING. applyCamera() pushes the same
         // number into TurretAim, whose bearingOf() rotates the camera frame down
         // to horizontal with it. More correct should mean better, but camera
         // aiming is what actually works in matches, so check DriveTeleOp aims
         // after deploying this.
-        CAMERA_PITCH_DEG = 38.0;
-        CAMERA_YAW_DEG = 0.0;    // NOT MEASURED -- assumed square to the turret
+        CAMERA_PITCH_DEG = 35.0;
+        // CHECKED ON THE ROBOT 2026-11-14 and no longer a bare assumption. Shane
+        // put a tag directly in front of the turret and read the bearing: the
+        // first mount gave +8 deg, i.e. the camera body aimed 8 deg RIGHT of
+        // where the turret points. He RE-SQUARED THE MOUNT rather than model it,
+        // and a dead-ahead tag now reads within a degree or two of 0.
+        //
+        // Fixing it mechanically was the cheaper road by a long way: TurretAim --
+        // the camera aiming that actually works in matches -- never reads this
+        // field at all, so an 8 deg yaw would have biased every bearing it
+        // produces AND leaked into TurretDirector's trim as fake pose drift.
+        // AIM_BIAS_DEG would have aimed the turret right while making
+        // isOnTarget() wrong by 8 deg in both directions, because DEADBAND_DEG is
+        // tested BEFORE the bias is added (TurretAim line ~387). If this ever
+        // comes back non-zero, teach TurretAim.bearingOf() the yaw at the source
+        // the way WallFix.bearingDeg() already does -- do not reach for the bias.
+        CAMERA_YAW_DEG = 0.0;
         applyCamera();
 
         // TUNED ON THE ROBOT, Shane 2026-11-11. He stepped it with the D-pad in

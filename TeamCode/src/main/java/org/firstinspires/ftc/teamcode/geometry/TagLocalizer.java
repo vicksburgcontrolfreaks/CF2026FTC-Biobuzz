@@ -72,9 +72,18 @@ import java.util.List;
  * !!!!     ~10% range under-read (2026-11-13 accuracy run) and a bias that     !!!!
  * !!!!     grows toward the edges of the frame (2026-11-13 sweep). Focal       !!!!
  * !!!!     length and distortion would explain both.                          !!!!
- * !!!!   - CAMERA_YAW_DEG, assumed 0. Fixes came back with a steady -2 to -3   !!!!
- * !!!!     deg heading error, which is what a small yaw looks like.            !!!!
- * !!!!   - CAMERA_LEFT, assumed 0.                                             !!!!
+ * !!!!   - CAMERA_LEFT, assumed 0. Note it is CONFOUNDED with yaw at a single  !!!!
+ * !!!!     distance: a lateral lens offset reads as atan(left/dist), which     !!!!
+ * !!!!     shrinks with range, while a true yaw is constant. Two distances     !!!!
+ * !!!!     separate them.                                                      !!!!
+ *
+ * CAMERA_YAW_DEG IS NO LONGER ON THAT LIST (2026-11-14). A tag placed directly
+ * in front of the turret read +8 deg of bearing on the remounted camera -- the
+ * body aimed 8 deg right of where the turret points, and the same shape as the
+ * steady -2 to -3 deg heading error older fixes came back with. Shane re-squared
+ * the mount instead of modelling it, and a dead-ahead tag now reads within a
+ * degree or two of 0. The measurement is cheap and worth repeating after any
+ * camera work: it needs one tag and no field.
  *
  * Check TurretFix.believable before trusting a fix, and see
  * docs/turret-odometry-aim-status.md for the measurements behind all of this.
@@ -90,14 +99,16 @@ public class TagLocalizer {
     // TurretGeometry's offsets are) because TagLocalizerTest builds a camera
     // pose on a laptop, where WhichRobot cannot run and install() never happens.
     //
-    // Measured on 6494: FORWARD (Shane 2026-11-10), UP and PITCH (Shane
-    // 2026-11-11, approximate). LEFT and YAW are still assumptions -- the camera
-    // is taken to be centred on the turret axis and square to where it points.
-    public static double CAMERA_FORWARD = 4.5;    // in, along the turret's pointing direction
+    // Measured on 6494 2026-11-14 (Shane), after the camera was remounted to get
+    // it out of the ball's exit path. YAW was measured at +8 on the first mount
+    // and then re-squared mechanically, so 0 is now a CHECK rather than an
+    // assumption. LEFT is still an assumption -- the camera is taken to be
+    // centred on the turret axis.
+    public static double CAMERA_FORWARD = -1.25;  // in, along the turret's pointing direction (NEGATIVE = behind the axis)
     public static double CAMERA_LEFT = 0.0;       // in. ASSUMED 0, not measured
-    public static double CAMERA_UP = 14.5;        // in, lens height above the tiles
+    public static double CAMERA_UP = 16.0;        // in, lens height above the tiles
     public static double CAMERA_PITCH_DEG = 35;   // tipped UP from level, to see the hive tags
-    public static double CAMERA_YAW_DEG = 0;      // left of the pointing direction. ASSUMED 0
+    public static double CAMERA_YAW_DEG = 0;      // left of the pointing direction. Re-squared to ~0 on 2026-11-14
 
     // How far from level (deg) and off the floor (in) the turret base may come
     // out and still be believed. The wrong hive tilt misses by ~HIVE_SWING_DEG.

@@ -1102,3 +1102,98 @@ READY TO RUN, checked: `ShotMapTune` drives the indexer directly
 (`collection.setIndexerRPM(CollectionSystem.FEED_RPM)`) and never goes through
 Launcher or Shooter, so `DIRECT_FEED` and the now-dead `getShotsFired()` counter
 do not touch it. No prior shot data exists, so the flip voided nothing.
+
+# CAMERA REMOUNTED 2026-11-14 (6494): all five mount numbers re-measured
+
+The camera was moved to get it out of the ball's exit path -- the old mount sat
+4.5 in ahead of the turret axis in the direction the camera looks, which is
+exactly where the ball leaves, and balls were striking the camera and its cord at
+large turret angles. Shane's measurements, all in `RobotProfile`'s 6494 block:
+
+| | was | now | provenance |
+|---|---|---|---|
+| `CAMERA_FORWARD` | 4.5 | **-1.25** | measured 2026-11-14. NEGATIVE, see below |
+| `CAMERA_LEFT` | 0.0 | 0.0 | still assumed, still unmeasured |
+| `CAMERA_UP` | 14.5 | **16.0** | tape to the lens |
+| `CAMERA_PITCH_DEG` | 38.0 | **35.0** | phone inclinometer against the body |
+| `CAMERA_YAW_DEG` | 0.0 (assumed) | 0.0 (**checked**) | +8 measured, then re-squared |
+
+## The sign on CAMERA_FORWARD is the whole content of that number
+
+The constant is "inches along the turret's POINTING direction", and turret-0
+points away from the collector since the flip. The lens is 1.25 in toward the
+COLLECTOR of the turret axis, so along the pointing direction it is **behind**
+the axis: `-1.25`. Getting that sign wrong is a 2.5 in error, leaning one way, in
+every tag fix and every wall re-anchor -- the error class that ate two sessions
+in this file already.
+
+## CAMERA_YAW_DEG came off the "not measured" list, and the fix was mechanical
+
+Shane put a tag directly in front of the turret and read the bearing: **+8 deg**
+on the first mount. Bearing is left-positive, so the camera body was aimed 8 deg
+to the RIGHT of where the turret points -- and that is the same shape as the
+steady -2 to -3 deg heading error older fixes came back with.
+
+He RE-SQUARED THE MOUNT rather than model it, and a dead-ahead tag now reads
+within a degree or two of 0. That was much the cheaper road, and the reason is
+worth keeping:
+
+- **`TurretAim` never reads `CAMERA_YAW_DEG`.** It uses pitch and nothing else.
+  So an 8 deg yaw biases every bearing the match aiming path produces, and leaks
+  into `TurretDirector`'s trim as *fake pose drift* -- the trim is "camera says
+  minus odometry says", so it would have absorbed the mount error and then
+  carried it forward while blind.
+- **`AIM_BIAS_DEG` would have aimed the turret correctly and lied on the
+  screen.** `TurretAim` tests `DEADBAND_DEG` (5) *before* adding the bias
+  (around line 387), so with 8 deg of bias the correct aim sits at a bearing of
+  +8, outside the deadband: `isOnTarget()` reads false forever, the ready rumble
+  never fires, and when the camera does read under 5 deg the turret is genuinely
+  3-8 deg off and reports ON TARGET.
+- If yaw ever comes back non-zero, **teach `TurretAim.bearingOf()` the yaw at the
+  source**, the way `WallFix.bearingDeg()` already does (`+ yawLeftDeg`), and
+  push it in from `applyCamera()` next to pitch. Then the deadband, `isOnTarget`,
+  the smoothing and the trim all work on a turret-frame bearing. Do not reach for
+  the bias.
+
+**Measuring yaw is cheap and belongs after any camera work:** one tag, dead ahead
+of the turret, read the bearing. No field, no pose, no odometry.
+
+## One confound to respect: yaw vs CAMERA_LEFT
+
+At a single distance they look identical. A lateral lens offset reads as
+`atan(left / dist)`, which SHRINKS with range; a true yaw is constant. 8 deg at
+24 in is also what a 3.4 in sideways offset looks like. Two distances separate
+them -- the same trick the range-scale work used.
+
+## What did NOT need re-measuring, and why
+
+The **focal length override (822.317 -> 902)** is an INTRINSIC -- pixels, a
+property of the lens and sensor, not of where the camera is bolted. Moving the
+mount does not touch it, and it still stands for the same camera at 640x480.
+Likewise tag size, tag centre heights, the hive geometry, `TURRET_OFFSET_X/Y`,
+`TURRET_ZERO_DEG` and the homing constants.
+
+A yaw-only re-square rotates about the vertical axis, so it does not disturb
+pitch or lens height either: the 35 and the 16.0 survive the re-squaring.
+
+## ON-ROBOT VALIDATION, in order -- none of this has been run yet
+
+Tag Pose Test gives two free error readings because the turret base is physically
+on the floor and level:
+
+1. **`lvl` ~ 0.** It IS the declared-vs-actual pitch error. It read +0.8..+1.3 on
+   the old mount at 38. **If it comes back near +3 at 35, the mount is really
+   nearer 38 and the inclinometer is the wrong instrument** -- correct
+   `CAMERA_PITCH_DEG` by whatever `lvl` says and re-read.
+2. **`z` ~ 0.** The vertical chain: `CAMERA_UP`, pitch, tag height. 3 deg of
+   pitch at ~60 in is about 2.6 in of z, which is how the last pitch error was
+   caught.
+3. **FUNNEL believable 4 of 4 decoded.** z straddling `FLOOR_TOLERANCE` (4 in) is
+   what silently dropped good tags before.
+4. **Range vs tape at TWO distances.** Confirms the 902 survived, and two
+   distances rather than one is what separates a scale error from an offset.
+5. **A dead-ahead tag reads ~0 bearing.** Re-confirms the re-squared yaw with the
+   new numbers installed.
+6. **Then `DriveTeleOp`: check the turret still tracks the cell.** Pitch feeds
+   camera aiming through `applyCamera()`, and camera aiming is the match-proven
+   path -- a pitch change moves it whether or not it is more correct.

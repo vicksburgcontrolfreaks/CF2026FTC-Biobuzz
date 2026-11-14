@@ -109,13 +109,19 @@ import java.util.List;
  *   X              load the next wall-start preset as the truth (cycles all
  *                  four: red/blue x audience/scoring wall -- see WallStart)
  *
- * WHAT TO DISTRUST (updated 2026-11-13)
+ * WHAT TO DISTRUST (updated 2026-11-14)
  * The HIVE is measured -- CELL_ARM, CELL_DROP, HIVE_SWING_DEG and PIVOT_Y all
- * have tape behind them now. What is still assumed is on the ROBOT:
- * TagLocalizer's CAMERA_LEFT and CAMERA_YAW_DEG are both 0 by assumption, and
- * the camera calibration is whatever the SDK picks. "Believable" only checks
- * that the turret base came out level and on the floor -- it does NOT mean the
- * fix is accurate.
+ * have tape behind them now. So is the CAMERA MOUNT, re-measured 2026-11-14
+ * after it was moved: FORWARD -1.25 (negative -- behind the turret axis as the
+ * camera looks), UP 16.0, PITCH 35, and YAW re-squared to ~0 by putting a tag
+ * dead ahead of the turret and reading the bearing.
+ *
+ * What is still assumed is on the ROBOT: TagLocalizer's CAMERA_LEFT is 0 by
+ * assumption, and the camera calibration is the SDK's C270 entry with the focal
+ * length scaled (822 -> 902) from ONE tape measurement -- the distortion
+ * coefficients are untouched, so frame-edge error is not corrected.
+ * "Believable" only checks that the turret base came out level and on the floor
+ * -- it does NOT mean the fix is accurate.
  *
  * CAMERA: live on GAMEPAD 2, because this has now been got wrong twice by
  * assumption and never once measured.
