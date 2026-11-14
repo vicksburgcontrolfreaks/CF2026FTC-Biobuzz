@@ -76,16 +76,43 @@ public class TurretDirectorTest {
 
     /*
      * A trim bigger than MAX_TRIM_DEG is dropped by update(), so the constant has
-     * to be big enough to cover a believable pose error and small enough to catch
-     * a wrong-cell sighting. The two cells of a hive are about 18.8 in. apart, so
-     * mistaking one for the other at 60 in. is roughly 18 deg -- outside the cap,
-     * which is the point.
+     * to be big enough to cover a real pose error and small enough to reject
+     * nonsense.
+     *
+     * THIS TEST USED TO ASSERT THE OPPOSITE END, 2026-11-13. It required the cap
+     * to sit BELOW a wrong-cell sighting (the hive's cells are ~18.8 in apart, so
+     * ~18 deg at 60 in), which forced the cap under 18 and meant any drift past
+     * that permanently dropped odometry aiming -- permanently, because the pose is
+     * only re-trusted when the camera AGREES, which a drifted pose never does.
+     *
+     * The wrong-cell guard belongs to TurretAim, not here: it only averages tags
+     * passing isTargetTag(), and acceptAnyHive is false in match code, so the
+     * bearing behind this trim cannot come from the other cell. See MAX_TRIM_DEG.
      */
-    @Test public void theCapSitsBelowAWrongCellSighting() {
+    @Test public void theCapAbsorbsRealDriftWithoutBelievingNonsense() {
+        // A wrong-cell sighting is ~18 deg. It must now be ABSORBED, not rejected,
+        // because tag-ID filtering is what prevents it -- and because 18 deg of
+        // genuine pose drift has to be correctable.
         double wrongCellDeg = Math.toDegrees(Math.atan2(18.8, 60));
-        assertTrue("a wrong-cell sighting (" + wrongCellDeg + " deg) should exceed MAX_TRIM_DEG",
-                wrongCellDeg > TurretDirector.MAX_TRIM_DEG);
-        // And a few degrees of ordinary pose error should NOT be thrown away.
+        assertTrue("drift of " + wrongCellDeg + " deg must be correctable, not dropped",
+                wrongCellDeg < TurretDirector.MAX_TRIM_DEG);
+
+        // Ordinary pose error, obviously kept.
         assertTrue(5.0 < TurretDirector.MAX_TRIM_DEG);
+
+        // But still bounded: a turret angle wrong by a quadrant, or a garbage
+        // frame, is not drift and must not be quietly applied to the aim.
+        assertTrue("90 deg is not drift, it is a fault", 90.0 > TurretDirector.MAX_TRIM_DEG);
+    }
+
+    /*
+     * The property that makes raising the cap safe: a single bad frame moves the
+     * aim by a fraction of its error, not all of it. At TRIM_SMOOTHING 0.15 even a
+     * frame at the new cap shifts the trim by under 7 deg, and the good frames
+     * after it pull straight back.
+     */
+    @Test public void smoothingKeepsOneBadFrameFromMovingTheAimFar() {
+        double worstStep = TurretDirector.MAX_TRIM_DEG * TurretDirector.TRIM_SMOOTHING;
+        assertTrue("one frame can move the trim " + worstStep + " deg", worstStep < 10.0);
     }
 }

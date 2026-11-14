@@ -176,12 +176,53 @@ public class TurretDirector {
     public static double TRIM_SMOOTHING = 0.15;
 
     /**
-     * Disagreements bigger than this are not believed. A pose really this far out
-     * at shooting range is a failure for pose correction to fix rather than
-     * something to quietly paper over, and the likelier explanation is a bad
-     * frame or the wrong cell in view.
+     * Disagreements bigger than this are not believed.
+     *
+     * 15 -> 45 on 2026-11-13, after Shane pushed back on the old behaviour during
+     * a driver session. The reasoning the 15 was built on does not hold up:
+     *
+     * 1. THE TRIM IS THE CORRECTION. trimFrom() returns
+     *    (where the camera says the target is) - (where odometry said to point).
+     *    If the pose is 20 deg out, the trim is 20 deg, and applying it makes the
+     *    aim RIGHT. Refusing it does not make the aim better; it just stops using
+     *    the measurement.
+     *
+     * 2. GIVING UP APPLIES THE SAME CORRECTION ANYWAY. Past this cap for
+     *    TRIM_DISTRUST_SEC we drop to camera aiming, which points at
+     *    turretAngle + cameraBearing -- the full trim, by another route. The only
+     *    difference appears when the tags go out of view: camera aiming then has
+     *    nothing to aim with, while odometry carries the learned correction
+     *    forward. So the big trim was strictly better than the fallback, and the
+     *    cap was costing us the one thing odometry aiming exists for.
+     *
+     * 3. THE WRONG-CELL JOB IS ALREADY DONE UPSTREAM. The old 15 was sized to sit
+     *    below a wrong-cell sighting (the hive's two cells are ~18.8 in apart, so
+     *    ~18 deg at 60 in). But TurretAim only averages tags that pass
+     *    isTargetTag(), and acceptAnyHive is false in match code, so the bearing
+     *    the trim is measured against CANNOT come from the other cell. The cap was
+     *    guarding a door that is already locked.
+     *
+     * 4. NOTHING WAS EVER GOING TO FIX THE POSE. The old comment said a pose this
+     *    far out is "a failure for pose correction to fix" -- but TagLocalizer was
+     *    never wired, so no pose correction existed, and poseTrusted could never
+     *    come back: it is only restored when the camera AGREES, which a drifted
+     *    pose never will. The turret stayed on camera aiming for the rest of the
+     *    match. Shane: "we're likely to keep driving around the field for the
+     *    entire match waiting for the camera to agree."
+     *
+     * So 45 absorbs any drift we have actually measured while still rejecting the
+     * implausible -- a wild frame, or a turret angle that is wrong by a quadrant.
+     * TRIM_SMOOTHING keeps a single bad frame from moving the aim more than ~15%
+     * of its error, and distrustPose() is still there for a sustained disagreement
+     * past 45, which means something structural rather than drift.
+     *
+     * WHAT THIS DOES NOT FIX: the trim corrects the AIM, not the POSE. It is right
+     * for the geometry at the moment it was measured, so while the robot drives
+     * blind on a stale trim with a POSITION error, the correction it needs is
+     * changing and the trim is not. It re-converges the moment tags are seen
+     * again. The real repair is the wall re-anchor (gamepad 1 D-pad Down).
      */
-    public static double MAX_TRIM_DEG = 15.0;
+    public static double MAX_TRIM_DEG = 45.0;
 
     /** A bearing from a frame older than this describes where we WERE. */
     public static double TRIM_MAX_AGE_MS = 150;
