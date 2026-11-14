@@ -252,18 +252,20 @@ public class ShooterPivot {
                 // moved +0.09, so this was not a clean one-tooth slip.
                 // (Was 2026-11-11: open 0.486, closed 0.896, pollen 0.846.
                 //  Was 2026-11-06: stops 0.1268 / 0.65, pollen 0.568, nectar 0.17.)
-                MIN_SAFE_POSITION = 0.478;    // widest (open hard stop)
-                MAX_SAFE_POSITION = 0.9375;   // tightest
-                OPEN_POSITION = 0.478;
-                // 0.928: the KEEPER pollen grip after the full 5618 rebuild
-                // (Jade, 2026-11-14). Fixed -- tune RPMs around it, not this.
-                // NOTE: the two ends above are from 11-13, BEFORE the rebuild,
-                // and were not re-measured; 0.928 sits inside them so it is not
-                // clipped. Re-measure the ends if the servo ever buzzes.
+                // LOCKED AT 0.928 after the full 5618 rebuild (Jade, 2026-11-14).
+                // 5618 takes POLLEN ONLY and 0.928 is the goldilocks flywheel gap:
+                // "a fixed position, will not change no matter what". So all five
+                // numbers are 0.928, and the safe band is that single point --
+                // setPosition() clips EVERYTHING to it. Launcher's open-on-stop
+                // (jam release), the nectar grip and Pollen Shot Tune's pivot knob
+                // all land on 0.928. To unlock: re-measure the ends with Pivot Jog
+                // Test (which drives the servo directly, not through this band).
+                // (Was 2026-11-13, pre-rebuild: open 0.478, tight 0.9375.)
+                MIN_SAFE_POSITION = 0.928;
+                MAX_SAFE_POSITION = 0.928;
+                OPEN_POSITION = 0.928;
                 POLLEN_POSITION = 0.928;
-                // NOT MEASURED: robot is pollen-only for now. 0.6 is a placeholder
-                // (Pivot Jog Test's 5618 start spot) -- re-measure before shooting nectar.
-                NECTAR_POSITION = 0.6;
+                NECTAR_POSITION = 0.928;   // pollen only -- no nectar grip on 5618
                 break;
             case R6494:
             default:

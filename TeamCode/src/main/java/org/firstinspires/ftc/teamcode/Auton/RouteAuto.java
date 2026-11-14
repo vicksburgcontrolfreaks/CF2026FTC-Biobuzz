@@ -487,6 +487,7 @@ public abstract class RouteAuto extends OpMode {
         RobotHardware hw = new RobotHardware();
         hw.init(hardwareMap, false);   // TurretCamera owns the webcam
         launcher = new Launcher(hw, hardwareMap);
+        launcher.useAutoRpm();   // this robot's AUTO speed (5618: 1275, TeleOp is 1225)
         turret = hw.turret;
         camera = new TurretCamera(hardwareMap);
         deflector = new Deflector(hardwareMap);

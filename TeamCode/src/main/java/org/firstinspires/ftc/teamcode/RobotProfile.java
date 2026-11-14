@@ -263,9 +263,10 @@ public final class RobotProfile {
         try {
             switch (WhichRobot.get()) {
                 case R5618:
-                    // The rebuilt collection system ran backwards as FORWARD.
-                    // Flipped 2026-11-11; NOT robot-tested.
-                    return DcMotorSimple.Direction.REVERSE;
+                    // FORWARD again after the full 5618 rebuild (Jade, 2026-11-14:
+                    // "the indexer does not need to be reversed"). It was REVERSE
+                    // from 2026-11-11 for the earlier collection rebuild.
+                    return DcMotorSimple.Direction.FORWARD;
                 case R6494:
                 default:
                     // Confirmed feeding UP on the robot, 2026-11-05.
