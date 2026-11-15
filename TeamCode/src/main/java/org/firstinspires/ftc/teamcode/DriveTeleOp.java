@@ -140,8 +140,8 @@ public class DriveTeleOp extends OpMode {
     /**
      * Where TeleOp assumes the robot is sitting at Start.
      *
-     * GARDEN_EDGE is Garden Shoot + Park's own start pose (Waypoints
-     * GARDEN_EDGE_START, mapped for the alliance exactly as RouteAuto does it).
+     * GARDEN_EDGE is the autos' garden-edge start pose (Waypoints
+     * GARDEN_EDGE_START_FACING_RED since 2026-11-14, mapped for the alliance exactly as RouteAuto does it).
      * It replaced "field centre" on 2026-11-12: centre was never a place you
      * could actually put the robot, so odometry aiming off it was guaranteed
      * wrong. The garden edge is a spot you CAN set the robot on by hand -- back
@@ -210,7 +210,9 @@ public class DriveTeleOp extends OpMode {
     // BY_SIDE needs a real position, which only the auto handoff gives us.
     private final AutoMenu.Choice<AimCell> aimCell =
             menu.add("Aim at", AimCell.CAMERA, AimCell.SCORING, AimCell.AUDIENCE, AimCell.BY_SIDE)
-                    .allowWhen(c -> c != AimCell.BY_SIDE || startPose.get() == StartPose.FROM_AUTO);
+                    .allowWhen(c -> c != AimCell.BY_SIDE || startPose.get() == StartPose.FROM_AUTO)
+                    // hidden for competition: stays on its automatic default
+                    .showWhen(() -> !CompetitionMode.ON);
     // WHERE the aim comes from, as opposed to aimCell's WHICH CELL. The option
     // order here is NOT the default -- init() sets that from RobotProfile, because
     // these field initializers run before RobotProfile.install() knows the robot.
@@ -219,7 +221,9 @@ public class DriveTeleOp extends OpMode {
     private final AutoMenu.Choice<TurretDirector.AimSource> aimSource =
             menu.add("Aim by", TurretDirector.AimSource.CAMERA, TurretDirector.AimSource.ODOMETRY)
                     .summary("aim %s")
-                    .allowWhen(TurretDirector.AimSource::isAvailable);
+                    .allowWhen(TurretDirector.AimSource::isAvailable)
+                    // hidden for competition: see start() for what it is forced to
+                    .showWhen(() -> !CompetitionMode.ON);
     // Diagnostics for the left-bias hunt. NORMAL is the match setting; leave it
     // there unless you are running the test. See TurretDirector.AimTest.
     // BENCH ONLY -- hidden and forced to NORMAL by CompetitionMode.
@@ -322,7 +326,9 @@ public class DriveTeleOp extends OpMode {
         RobotProfile.install();
         // AFTER install(), so the row starts on this robot's default. start() is
         // what makes the pick live.
-        aimSource.set(TurretDirector.AimSource.fromDefault());
+        // ODOMETRY BY DEFAULT (Shane, 2026-11-14) on both robots -- set() refuses
+        // it on a robot whose turret geometry is unmeasured, leaving CAMERA.
+        aimSource.set(TurretDirector.AimSource.ODOMETRY);
         // Hiding a row does not reset it, so force the bench-only rows back to
         // their match values when CompetitionMode is on. See that class.
         if (CompetitionMode.ON) {
@@ -369,11 +375,11 @@ public class DriveTeleOp extends OpMode {
             telemetry.addData("Auto pose", "none (no auto since power-up)");
         }
         if (startPose.get() == StartPose.GARDEN_EDGE) {
-            Pose s = alliance.get().map(Waypoints.GARDEN_EDGE_START);
+            Pose s = alliance.get().map(Waypoints.GARDEN_EDGE_START_FACING_RED);
             telemetry.addLine(String.format(
                     "Set the robot on the GARDEN EDGE start (like auto): (%.0f, %.0f) %.0f deg.",
                     s.getX(), s.getY(), Math.toDegrees(s.getHeading())));
-            telemetry.addLine("    Back edge on the end of the garden tape, touching the garden wall.");
+            telemetry.addLine("    Facing the RED wall, collector edge on the end of the garden tape, touching the garden wall.");
         }
         telemetry.addData("Turret", "%s (%s)", turret.getState(), turret.getStatusNote());
         if (!turret.isHomed() && Turret.isMeasured()) {
@@ -407,6 +413,14 @@ public class DriveTeleOp extends OpMode {
     public void start() {
         // Apply the menu pick ONCE here, not every loop: USE_ODOMETRY_AIM is also
         // editable live in Panels, and rewriting it each loop would stomp that.
+        // COMPETITION: the row is hidden, so make the safe call for the drivers.
+        // Odometry needs a real pose; without an auto handoff the pose is only
+        // an assumed start, which is how the turret ended up pinned on a soft
+        // limit on 2026-11-12. So no handoff = camera.
+        if (CompetitionMode.ON) {
+            boolean realPose = startPose.get() == StartPose.FROM_AUTO && PoseHandoff.has();
+            aimSource.set(realPose ? TurretDirector.AimSource.ODOMETRY : TurretDirector.AimSource.CAMERA);
+        }
         aimSource.get().apply();
         aimTest.get().apply();
         // Latch the control layout for the whole run. Reading the menu every loop
@@ -419,15 +433,15 @@ public class DriveTeleOp extends OpMode {
         if (poseFromAuto) {
             start = PoseHandoff.pose();
         } else {
-            // Garden Shoot + Park's start, mapped for the alliance the same way
-            // RouteAuto does it (Waypoints are written in RED coordinates).
+            // The garden-edge start EVERY auto uses since 2026-11-14 (Shane): facing
+            // RED, collector edge on the end of the garden tape. Mapped for the
+            // alliance like RouteAuto (Waypoints are RED coordinates).
             //
-            // The heading is unchanged by this: GARDEN_EDGE_START faces blue, and
-            // alliance.map() rotates it 180 deg for blue -- which works out to
-            // awayFromDriversHeading() for both alliances, what this used to pass.
-            // So field-centric driving behaves exactly as before; only x/y moved,
-            // and x/y is read by nothing but odometry aiming.
-            start = alliance.get().map(Waypoints.GARDEN_EDGE_START);
+            // THE ROBOT MUST REALLY FACE RED (toward its drivers) for this. Field-
+            // centric driving reads this heading, so a robot set down facing blue
+            // would drive with reversed sticks until X is pressed. (Before
+            // 2026-11-14 this was GARDEN_EDGE_START, facing blue.)
+            start = alliance.get().map(Waypoints.GARDEN_EDGE_START_FACING_RED);
         }
         follower.setStartingPose(start);
         PoseHandoff.clear();   // taken; a second TeleOp run must not reuse it

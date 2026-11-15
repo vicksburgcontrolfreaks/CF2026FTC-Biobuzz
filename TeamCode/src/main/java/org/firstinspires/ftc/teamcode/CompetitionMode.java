@@ -24,6 +24,10 @@ import com.bylazar.configurables.annotations.Configurable;
  * WHAT IT HIDES (keep this list current -- it is the point of the class)
  *   DriveTeleOp "Gamepads"   one-gamepad solo testing. Forced back to TWO.
  *   DriveTeleOp "Aim test"   the aim diagnostic presets. Forced back to NORMAL.
+ *   DriveTeleOp "Aim at"     which cell. Left on its automatic default (by side
+ *                            after an auto, else camera picks).
+ *   DriveTeleOp "Aim by"     odometry after an auto, CAMERA without one (no real
+ *                            pose to aim from). Shane, 2026-11-14.
  *
  * ADDING TO THE LIST
  *   1. Give the menu row {@code .showWhen(() -> !CompetitionMode.ON)}.
@@ -48,5 +52,5 @@ public final class CompetitionMode {
      * FALSE during the season's build and test work, which is most of the time.
      * Turn it on for an event.
      */
-    public static boolean ON = false;
+    public static boolean ON = true;   // ON for the 2026-11-15 competition (Shane)
 }
