@@ -17,7 +17,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 6494's park, 3 in. closer to our wall (Shane, 2026-11-15). RouteAuto moves
+ * 6494's park, 1 in. closer to our wall (Shane, 2026-11-15; was 3). RouteAuto moves
  * the LAST step of every route that marked a park by PARK_WALL_SHIFT_6494 toward
  * the red wall (before mirroring). This builds every competition route the same
  * way and checks the moved park still passes the path check, stays off the wall
@@ -39,9 +39,9 @@ public class ParkWallShiftTest {
     }
 
     @Test public void shiftIsThreeInchesTowardTheRedWall() {
-        assertEquals(3.0, SHIFT, EPS);
+        assertEquals(1.0, SHIFT, EPS);
         Pose p = Waypoints.towardRedWall(Waypoints.PARK_GARDEN_SIDE, SHIFT);
-        assertEquals(Waypoints.PARK_GARDEN_SIDE.getX() - 3, p.getX(), EPS);
+        assertEquals(Waypoints.PARK_GARDEN_SIDE.getX() - 1, p.getX(), EPS);
         assertEquals(Waypoints.PARK_GARDEN_SIDE.getY(), p.getY(), EPS);
         assertEquals(Waypoints.PARK_GARDEN_SIDE.getHeading(), p.getHeading(), EPS);
     }

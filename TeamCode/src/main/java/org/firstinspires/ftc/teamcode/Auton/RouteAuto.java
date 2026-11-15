@@ -294,11 +294,12 @@ public abstract class RouteAuto extends OpMode {
      * park spots it ends up further toward the hive than the 4 in. wall gap the
      * spots are drawn for -- most likely its strafe-pod drift (docs/TODO.md item
      * 0), not the spots themselves. So on 6494 ONLY, the FINAL park point is
-     * moved this many inches toward our alliance wall (commanded gap 4 -> 1 in.).
+     * moved this many inches toward our alliance wall (commanded gap 4 -> 3 in.).
+     * 3 -> 1 (Shane, 2026-11-15): 2 in. added back, commanded gap now 3 in.
      * 5618 parks where it always did. The earlier park legs are untouched -- they
      * are what keep us off the hive and the red-wall flower.
      */
-    public static double PARK_WALL_SHIFT_6494 = 3.0;
+    public static double PARK_WALL_SHIFT_6494 = 1.0;   // 3 -> 1, Shane 2026-11-15
     /** This robot's shift, set once in init(). 0 on 5618 or an unknown robot. */
     private double parkWallShift = 0;
 
