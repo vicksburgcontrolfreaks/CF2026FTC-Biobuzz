@@ -234,6 +234,26 @@ public final class Routes {
                 .driveTo(facingRed(park.spot));                 // collector still toward red
     }
 
+    // FAR WALL WAIT AND SHOOT (Shane, 2026-11-14). Start on the far wall facing
+    // red (FAR_EDGE_START_FACING_RED). The turret homes and aims at our SCORING
+    // cell in INIT; the flywheel spins up at Start. Then WAIT, without moving,
+    // until the camera sees the scoring cell's tags (partner tipped the garden-side
+    // hive, so the scoring side is now up), aim TIP_AIM_SEC (2 s), fire
+    // FAR_WAIT_FIRE_SEC (5 s), and park. At PARK_LEAVE_BY_SEC (25 s) it parks
+    // anyway -- tip seen or not, mid-fire or not.
+    //
+    // ALWAYS PARKS (leave + park points), still facing red: no turn on the way,
+    // same reasoning as Garden Shoot 2X. Both parks are a straight diagonal off
+    // the wall, down and toward red, away from the far-wall flower and >15 in.
+    // clear of the hive (FarWallWaitShootTest). NOT robot-run.
+    public static final double FAR_WAIT_FIRE_SEC = 5;
+    public static Route farWallWaitShoot(Park park) {
+        return Route.startAt(FAR_EDGE_START_FACING_RED)
+                .tipLaunchHere(FAR_WAIT_FIRE_SEC)
+                .beginPark()
+                .driveTo(parkSpot(park));        // park spots already face red
+    }
+
     // 2026 ROBOT BACKUP (2026-11-07): Garden Shoot + Park's start, no launch,
     // straight to the park facing blue. For a broken launcher or a partner who
     // needs the shot. Always parks. Laptop path-checked (GardenShootParkTest);

@@ -39,6 +39,9 @@ public final class Route {
         TIP_LAUNCH, // on arrival, wait until the camera sees our cell's tags (partner
                     // tipped the hive), then LAUNCH. Gives up / cuts firing short at
                     // RouteAuto.PARK_LEAVE_BY_SEC so we still make it to the park.
+        TIP_LAUNCH_HERE, // TIP_LAUNCH without going anywhere (null path, like
+                         // LAUNCH_HERE): wait for the tip where the robot stands.
+                         // Far Wall Wait and Shoot, Shane 2026-11-14.
         YIELD,    // on arrival, hold still until the "yield until" time, to
                   // stay out of our alliance partner's way
     }
@@ -210,6 +213,14 @@ public final class Route {
 
     public Route tipLaunchFrom(Pose target) {
         return then(new Step(target, Action.TIP_LAUNCH, Double.NaN, true, Double.NaN, Double.NaN, Double.NaN));
+    }
+
+    /**
+     * Wait for the tip WHERE WE STAND, then aim RouteAuto.TIP_AIM_SEC and fire
+     * fireSec. No path. Cut short at PARK_LEAVE_BY_SEC like every tip launch.
+     */
+    public Route tipLaunchHere(double fireSec) {
+        return then(new Step(null, Action.TIP_LAUNCH_HERE, fireSec, true, Double.NaN, Double.NaN, Double.NaN));
     }
 
     // ("yield" by itself is a Java keyword, so this is yieldAt.)

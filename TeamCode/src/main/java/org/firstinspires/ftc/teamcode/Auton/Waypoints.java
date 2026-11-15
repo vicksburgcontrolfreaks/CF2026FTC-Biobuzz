@@ -169,6 +169,15 @@ public final class Waypoints {
     public static final Pose FAR_EDGE_START = new Pose(
             FieldConstants.TILE_SIZE + HALF_LENGTH, ON_FAR_WALL_Y, FACING_BLUE);
 
+    // FAR_EDGE_START TURNED ROUND (Shane, 2026-11-14), for Far Wall Wait and
+    // Shoot: collector toward the RED wall, COLLECTOR edge on the first tile
+    // seam (x = 24), side touching the far wall, back toward blue. Same centre
+    // (33, 135) for the same reason as GARDEN_EDGE_START_FACING_RED. The back is
+    // at x = 42, ~2.7 in. short of the far-wall flower. The turret (rear-facing
+    // zero) points toward blue, so the scoring cell is ~58 deg off its zero.
+    public static final Pose FAR_EDGE_START_FACING_RED = new Pose(
+            FAR_EDGE_START.getX(), FAR_EDGE_START.getY(), FACING_RED_WALL);
+
     // 24 in. forward and 18 in. left (toward the hive) of the start, turned to face
     // the hive center. The turret does the fine aim by camera from there.
     // Was 12 / 12, then 18 / 18 after run 1, then 6 in. more toward blue after

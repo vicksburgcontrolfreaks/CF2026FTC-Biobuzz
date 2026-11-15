@@ -137,6 +137,12 @@ public abstract class RouteAuto extends OpMode {
     public static double PARK_LEAVE_BY_SEC = 25.0;
     /** Camera frames with one of our cell's tags in them before we believe the hive tipped. */
     public static int TIP_CONFIRM_FRAMES = 3;
+    /**
+     * Seconds to aim after the tip is confirmed, before feeding (Shane,
+     * 2026-11-14, Far Wall Wait and Shoot). Every tip launch, so Far Wall Tip
+     * Shoot + Park gets it too.
+     */
+    public static double TIP_AIM_SEC = 2.0;
 
     // 1.0 = full speed (Shane, 2026-11-06). Was 0.5 while 6494's odometry drifts
     // ~1" per round trip (docs/TODO.md item 0) -- at full speed that drift and
@@ -245,7 +251,7 @@ public abstract class RouteAuto extends OpMode {
             // here indexes by, and a null path counts as arrived (see
             // autonomousPathUpdate). A zero-length BezierLine would be the
             // obvious alternative and is exactly what we are avoiding.
-            if (s.action == Route.Action.LAUNCH_HERE) {
+            if (s.target == null) {   // LAUNCH_HERE, TIP_LAUNCH_HERE
                 targets.add(from);
                 paths.add(null);
                 continue;
@@ -353,7 +359,7 @@ public abstract class RouteAuto extends OpMode {
                     launchFiring = false;
                     launchTimer.resetTimer();
                     flywheel(true);    // normally already spinning (pre-spun at Start)
-                    tipSeen = action != Route.Action.TIP_LAUNCH;   // plain LAUNCH doesn't wait
+                    tipSeen = !isTip(action);   // plain LAUNCH doesn't wait
                     tipFrames = 0;
                     lastTipFrame = 0;
                 }
@@ -478,7 +484,16 @@ public abstract class RouteAuto extends OpMode {
         if (!launchFiring) {
             double spunSec = Double.isNaN(flywheelOnSinceSec)
                     ? 0 : runTimer.getElapsedTimeSeconds() - flywheelOnSinceSec;
-            if (t >= SPINUP_SEC || spunSec >= SPINUP_SEC) {   // already spun up = no wait
+            boolean spunUp = t >= SPINUP_SEC || spunSec >= SPINUP_SEC;   // already spun up = no wait
+            // TIP launches also give the turret TIP_AIM_SEC after the tip: the cell
+            // just swung up, so the camera trim only starts converging now.
+            // launchTimer was reset when the tip was confirmed, so t counts from it.
+            boolean aimed = !isTip(route.steps.get(step).action) || t >= TIP_AIM_SEC;
+            if (!aimed) {
+                launchNote = String.format("tip seen - aiming %.1f / %.0f s  %s", t, TIP_AIM_SEC, aim.getStatus());
+                return false;
+            }
+            if (spunUp) {
                 launchFiring = true;   // loop() turns this into allForward
                 fireStartSec = t;
                 launchNote = "spun up - feeding";
@@ -546,13 +561,18 @@ public abstract class RouteAuto extends OpMode {
     }
 
     private static boolean isLaunch(Route.Action a) {
-        return a == Route.Action.LAUNCH || a == Route.Action.TIP_LAUNCH
+        return a == Route.Action.LAUNCH || isTip(a)
                 || a == Route.Action.LAUNCH_HERE;
+    }
+
+    /** Waits for the partner to tip the hive before it fires. */
+    private static boolean isTip(Route.Action a) {
+        return a == Route.Action.TIP_LAUNCH || a == Route.Action.TIP_LAUNCH_HERE;
     }
 
     private boolean routeLaunches() {
         return route.has(Route.Action.LAUNCH) || route.has(Route.Action.TIP_LAUNCH)
-                || route.has(Route.Action.LAUNCH_HERE);
+                || route.has(Route.Action.LAUNCH_HERE) || route.has(Route.Action.TIP_LAUNCH_HERE);
     }
 
     /**

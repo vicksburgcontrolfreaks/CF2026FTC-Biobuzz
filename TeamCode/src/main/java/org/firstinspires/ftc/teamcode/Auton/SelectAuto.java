@@ -30,6 +30,7 @@ public class SelectAuto extends RouteAuto {
         FAR_LEAVE_PARK_2026("Far Wall Leave + Park", Routes.Park.FAR_SIDE, true),   // 2026 robot
         FAR_TIP_SHOOT_PARK("Far Wall Tip Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
         FAR_QUICK_SHOOT_PARK("Far Wall Quick Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
+        FAR_WAIT_SHOOT("Far Wall Wait and Shoot", Routes.Park.FAR_SIDE, true),   // 2026 robot, 2026-11-14
         GARDEN_WALL("Garden Wall", Routes.Park.GARDEN_SIDE, false),
         FAR_WALL("Far Wall", Routes.Park.GARDEN_SIDE, false),
         GARDEN_WALL_LAUNCH("Garden Wall + Launch", Routes.Park.GARDEN_SIDE, false),
@@ -55,6 +56,7 @@ public class SelectAuto extends RouteAuto {
                 case FAR_LEAVE_PARK_2026:    return Routes.farLeavePark2026(park);
                 case FAR_TIP_SHOOT_PARK:     return Routes.farTipShootPark(park);
                 case FAR_QUICK_SHOOT_PARK:   return Routes.farQuickShootPark(park);
+                case FAR_WAIT_SHOOT:         return Routes.farWallWaitShoot(park);
                 case GARDEN_WALL:        return Routes.startUpGardenWall(park);
                 case FAR_WALL:           return Routes.startUpFarWall(park);
                 case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
@@ -63,6 +65,11 @@ public class SelectAuto extends RouteAuto {
                 case FAR_WALL_LEAVE_PARK:    return Routes.farWallLeavePark(park);
                 default: throw new IllegalStateException("No route for " + this);
             }
+        }
+
+        /** Does the "Wait (sec)" setting apply? Not for routes that wait for a tip. */
+        boolean usesStartWait() {
+            return this != FAR_WAIT_SHOOT;
         }
 
         @Override
@@ -83,10 +90,13 @@ public class SelectAuto extends RouteAuto {
             menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_SHOOT_2X,
                     AutoRoute.GARDEN_LEAVE_PARK_2026,
                     AutoRoute.FAR_LEAVE_PARK_2026, AutoRoute.FAR_TIP_SHOOT_PARK,
-                    AutoRoute.FAR_QUICK_SHOOT_PARK);
+                    AutoRoute.FAR_QUICK_SHOOT_PARK, AutoRoute.FAR_WAIT_SHOOT);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8)
-                    .summary("Wait %ds");
+                    .summary("Wait %ds")
+                    // Far Wall Wait and Shoot already waits for the tip; a start
+                    // wait would only eat into it (Shane, 2026-11-14).
+                    .showWhen(() -> autoRoute.get().usesStartWait());
     private final AutoMenu.Choice<Routes.Park> park =
             menu.add("Park", Routes.Park.GARDEN_SIDE, Routes.Park.FAR_SIDE, Routes.Park.NONE)
                     .allowWhen(p -> p != Routes.Park.NONE || !autoRoute.get().alwaysParks);
@@ -102,7 +112,8 @@ public class SelectAuto extends RouteAuto {
 
     // Hand the menu's current picks to RouteAuto.
     private void applyMenu() {
-        useRoute(alliance.get(), autoRoute.get().route(park.get()), startWait.get());
+        int wait = autoRoute.get().usesStartWait() ? startWait.get() : 0;   // hidden = 0
+        useRoute(alliance.get(), autoRoute.get().route(park.get()), wait);
         setYieldUntil(yieldUntil.get());
     }
 
