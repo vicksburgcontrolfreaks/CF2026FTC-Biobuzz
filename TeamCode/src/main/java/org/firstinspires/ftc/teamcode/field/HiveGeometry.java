@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.field;
 
+import com.bylazar.configurables.annotations.Configurable;
+
 import org.firstinspires.ftc.teamcode.field.FieldAprilTags.Cell;
 
 /*
@@ -23,7 +25,8 @@ import org.firstinspires.ftc.teamcode.field.FieldAprilTags.Cell;
  *
  * Coordinates are Pedro field inches, same as FieldConstants.
  */
-public final class HiveGeometry {
+@Configurable   // so the opening estimates can be typed into Panels on the field
+public class HiveGeometry {
 
     private HiveGeometry() {}
 
@@ -37,20 +40,84 @@ public final class HiveGeometry {
         }
     }
 
-    // ---- Measured: the RED AUDIENCE cell's opening, while it is the UP cell ----
-    // TODO(measure in CAD): the center of the opening we launch into, in field
-    // inches. The FIRST field CAD (Playing Field Resources page) has the hive in
-    // one resting position -- if it shows the other cell up, measure that cell
-    // and mirror it (y -> 144 - y) to get this one. NaN = not measured yet.
-    public static double RED_AUDIENCE_OPENING_X = Double.NaN;
-    public static double RED_AUDIENCE_OPENING_Y = Double.NaN;
-    public static double RED_AUDIENCE_OPENING_Z = Double.NaN;   // height above the tiles
+    // ---- The RED AUDIENCE cell's opening, while it is the UP cell -------------
+    // ESTIMATES, NOT MEASUREMENTS. Every number here is derived from the manual
+    // plus Shane's 2026-11-11 hive measurements, and each rests on an assumption
+    // that has not been checked on a field. They are here, rather than NaN, so
+    // the turret can aim at the hive AT ALL and we can see how close it lands.
+    // Replace them with the plumb-line measurement in docs/hive-opening-measure.md
+    // and set OPENING_MEASURED = true.
+    //
+    // @Configurable: type better values straight into Panels on the field instead
+    // of redeploying once per guess.
 
-    /** False until the opening is measured. */
-    public static boolean isMeasured() {
+    // X = 59.6. The manual's hive frame is 49.46 in. wide, centred on the field,
+    // so it spans x 47.27 to 96.73 with the two hives side by side. If each hive
+    // sits centred in its half, red (the low-x side -- FieldConstants puts the
+    // red wall at x = 0) lands at 47.27 + 49.46/4. THE ASSUMPTION is "centred in
+    // its half", which is exactly what Figures 9-8..9-11 would settle.
+    // Worth knowing: this should equal HiveTags.RED_HIVE_X, a made-up 60.0 that
+    // happens to sit right next to this -- so it may be where 60.0 came from.
+    public static double RED_AUDIENCE_OPENING_X = 59.6;
+
+    // Y = 55.0. MEASURED, Shane 2026-11-11: audience wall to the centre of the
+    // opening's face, with the red audience cell raised.
+    //
+    // This replaces a derived 63.9 that was wrong by about 9 in., and the reason is
+    // worth keeping. The AprilTags sit on the cell's BACK face; the opening is the
+    // OPPOSITE face, 12 in. away through the cell (manual 9.6.2). The old estimate
+    // put the opening directly above the back face's centre, so it dropped that
+    // depth entirely.
+    //
+    // DON'T TRY TO DERIVE THIS FROM HiveTags. Crossing the 12 in. needs both the
+    // cell's internal layout and the tilt, and guessing them is what produced the
+    // 9 in. error. HiveTags is anchored to the tag measurement on the back face;
+    // this is anchored to a tape on the opening. Each half stands on its own
+    // measurement and neither is computed from the other.
+    //
+    // Shane's sanity check was the giveaway: 63.9 sits only 8 in. from the field
+    // centre, and the hive does not reach that far in toward the middle.
+    public static double RED_AUDIENCE_OPENING_Y = 55.0;
+
+    // Z = 59.0, Shane's call 2026-11-11, refining his own earlier reading. Z DOES
+    // NOT AFFECT AIMING -- aimAngle() and distanceTo() are flat x/y. It feeds
+    // LaunchReach, and eventually the ballistics.
+    //
+    // Replaces a derived 57.5 (bottom of the opening at just under 54, plus half
+    // the manual's 14 in. opening height through a 30 deg face). That derivation
+    // needed a guess about which of the opening's dimensions runs up the tilted
+    // face, and guessing the cell's internal layout is exactly what went wrong
+    // with the y estimate. 59 is the number from the person holding the tape.
+    //
+    // It also makes the geometry close, though not for the reason an earlier
+    // version of this comment gave. Working the cell's real shape out from the
+    // pivot -- back face 9.4 in. out, opening on the FRONT (outer end) face 21.4
+    // in. out, which Shane confirmed 2026-11-11 is the front and not the top,
+    // tag on the bottom face 4.75 in. out from the back edge -- predicts this
+    // opening centre at y 56.2, z 59.4 against the y 55, z 59 measured here.
+    // See the CELL_DROP cross-check in HiveTags for the working.
+    public static double RED_AUDIENCE_OPENING_Z = 59.0;
+
+    /**
+     * Flip to true when the three numbers above are real measurements rather than
+     * the derived estimates they are today. Op modes show this so an aim that
+     * lands off the opening is not mistaken for a turret-geometry bug.
+     */
+    public static boolean OPENING_MEASURED = false;
+
+    /**
+     * Enough to AIM at the hive: x and y only, which is all TurretGeometry
+     * .aimAngle() and distanceTo() read. Separate from isMeasured() because
+     * requiring z blocked aiming on a number that aiming never uses.
+     */
+    public static boolean isAimMeasured() {
         return !Double.isNaN(RED_AUDIENCE_OPENING_X)
-                && !Double.isNaN(RED_AUDIENCE_OPENING_Y)
-                && !Double.isNaN(RED_AUDIENCE_OPENING_Z);
+                && !Double.isNaN(RED_AUDIENCE_OPENING_Y);
+    }
+
+    /** All three, including the height LaunchReach needs. */
+    public static boolean isMeasured() {
+        return isAimMeasured() && !Double.isNaN(RED_AUDIENCE_OPENING_Z);
     }
 
     /** Which cell an alliance launches into, given how its hive is tipped. */
@@ -59,6 +126,24 @@ public final class HiveGeometry {
             return tilt == Tilt.FAR_UP ? Cell.RED_SCORING : Cell.RED_AUDIENCE;
         }
         return tilt == Tilt.FAR_UP ? Cell.BLUE_SCORING : Cell.BLUE_AUDIENCE;
+    }
+
+    /**
+     * The inverse of {@link #upCell}: how the hive must be tipped for this cell to
+     * be the raised one. Alliance-independent -- a SCORING cell is up when the +y
+     * side is up, for both.
+     *
+     * WHY THIS EXISTS: the wall re-anchor needs the hive's tilt to know where a
+     * tag physically is, and the usual way to get it (TagLocalizer.turretFixOf,
+     * which tries both tilts and keeps the level one) needs detection.robotPose --
+     * which is null on TurretCamera, because its processor has no camera pose set.
+     * But the operator has ALREADY told us which cell they are shooting at, and
+     * you shoot at the raised one. So the aim cell gives the tilt for free, with
+     * no camera-pose change on the match camera.
+     */
+    public static Tilt tiltWithRaised(Cell cell) {
+        return (cell == Cell.RED_SCORING || cell == Cell.BLUE_SCORING)
+                ? Tilt.FAR_UP : Tilt.AUDIENCE_UP;
     }
 
     /**
@@ -111,6 +196,18 @@ public final class HiveGeometry {
         if (currentIsOurs && (current == audience ? seenAudience : seenScoring) > 0) return current;
         if (seenAudience == 0 && seenScoring == 0) return currentIsOurs ? current : scoring;
         return seenAudience > seenScoring ? audience : scoring;
+    }
+
+    /**
+     * {x, y, z}: where to aim for THIS CELL, whichever it is. All NaN until the
+     * opening is measured.
+     *
+     * For callers that have already decided which cell they are shooting at --
+     * DriveTeleOp picks by side or by camera, not by tilt -- rather than making
+     * them work backwards to an alliance and a tilt to ask aimPoint().
+     */
+    public static double[] aimPointFor(Cell cell) {
+        return openingOf(cell, RED_AUDIENCE_OPENING_X, RED_AUDIENCE_OPENING_Y, RED_AUDIENCE_OPENING_Z);
     }
 
     /** {x, y, z}: where to aim for this alliance's up cell. Feed x, y to TurretGeometry.aimAngle(). */

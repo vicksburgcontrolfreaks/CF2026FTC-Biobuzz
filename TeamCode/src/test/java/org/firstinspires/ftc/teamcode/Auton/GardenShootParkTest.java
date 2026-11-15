@@ -69,16 +69,80 @@ public class GardenShootParkTest {
         assertEquals(0.0, park.getHeading(), EPS);
     }
 
-    @Test public void backupLeaveParkIsClearAndFacesBlue() {
+    @Test public void backupLeaveParkIsClearAndFacesRed() {   // today's orientation, 2026-11-14
         for (Alliance a : Alliance.values()) {
             for (Routes.Park p : Routes.Park.values()) {
                 Route r = Routes.gardenLeavePark2026(p);
                 List<String> w = warnings(r, a, p);
                 assertTrue("backup " + a + " / " + p + ": " + w, w.isEmpty());
-                assertEquals(1, r.steps.size());   // straight to the park, NONE parks garden side
-                assertEquals(0.0, r.steps.get(0).target.getHeading(), EPS);
+                assertEquals(4, r.steps.size());   // the Garden Shoot 2X park legs; NONE parks garden side
+                assertEquals(0, r.parkFrom);
+                assertEquals(180.0, Math.toDegrees(r.start.getHeading()), EPS);
+                for (Route.Step s : r.steps) assertEquals(Math.PI, s.target.getHeading(), EPS);   // no turn
             }
         }
+    }
+
+    @Test public void farLeaveParkIsClearAndFacesRed() {   // today's orientation, 2026-11-14
+        for (Alliance a : Alliance.values()) {
+            for (Routes.Park p : Routes.Park.values()) {
+                Route r = Routes.farLeavePark2026(p);
+                List<String> w = warnings(r, a, p);
+                assertTrue("far leave+park " + a + " / " + p + ": " + w, w.isEmpty());
+                assertEquals(1, r.steps.size());
+                assertEquals(Math.PI, r.steps.get(0).target.getHeading(), EPS);   // no turn
+                assertEquals(0, r.parkFrom);
+            }
+        }
+        Pose start = Routes.farLeavePark2026(Routes.Park.FAR_SIDE).start;
+        assertEquals(33.0, start.getX(), EPS);    // collector edge on x = 24
+        assertEquals(135.0, start.getY(), EPS);   // touching the far wall
+        assertEquals(Math.PI, start.getHeading(), EPS);
+    }
+
+    @Test public void farTipShootParkIsClear() {
+        for (Alliance a : Alliance.values()) {
+            for (Routes.Park p : Routes.Park.values()) {
+                Route r = Routes.farTipShootPark(p);
+                List<String> w = warnings(r, a, p);
+                assertTrue("far tip shoot " + a + " / " + p + ": " + w, w.isEmpty());
+            }
+        }
+    }
+
+    @Test public void farTipShootStrafesRightThenWaitsToShootFromTheMirroredSpot() {
+        Route r = Routes.farTipShootPark(Routes.Park.FAR_SIDE);
+        Pose strafe = r.steps.get(0).target;
+        assertEquals(Route.Action.DRIVE, r.steps.get(0).action);
+        assertEquals(r.start.getX(), strafe.getX(), EPS);        // straight right, no forward
+        assertTrue(strafe.getY() < r.start.getY());
+        assertEquals(0.0, strafe.getHeading(), EPS);              // no turn yet
+        assertEquals(Route.Action.TIP_LAUNCH, r.steps.get(1).action);
+        Pose shot = r.steps.get(1).target;
+        assertEquals(57.0, shot.getX(), EPS);                     // GARDEN_SHOT mirrored in y
+        assertEquals(117.0, shot.getY(), EPS);
+        assertEquals(Math.toDegrees(Math.atan2(72 - 117, 72 - 57)), Math.toDegrees(shot.getHeading()), EPS);
+        assertEquals(0.0, r.steps.get(2).target.getHeading(), EPS);   // parks facing blue
+        assertEquals(2, Routes.farTipShootPark(Routes.Park.NONE).steps.size());
+    }
+
+    @Test public void farQuickShootParkIsClearAndFiresThirteenSeconds() {
+        for (Alliance a : Alliance.values()) {
+            for (Routes.Park p : Routes.Park.values()) {
+                Route r = Routes.farQuickShootPark(p);
+                List<String> w = warnings(r, a, p);
+                assertTrue("far quick shoot " + a + " / " + p + ": " + w, w.isEmpty());
+                Route.Step shot = r.steps.get(1);
+                assertEquals(Route.Action.LAUNCH, shot.action);   // no tip check
+                assertEquals(13.0, shot.fireSec, EPS);
+                assertTrue(shot.cutForPark);
+                assertEquals(Waypoints.FAR_SHOT, shot.target);
+            }
+        }
+        // The garden auto keeps the default fire time and no cutoff.
+        Route.Step garden = Routes.gardenShootPark(Routes.Park.GARDEN_SIDE).steps.get(0);
+        assertTrue(Double.isNaN(garden.fireSec));
+        assertTrue(!garden.cutForPark);
     }
 
     @Test public void dontParkStopsAtTheLaunchSpot() {

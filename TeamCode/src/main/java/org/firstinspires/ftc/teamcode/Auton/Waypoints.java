@@ -98,9 +98,15 @@ public final class Waypoints {
     // LEAVE = not touching the wall at the end of auto, so we park
     // PARK_WALL_GAP inches off the wall to get both.
 
+    // 5, was 8: leave our partner 3 more inches (Shane, 2026-11-08). The rule
+    // only needs part of the robot in the zone (tape counts), so 5 in. still
+    // leaves margin for a few inches of stopping error.
+    // 5 -> 8 (Shane, 2026-11-14 evening): a 5x5 in. corner overlap missed the
+    // zone on the far-side park. Costs our partner 3 in. of room.
     public static final double PARK_OVERLAP  = 8; // inches of robot inside the zone
     // 6, was 2: too close to the wall for comfort on the first run (Shane, 2026-11-06).
-    public static final double PARK_WALL_GAP = 6; // inches between robot and wall
+    // 6 -> 4 (Shane, 2026-11-14 evening): 9 in. of the 11 in. zone depth now.
+    public static final double PARK_WALL_GAP = 4; // inches between robot and wall
 
     private static final double PARK_X = HALF_LENGTH + PARK_WALL_GAP;
 
@@ -138,6 +144,40 @@ public final class Waypoints {
     public static final Pose GARDEN_EDGE_START = new Pose(
             FieldConstants.RED_GARDEN.maxX + HALF_LENGTH, ON_GARDEN_WALL_Y, FACING_BLUE);
 
+    // GARDEN_EDGE_START TURNED ROUND (Shane, 2026-11-14), for Garden Shoot 2X.
+    // Collector facing the RED alliance wall, collector edge on the garden tape
+    // seam (x = 24), side touching the garden wall.
+    //
+    // IT IS THE SAME CENTRE AS GARDEN_EDGE_START, (33, 9), and that is not a
+    // coincidence worth re-deriving: there, the BACK edge is on the seam and the
+    // body runs toward blue; here the COLLECTOR edge is on the seam and the body
+    // runs the same way. Both put the centre half a robot length past x = 24. So
+    // this pose is GARDEN_EDGE_START rotated 180 deg in place, and the two are
+    // interchangeable as far as the wall re-anchor's geometry is concerned.
+    //
+    // WHY FACE THIS WAY: the turret points away from the collector since the
+    // flip, so a collector facing red puts the turret on the hive side with no
+    // turning. From (33, 9) the red hive centre sits about 67 deg off the
+    // turret's zero -- well inside the +/-150 of travel.
+    public static final Pose GARDEN_EDGE_START_FACING_RED = new Pose(
+            GARDEN_EDGE_START.getX(), GARDEN_EDGE_START.getY(), FACING_RED_WALL);
+
+    // Same as GARDEN_EDGE_START but on the FAR wall (Shane, 2026-11-08): back
+    // edge on the first tile seam (x = 24), touching the far wall, facing blue.
+    // Center (33, 135). The robot's front is at x = 42, ~2.7 in. short of the
+    // far-wall flower (x = 44.7) -- don't start it any farther toward blue.
+    public static final Pose FAR_EDGE_START = new Pose(
+            FieldConstants.TILE_SIZE + HALF_LENGTH, ON_FAR_WALL_Y, FACING_BLUE);
+
+    // FAR_EDGE_START TURNED ROUND (Shane, 2026-11-14), for Far Wall Wait and
+    // Shoot: collector toward the RED wall, COLLECTOR edge on the first tile
+    // seam (x = 24), side touching the far wall, back toward blue. Same centre
+    // (33, 135) for the same reason as GARDEN_EDGE_START_FACING_RED. The back is
+    // at x = 42, ~2.7 in. short of the far-wall flower. The turret (rear-facing
+    // zero) points toward blue, so the scoring cell is ~58 deg off its zero.
+    public static final Pose FAR_EDGE_START_FACING_RED = new Pose(
+            FAR_EDGE_START.getX(), FAR_EDGE_START.getY(), FACING_RED_WALL);
+
     // 24 in. forward and 18 in. left (toward the hive) of the start, turned to face
     // the hive center. The turret does the fine aim by camera from there.
     // Was 12 / 12, then 18 / 18 after run 1, then 6 in. more toward blue after
@@ -149,6 +189,24 @@ public final class Waypoints {
     public static final Pose GARDEN_SHOT = new Pose(SHOT_X, SHOT_Y,
             Math.atan2(FieldConstants.CENTER - SHOT_Y, FieldConstants.CENTER - SHOT_X));   // ~72 deg
 
+    // ---- Far Wall Tip Shoot + Park (Shane, 2026-11-08) ----
+    // GARDEN_SHOT mirrored onto the far wall: SHOT_FORWARD toward blue and
+    // SHOT_LEFT to the RIGHT (toward the hive) of FAR_EDGE_START, turned to face
+    // the hive center. (57, 117), ~-72 deg.
+    private static final double FAR_SHOT_X = FAR_EDGE_START.getX() + SHOT_FORWARD;
+    private static final double FAR_SHOT_Y = FAR_EDGE_START.getY() - SHOT_LEFT;
+    public static final Pose FAR_SHOT = new Pose(FAR_SHOT_X, FAR_SHOT_Y,
+            Math.atan2(FieldConstants.CENTER - FAR_SHOT_Y, FieldConstants.CENTER - FAR_SHOT_X));
+
+    // First move off the far wall: strafe straight right (toward the audience),
+    // still facing blue, so the robot's front corner is well below the far-wall
+    // flower (y = 138) before it heads toward blue and starts turning. Mid-turn
+    // the corners swing out ~3.7 in. past the square, so it needs more than the
+    // 6 in. the flower sticks out.
+    public static final double FAR_STRAFE = 12;
+    public static final Pose FAR_STRAFE_OFF_WALL = new Pose(FAR_EDGE_START.getX(),
+            FAR_EDGE_START.getY() - FAR_STRAFE, FACING_BLUE);
+
     // Back toward the garden and turned to face blue again, BEFORE heading up
     // past the hive. The robot must finish turning down here: mid-turn, an 18 in.
     // square's corners swing out ~12.7 in., and a waypoint at (24, 48) clipped
@@ -156,6 +214,80 @@ public final class Waypoints {
     // the park stays ~3 in. off the red-wall flower (corner of the robot vs
     // the flower box, worst point) and ~15 in. off the hive.
     public static final Pose GARDEN_TURN_BACK = new Pose(24, 30, FACING_BLUE);
+
+    // GARDEN SHOOT 2X: get well clear of the hive BEFORE heading up to the park.
+    //
+    // WHY IT EXISTS (Shane, 2026-11-14): the route went straight from the shot
+    // spot (33, 9) to the park and RAN INTO THE HIVE on the robot. The commanded
+    // path cleared it by about 7 in. at the worst point and PathSafety found
+    // nothing -- so this was never a geometry error, it was 7 in. of pose error
+    // (6494's sideways drift, docs/TODO.md item 0) eating a 7 in. margin, after a
+    // round trip at 0.2 speed. The fix is margin, not a different line.
+    //
+    // From here the leg to the park runs NORTH with the robot's far edge at
+    // x = 30, which is 17 in. clear of the hive instead of 7.
+    //
+    // x = 21 is 12 in. toward red of the shot spot -- the foot Shane asked for --
+    // and it is bounded from the other side by the RED-WALL FLOWER (it sticks out
+    // to x = 6), so going further would trade a hive strike for a flower strike.
+    // 6 in. of flower clearance at the waypoint, double PAST_FLOWER_CLEARANCE,
+    // for the same reason: 7 in. of drift is now a measured quantity.
+    //
+    // IT TAKES TWO POINTS, and the second one is the one that does the work.
+    // Turning WHILE moving away from the shot spot is what nearly put a corner in
+    // the hive: a single turn-back point leaves the worst clearance at 10 in.,
+    // mid-turn, while the robot is still out at x ~ 24 (GardenShoot2XTest
+    // measures it). So go toward red FIRST, flat out, still facing red -- no turn,
+    // so no corner swing -- and only turn once the robot is tucked in at x = 21,
+    // on the way north. That is the same move FAR_STRAFE_OFF_WALL makes for the
+    // far-wall flower, for the same reason. Worst hive clearance then: 13.3 in.
+    //
+    // x = 21 for both: 12 in. toward red of the shot spot (the foot Shane asked
+    // for) and 6 in. clear of the red-wall flower, which is what stops it going
+    // further. SHOOT_2X_FLOWER_GAP is double PAST_FLOWER_CLEARANCE because 7 in.
+    // of drift is now a measured quantity rather than a worry.
+    //
+    // y = 30 on the turn point for the same reason GARDEN_TURN_BACK uses it: the
+    // turn has to finish down here, and doing it against the garden wall would
+    // swing a corner into the wall.
+    public static final double SHOOT_2X_FLOWER_GAP = 6;
+    private static final double SHOOT_2X_BACK_X =
+            FieldConstants.FLOWER_RED_WALL.maxX + HALF_LENGTH + SHOOT_2X_FLOWER_GAP;
+
+    /** Straight back along the garden wall toward red, still facing red. No turn. */
+    public static final Pose SHOOT_2X_WALL_BACK =
+            new Pose(SHOOT_2X_BACK_X, ON_GARDEN_WALL_Y, FACING_RED_WALL);
+    /** North off the wall, turning to face blue, well clear of the hive. */
+    public static final Pose SHOOT_2X_TURN_BACK =
+            new Pose(SHOOT_2X_BACK_X, 30, FACING_BLUE);
+    /**
+     * Still at x = 21, now fully past the RED-WALL FLOWER in y, which is where
+     * the slide in to the park (x = 15) is allowed to start.
+     *
+     * Without this the park leg cuts the corner and passes the flower at x ~ 18,
+     * leaving 2.9 in. -- measured, and under the 3 in. this repo already treats
+     * as the minimum. Holding x = 21 until here makes it 6 in. The park itself
+     * sits at x = 15 (edge on x = 6, flush with the flower) but by then it is at
+     * y = 92, nowhere near it.
+     *
+     * Turning here instead of at SHOOT_2X_TURN_BACK does NOT work: mid-turn the
+     * corners swing out ~12.7 in. in BOTH axes, so a turn level with the flower
+     * costs more clearance than the straight line saves (2.7 in., measured).
+     * Turn low, then run straight.
+     */
+    public static final Pose SHOOT_2X_PAST_FLOWER = new Pose(SHOOT_2X_BACK_X,
+            FieldConstants.FLOWER_RED_WALL.maxY + HALF_WIDTH + 1, FACING_BLUE);
+
+    // GARDEN_TURN_BACK mirrored to the far side, for Far Wall Tip Shoot + Park
+    // going to the GARDEN-side park: straight from FAR_SHOT clips the hive
+    // corner near (46, 110) (GardenShootParkTest, 2026-11-08). The far-side park
+    // doesn't need it.
+    public static final Pose FAR_TURN_BACK = new Pose(24, FieldConstants.FIELD_SIZE - 30, FACING_BLUE);
+
+    /** The same spot, facing the RED wall (collector toward red). */
+    public static Pose facingRed(Pose p) {
+        return new Pose(p.getX(), p.getY(), FACING_RED_WALL);
+    }
 
     /** The same spot, facing blue (the 2026 robot parks the way it started). */
     public static Pose facingBlue(Pose p) {

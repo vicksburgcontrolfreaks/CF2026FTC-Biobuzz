@@ -73,7 +73,7 @@ public final class Routes {
 
     // Start against the garden wall, launch the 4 preloads, collect the garden
     // pollen, go around the left of the hive to the far wall, launch again,
-    // then park. Launches are real: aim, then fire LAUNCH_SHOTS (see RouteAuto).
+    // then park. Launches are real: spin up, then fire (see RouteAuto.SPINUP_SEC).
     public static Route gardenWallLaunch(Park park) {
         Route route = Route.startAt(GARDEN_WALL_START)
                 .launchFrom(LAUNCH_GARDEN_WALL)  // launch the preloads
@@ -111,7 +111,7 @@ public final class Routes {
     // (df596f3: arc 70, shot (57, 27), 15 s, full speed) -- shots went in, on
     // BOTH 5618 and 6494.
     // Blue is the same route mirrored; not run on a robot yet. Start on the garden wall
-    // just outside the garden, facing blue. Deflector to AUTO_ARC_DEG at Start;
+    // just outside the garden, facing blue. Deflector to Deflector.DEFAULT_SHOT_DEG at Start;
     // drive to GARDEN_SHOT (24 in. forward, 18 in. left) turning to face the hive; launch (collector +
     // indexer + flywheels, LAUNCH_MAX_SEC); everything off; past the red-wall
     // flower (clear of the hive) to park, facing blue like the start.
@@ -127,13 +127,206 @@ public final class Routes {
                 .driveTo(facingBlue(park.spot));
     }
 
-    // 2026 ROBOT BACKUP (2026-11-07): Garden Shoot + Park's start, no launch,
-    // straight to the park facing blue. For a broken launcher or a partner who
-    // needs the shot. Always parks. Laptop path-checked (GardenShootParkTest);
-    // NOT run on a robot yet.
+    // GARDEN SHOOT 2X (Shane, 2026-11-14). Shoot the preloads where we stand,
+    // sweep the garden wall for more, come back to the same spot, shoot again,
+    // then park (still facing red -- no turn, as of 2026-11-14 evening).
+    //
+    // RUN ON 5618 TWICE on 2026-11-14, and it has not finished yet: the first
+    // run clipped the hive on the way to the park (fixed with the two-point way
+    // out, see SHOOT_2X_WALL_BACK), the second wedged on a ball just short of the
+    // garden corner and stopped there for the rest of the match (fixed with the
+    // leg timeouts and beginPark() below). Neither fix has been driven.
+    //
+    //   1. Start on GARDEN_EDGE_START_FACING_RED: collector toward the RED wall,
+    //      collector edge on the garden seam, side on the garden wall. The turret
+    //      points away from the collector since the flip, so it already faces the
+    //      hive from here.
+    //   2. launchHere(5): 4 s spin-up (wheels on since Start), feed 5 s, everything off. No driving
+    //      -- the step has no path at all.
+    //   3. collectTo(GARDEN_CORNER) at 0.4 with a 1 s dwell: 24 in. along the
+    //      wall into the garden corner, collector-first (heading 180 means the
+    //      collector leads), then sit still for 1 s with the collector still
+    //      running before it switches off.
+    //   4. driveTo the start pose again at full speed, same orientation.
+    //   5. launchHere(4) again, NO spin-up (wheels already on) -- launchFrom() here would be a zero-length path.
+    //   6. Park STILL FACING RED -- no turn (Shane, 2026-11-14 evening; see the
+    //      park legs below for why).
+    //
+    // TELEOP HANDOFF WHILE PARKED FACING RED: nothing to do. Field-centric
+    // driving uses the real pose heading (180), so stick-forward is still away
+    // from the drivers with driverHeadingOffset at 0 -- the collector just
+    // starts out pointing AT the drivers. DO NOT PRESS X at the start of TeleOp:
+    // X means "the robot faces away from me now", and pressing it while the
+    // robot faces the drivers sets a 180 deg offset and reverses the sticks.
+    // Press X only once the robot really does face away.
+    //
+    // (Below: the reasoning from when the park turned to face blue.)
+    // THE TELEOP HANDOFF IS NOT A POSE EDIT, deliberately. Red's "away from the
+    // drivers" IS heading 0, and the robot's heading is the direction the
+    // COLLECTOR points (WallFix.Face.FRONT is collector-first), so parking at
+    // facingBlue() already means stick-forward = collector-first-away-from-the-
+    // drivers with DriveTeleOp's driverHeadingOffset left at 0. Nothing has to be
+    // re-oriented. Overwriting the pose heading to force it is the 2026-11-12 bug
+    // that made odometry aiming miss the blue hive -- see
+    // DriveTeleOp.driverHeadingOffset.
+    //
+    // "Don't park" stops after the second shot, still facing RED, and
+    // needs nothing in TeleOp either -- same as the park above: do NOT press X
+    // until the robot faces away. It is not parked and scores no park points.
+    public static final double SHOOT_2X_FIRST_FIRE_SEC = 5;   // preloads; 4 -> 5 (Shane, 2026-11-14)
+    public static final double SHOOT_2X_FIRE_SEC = 4;         // second volley
+    public static final double SHOOT_2X_COLLECT_SPEED = 0.4;   // 0.2 too slow, 0.3 -> 0.4 to be sure it gets there (Shane, 2026-11-14)
+    public static final double SHOOT_2X_WALL_DWELL_SEC = 1;   // 2 -> 1 to buy back time (Shane, 2026-11-14)
+
+    // A BALL STOPPED THE WHOLE ROUTE (Shane, 5618, 2026-11-14). The sweep got
+    // almost to the garden corner, wedged on a ball, and sat there pushing: a
+    // step ends when the follower says it arrived, and a blocked robot never
+    // arrives, so the second shot and the park never happened.
+    //
+    // These two numbers are the fix, with Route.beginPark() below as the
+    // backstop. BOTH WALL LEGS GET ONE, not just the sweep -- the drive back is
+    // the same 24 in. of the same wall with the same loose balls on it.
+    //
+    // THE VALUES ARE PLACEHOLDERS UNTIL SOMEONE TIMES A GOOD RUN. Read "Step
+    // time" off the Driver Station on a clean run and set each limit a couple of
+    // seconds above it. Too generous wastes auto; too tight cuts off a leg that
+    // was going to make it. The sweep's is the bigger of the two because it runs
+    // at 0.4 speed and the return is at full power.
+    public static final double SHOOT_2X_SWEEP_TIMEOUT_SEC = 8;
+    public static final double SHOOT_2X_RETURN_TIMEOUT_SEC = 5;
+
+    public static Route gardenShoot2X(Park park) {
+        Route route = Route.startAt(GARDEN_EDGE_START_FACING_RED)
+                .launchHere(SHOOT_2X_FIRST_FIRE_SEC)            // shoot where we stand
+                .collectTo(GARDEN_CORNER, SHOOT_2X_COLLECT_SPEED, SHOOT_2X_WALL_DWELL_SEC)
+                .timeout(SHOOT_2X_SWEEP_TIMEOUT_SEC)            // blocked? leave it, keep going
+                .driveTo(GARDEN_EDGE_START_FACING_RED)          // back, same orientation
+                .timeout(SHOOT_2X_RETURN_TIMEOUT_SEC)
+                .launchHere(SHOOT_2X_FIRE_SEC);                 // second shooting sequence
+        if (park == Park.NONE) {
+            return route;
+        }
+        return route
+                // EVERYTHING BELOW IS THE PARK (gardenParkLegs). Marking it lets
+                // RouteAuto bail out to these steps at PARK_LEAVE_BY_SEC from
+                // anywhere earlier in the route -- the park is worth more than the
+                // second shot, and it is the one thing we want from a run that
+                // goes wrong. It has to be the whole four-leg park, not just the
+                // park spot: the first three legs are what keeps us off the hive.
+                //
+                // TOWARD RED FIRST, THEN TURN, then north to the park. Going
+                // straight to the park RAN INTO THE HIVE on the robot (Shane,
+                // 2026-11-14) even though the commanded line cleared it by ~7 in.
+                // and PathSafety was happy -- that margin is smaller than 6494's
+                // pose drift. Turning on the way out is what costs the clearance,
+                // so this leg does not turn at all and the next one does, tucked
+                // in at x = 21. See SHOOT_2X_WALL_BACK.
+                //
+                // NO TURN AT ALL NOW (Shane, 2026-11-14 evening): the whole park
+                // stays facing RED, collector toward the red wall. On the last run
+                // the robot BELIEVED it parked at (15, 94) but was really near the
+                // far end of the loading zone -- odometry ~30 in. off in y. The
+                // in-motion 180 deg turn is the prime suspect, so this run tests
+                // that by removing it. Same points, heading 180 throughout.
+                .then(gardenParkLegs(park));
+    }
+
+    /**
+     * THE PARK FROM THE GARDEN-EDGE START (facing red), shared by Garden Shoot
+     * 2X and Garden Leave + Park so the two cannot drift apart. Four legs, all
+     * facing red, no turn -- see the comments in gardenShoot2X for why each one
+     * is there (hive strike, red-wall flower, odometry error from turning).
+     * Starts with beginPark(), so the 25 s deadline jumps to the whole park.
+     */
+    private static Route gardenParkLegs(Park park) {
+        return Route.startAt(GARDEN_EDGE_START_FACING_RED)   // start unused; steps only
+                .beginPark()
+                .driveTo(SHOOT_2X_WALL_BACK)                    // flat out toward red
+                .driveTo(facingRed(SHOOT_2X_TURN_BACK))         // north off the wall, no turn
+                .driveTo(facingRed(SHOOT_2X_PAST_FLOWER))       // hold x until past the flower
+                .driveTo(facingRed(parkSpot(park)));            // collector still toward red
+    }
+
+    // FAR WALL WAIT AND SHOOT (Shane, 2026-11-14). Start on the far wall facing
+    // red (FAR_EDGE_START_FACING_RED). The turret homes and aims at our SCORING
+    // cell in INIT; the flywheel spins up at Start. Then WAIT, without moving,
+    // until the camera sees the scoring cell's tags (partner tipped the garden-side
+    // hive, so the scoring side is now up), aim TIP_AIM_SEC (2 s), fire
+    // FAR_WAIT_FIRE_SEC (5 s), and park. At PARK_LEAVE_BY_SEC (25 s) it parks
+    // anyway -- tip seen or not, mid-fire or not.
+    //
+    // ALWAYS PARKS (leave + park points), still facing red: no turn on the way,
+    // same reasoning as Garden Shoot 2X. Both parks are a straight diagonal off
+    // the wall, down and toward red, away from the far-wall flower and >15 in.
+    // clear of the hive (FarWallWaitShootTest). NOT robot-run.
+    public static final double FAR_WAIT_FIRE_SEC = 5;
+    public static Route farWallWaitShoot(Park park) {
+        return Route.startAt(FAR_EDGE_START_FACING_RED)
+                .tipLaunchHere(FAR_WAIT_FIRE_SEC)
+                .beginPark()
+                .driveTo(parkSpot(park));        // park spots already face red
+    }
+
+    // GARDEN LEAVE + PARK, TODAY'S ORIENTATION (Shane, 2026-11-14): the
+    // backup -- no shooting. Same start as Garden Shoot 2X (facing red,
+    // collector edge on the garden seam) and the same four-leg, no-turn park.
+    // Always parks. Laptop path-checked; NOT robot-run in this form.
+    // (Was 2026-11-07: start facing blue, one straight leg to the park.)
     public static Route gardenLeavePark2026(Park park) {
-        return Route.startAt(GARDEN_EDGE_START)
-                .driveTo(facingBlue(parkSpot(park)));
+        return Route.startAt(GARDEN_EDGE_START_FACING_RED)
+                .then(gardenParkLegs(park));
+    }
+
+    // FAR WALL LEAVE + PARK, TODAY'S ORIENTATION (Shane, 2026-11-14): same
+    // start as Far Wall Wait and Shoot (facing red, collector edge on the first
+    // seam, side on the far wall), then one straight diagonal off the wall to
+    // the park, still facing red. No shooting. Always parks. The turret still
+    // homes on lock and is kept homed into TeleOp. Laptop path-checked; NOT
+    // robot-run. (Was 2026-11-08: start facing blue.)
+    public static Route farLeavePark2026(Park park) {
+        return Route.startAt(FAR_EDGE_START_FACING_RED)
+                .beginPark()
+                .driveTo(parkSpot(park));        // park spots already face red
+    }
+
+    // 2026 ROBOT (Shane, 2026-11-08): Garden Shoot + Park mirrored onto the far
+    // wall, but the shot waits for our partner to TIP the hive. Start like Far
+    // Wall Leave + Park; strafe right off the wall first (clear the flower);
+    // to FAR_SHOT facing the hive; wait until the camera sees our cell's tags,
+    // then launch like Garden Shoot + Park. No tip seen by PARK_LEAVE_BY_SEC, or
+    // still firing then = stop and go park. Laptop path-checked; NOT robot-run.
+    // "Don't park" = stay at the shot spot (and fire the full time).
+    public static Route farTipShootPark(Park park) {
+        Route route = Route.startAt(FAR_EDGE_START)
+                .driveTo(FAR_STRAFE_OFF_WALL)
+                .tipLaunchFrom(FAR_SHOT);
+        if (park == Park.NONE) {
+            return route;
+        }
+        if (park == Park.GARDEN_SIDE) {
+            route = route.driveTo(FAR_TURN_BACK);   // straight there clips the hive
+        }
+        return route.driveTo(facingBlue(park.spot));
+    }
+
+    // 2026 ROBOT (Shane, 2026-11-08): Far Wall Tip Shoot + Park WITHOUT the tip
+    // check -- for when we trust our partner to tip the hive and want to shoot
+    // early and get out of their way. Same start, strafe and shot spot; on
+    // arrival spin up (SPINUP_SEC), fire FAR_QUICK_FIRE_SEC, then park.
+    // Still cut short at PARK_LEAVE_BY_SEC so a long Wait can't cost the park.
+    // Laptop path-checked; NOT robot-run. "Don't park" = stay at the shot spot.
+    public static final double FAR_QUICK_FIRE_SEC = 13;
+    public static Route farQuickShootPark(Park park) {
+        Route route = Route.startAt(FAR_EDGE_START)
+                .driveTo(FAR_STRAFE_OFF_WALL)
+                .launchFrom(FAR_SHOT, FAR_QUICK_FIRE_SEC);
+        if (park == Park.NONE) {
+            return route;
+        }
+        if (park == Park.GARDEN_SIDE) {
+            route = route.driveTo(FAR_TURN_BACK);   // straight there clips the hive
+        }
+        return route.driveTo(facingBlue(park.spot));
     }
 
     // BACKUP autos: just LEAVE + PARK (about 8 points), no launching or

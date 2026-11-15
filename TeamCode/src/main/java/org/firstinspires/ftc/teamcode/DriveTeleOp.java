@@ -4,24 +4,33 @@ import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.Auton.AutoMenu;
+import org.firstinspires.ftc.teamcode.Auton.Waypoints;
 import org.firstinspires.ftc.teamcode.field.Alliance;
 import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
-import org.firstinspires.ftc.teamcode.field.FieldConstants;
 import org.firstinspires.ftc.teamcode.field.HiveGeometry;
+import org.firstinspires.ftc.teamcode.field.HiveTags;
 import org.firstinspires.ftc.teamcode.field.PoseHandoff;
 import org.firstinspires.ftc.teamcode.geometry.FieldCentric;
+import org.firstinspires.ftc.teamcode.geometry.Rigid3;
+import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
+import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
+import org.firstinspires.ftc.teamcode.geometry.WallFix;
+import org.firstinspires.ftc.teamcode.geometry.WallReanchor;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.shooting.NectarGuard;
 import org.firstinspires.ftc.teamcode.subsystems.Deflector;
 import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 import org.firstinspires.ftc.teamcode.subsystems.TurretAim;
+import org.firstinspires.ftc.teamcode.subsystems.TurretDirector;
 import org.firstinspires.ftc.teamcode.vision.TurretCamera;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /*
@@ -30,27 +39,40 @@ import java.util.List;
  * GAMEPAD 1 (driver)
  *   Left stick   drive (field-centric: forward = away from OUR drivers)
  *   Right stick  turn
- *   X            "the robot faces away from me right now" -- heading reset, rumbles
+ *   X            "the robot faces away from me right now" -- re-references the
+ *                DRIVING sticks only, rumbles. It does NOT move the pose, so it
+ *                cannot throw the turret's aim off (see driverHeadingOffset).
  *                (was BACK until 2026-11-06; BACK didn't register reliably on 6494)
+ *   D-pad Down   WALL RE-ANCHOR: "we are square on this wall, collector-first."
+ *                Fixes a drifted pose from the wall plus the camera's bearing to
+ *                the hive tags. Long rumble = taken, two blips = refused (the
+ *                screen says why). Drive squarely into the wall, STOP, then press.
+ *                Works on gamepad 1 in both layouts.
  *
  * GAMEPAD 2 (operator)                             (all "hold" = only while held)
- *   B  (hold)    FIRE: starts the flywheel if it's off, then one ball at a time
- *                once it's at speed, pausing for it to recover after each shot
- *   A  (hold)    collector in            X (hold)   collector out
- *   RT (hold)    collector + indexer forward: starts the flywheel and FIRES like
- *                B, with the collector helping push balls up
- *   LT (hold)    collector + indexer backward (the only indexer-backward control)
- *   Y            flywheel on / off. B/RT turn it on; it STAYS on until Y.
- *                (After a JAM fault: clears it and spins up.)
- *                Backward controls (LT, X) never start or stop it.
+ *   B  (hold)    FIRE. Spins the flywheel up, waits for it to reach speed ONCE,
+ *                then runs the indexer for as long as you hold it. Release and
+ *                both stop. No queue, no pauses, no timeouts -- see
+ *                Launcher.DIRECT_FEED for what was removed and why.
+ *   A            COLLECTOR ON / OFF. Press once for on, again for off -- it is a
+ *                LATCH, not a hold (2026-11-14). It keeps running while you drive,
+ *                aim and fire. X (collector out) also turns it off.
+ *   X  (hold)    collector out -- and drops the A latch
+ *   RT (hold)    same as B, with the collector helping push balls up. Works
+ *                whatever the A latch says, and leaves it as it found it.
+ *   LT (hold)    collector + indexer backward (the only indexer-backward control).
+ *                Backward WINS over fire -- it is the jam-clearing control.
+ *   Y            PRE-SPIN the flywheel on / off. Not needed to shoot: B and RT
+ *                spin it up themselves. Use it before a volley so the first shot
+ *                does not wait for spin-up. Press again to stop pre-spinning.
  *   Bumpers      unused (2026-11-06: they don't register well on our gamepads;
  *                fire moved RB -> B, indexer-only backward (LB) dropped)
  *   Right stick X  turret by hand -- overrides aiming while held
  *   Left stick   FLICK up / down: deflector (shot arc) one position higher /
  *                lower -- 0 / 67.5 / 70 / 72.5 / 75 / 80 / 90 deg. Return to center between
  *                flicks. Needs the pre-match zero (see Deflector).
- *   D-pad Up     park the turret forward / resume aiming
- *   D-pad Down   "a NECTAR is next": nectar gap until the next shot
+ *   D-pad Up     park the turret straight back (turret 0, since the flip) / resume aiming
+ *   D-pad Down   (gamepad 1 only now -- wall re-anchor, see above)
  *   D-pad L / R  aim at our AUDIENCE / SCORING cell (with "Our side": until the
  *                robot next crosses the middle of the field)
  *   Rumble       short = ready (at speed + on target); 3 blips = nectar detected;
@@ -67,7 +89,7 @@ import java.util.List;
  *
  * TURRET: aims at our cell by camera whenever it's in view (TurretAim). Not
  * homed at Start (no auto since power-up)? It homes itself -- so the turret must
- * start roughly forward, same rule as Turret Test.
+ * start roughly BACKWARD (turret 0 faces the rear since the 2026-11-13 flip).
  *
  * NECTAR SAFETY: Launcher runs every ball through NectarGuard -- see that class.
  * TRIP_AMPS comes from the 25 RPM Indexer Load Test on 6494 (see NectarGuard).
@@ -75,8 +97,36 @@ import java.util.List;
  * START POSE (INIT menu, gamepad 1, same controls as Select Auto):
  *   FROM AUTO    - auto saves its pose every loop (PoseHandoff); default if it
  *                  ran in the last AUTO_POSE_FRESH_SEC.
- *   FACING AWAY  - point the robot away from our drivers before Start.
- *                  Position unknown (field center) -- fine for driving.
+ *   GARDEN EDGE  - assumes Garden Shoot + Park's start pose: back edge on the end
+ *                  of the garden tape, touching the garden wall. Set the robot
+ *                  there and it's right; anywhere else and the POSITION is wrong
+ *                  (the heading is the same either way). Driving doesn't care --
+ *                  only "Aim by odometry" reads the position.
+ *
+ * AIM BY (INIT menu): camera/tags or odometry/pose. RobotProfile sets the default
+ * per robot; this row is how you change it without a redeploy. See
+ * TurretDirector.AimSource.
+ *
+ * GAMEPADS (INIT menu, bench only -- hidden by CompetitionMode):
+ *   two (match)        the layout above. The default, and the only one at an event.
+ *   one (solo testing) everything on GAMEPAD 1, for testing with nobody to help:
+ *
+ *       Left stick   drive              Right stick  turn
+ *       X            heading re-reference (as above)
+ *       B  (hold)    FIRE               A            collector ON / OFF (latch)
+ *       RT (hold)    collector + indexer forward
+ *       LT (hold)    collector + indexer BACKWARD -- backing a ball out is the
+ *                    job collector-out would have done, so this one stays
+ *       Y            PRE-SPIN the flywheel on / off
+ *       D-pad Up     park the turret / resume aiming
+ *       D-pad Down   WALL RE-ANCHOR (same as the driver layout)
+ *       D-pad L / R  aim at our AUDIENCE / SCORING cell
+ *       Rumble       same three signals, on gamepad 1
+ *
+ *     NOT AVAILABLE SOLO, because they need a stick or button that is driving:
+ *       collector out (X), turret by hand, deflector arc.
+ *     The turret aims itself and the deflector holds what Start gave it. Park
+ *     (D-pad Up) is how you stop a bad aim without a second gamepad.
  */
 @TeleOp(name = "DriveTeleOp", group = "TeleOp")
 public class DriveTeleOp extends OpMode {
@@ -87,10 +137,59 @@ public class DriveTeleOp extends OpMode {
     private static final double TURRET_NUDGE_DEG_PER_SEC = 90;  // full stick
     private static final double TURRET_JOG_POWER = 0.25;        // full stick, turret NOT homed (no soft limits!)
 
+    /**
+     * Where TeleOp assumes the robot is sitting at Start.
+     *
+     * GARDEN_EDGE is the autos' garden-edge start pose (Waypoints
+     * GARDEN_EDGE_START_FACING_RED since 2026-11-14, mapped for the alliance exactly as RouteAuto does it).
+     * It replaced "field centre" on 2026-11-12: centre was never a place you
+     * could actually put the robot, so odometry aiming off it was guaranteed
+     * wrong. The garden edge is a spot you CAN set the robot on by hand -- back
+     * edge on the end of the garden tape, touching the garden wall -- so the
+     * assumption is at least achievable.
+     *
+     * It is still an ASSUMPTION. Nothing measures it. Put the robot somewhere
+     * else and odometry aiming is wrong again, just less wildly.
+     */
     private enum StartPose {
-        FROM_AUTO("From auto"), FACING_AWAY("Facing away from us");
+        FROM_AUTO("From auto"), GARDEN_EDGE("Garden edge (same as auto)");
         private final String label;
         StartPose(String label) { this.label = label; }
+        @Override public String toString() { return label; }
+    }
+
+    /**
+     * How many gamepads are driving this op mode.
+     *
+     * TWO is the match configuration and what everything below is written for:
+     * gamepad 1 drives, gamepad 2 runs the launcher.
+     *
+     * ONE is for testing alone. The operator controls move onto GAMEPAD 1. Only
+     * the three that would collide with driving are dropped, rather than remapped
+     * onto something the driver's thumbs are already using:
+     *
+     *   gamepad 2 x            collector OUT     -- gamepad 1 X is the heading
+     *                                               re-reference
+     *   gamepad 2 right stick  turret by hand    -- gamepad 1 right stick turns
+     *   gamepad 2 left stick   deflector flick   -- gamepad 1 left stick drives
+     *
+     * LT (everything BACKWARD) stays, because the driver uses neither trigger.
+     * That is deliberate and it is what makes losing collector-out acceptable:
+     * LT reverses the collector AND the indexer, so a ball can still be backed
+     * out of the launcher with one gamepad (Shane's call, 2026-11-12).
+     *
+     * So solo mode cannot override the aim by hand and cannot move the deflector:
+     * the turret aims itself and the deflector sits where Start put it
+     * (Deflector.DEFAULT_SHOT_DEG). Everything that feeds or clears a ball is
+     * there. Park (D-pad Up) still parks the turret, so a runaway aim can be
+     * stopped without a second gamepad.
+     *
+     * TWO-GAMEPAD MODE IS UNCHANGED by any of this.
+     */
+    private enum Gamepads {
+        TWO("two (match)"), ONE("one (solo testing)");
+        private final String label;
+        Gamepads(String label) { this.label = label; }
         @Override public String toString() { return label; }
     }
 
@@ -106,21 +205,58 @@ public class DriveTeleOp extends OpMode {
     private final AutoMenu.Choice<Alliance> alliance =
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
     private final AutoMenu.Choice<StartPose> startPose =
-            menu.add("Start pose", StartPose.FACING_AWAY, StartPose.FROM_AUTO)
+            menu.add("Start pose", StartPose.GARDEN_EDGE, StartPose.FROM_AUTO)
                     .allowWhen(p -> p != StartPose.FROM_AUTO || PoseHandoff.has());
     // BY_SIDE needs a real position, which only the auto handoff gives us.
     private final AutoMenu.Choice<AimCell> aimCell =
             menu.add("Aim at", AimCell.CAMERA, AimCell.SCORING, AimCell.AUDIENCE, AimCell.BY_SIDE)
-                    .allowWhen(c -> c != AimCell.BY_SIDE || startPose.get() == StartPose.FROM_AUTO);
+                    .allowWhen(c -> c != AimCell.BY_SIDE || startPose.get() == StartPose.FROM_AUTO)
+                    // hidden for competition: stays on its automatic default
+                    .showWhen(() -> !CompetitionMode.ON);
+    // WHERE the aim comes from, as opposed to aimCell's WHICH CELL. The option
+    // order here is NOT the default -- init() sets that from RobotProfile, because
+    // these field initializers run before RobotProfile.install() knows the robot.
+    // Deliberately not restricted to FROM_AUTO: picking odometry off a GARDEN_EDGE
+    // pose is a legitimate experiment, and init_loop() warns rather than forbids.
+    private final AutoMenu.Choice<TurretDirector.AimSource> aimSource =
+            menu.add("Aim by", TurretDirector.AimSource.CAMERA, TurretDirector.AimSource.ODOMETRY)
+                    .summary("aim %s")
+                    .allowWhen(TurretDirector.AimSource::isAvailable)
+                    // hidden for competition: see start() for what it is forced to
+                    .showWhen(() -> !CompetitionMode.ON);
+    // Diagnostics for the left-bias hunt. NORMAL is the match setting; leave it
+    // there unless you are running the test. See TurretDirector.AimTest.
+    // BENCH ONLY -- hidden and forced to NORMAL by CompetitionMode.
+    private final AutoMenu.Choice<TurretDirector.AimTest> aimTest =
+            menu.add("Aim test", TurretDirector.AimTest.NORMAL,
+                            TurretDirector.AimTest.NO_CELL_CENTRING,
+                            TurretDirector.AimTest.NO_CAMERA_TRIM,
+                            TurretDirector.AimTest.NEITHER)
+                    .summary("%s")
+                    .showWhen(() -> !CompetitionMode.ON);
+    // BENCH ONLY -- hidden and forced to TWO by CompetitionMode. See Gamepads.
+    private final AutoMenu.Choice<Gamepads> gamepads =
+            menu.add("Gamepads", Gamepads.TWO, Gamepads.ONE)
+                    .summary("%s")
+                    .showWhen(() -> !CompetitionMode.ON);
 
     private RobotHardware hardware;
     private Follower follower;
     private Launcher launcher;
     private Turret turret;
     private TurretCamera camera;
-    private TurretAim aim;
+    // Camera-only until TurretDirector.USE_ODOMETRY_AIM is turned on; see that class.
+    private TurretDirector aim;
     private Deflector deflector;
     private boolean deflectorStickArmed = true;
+
+    // ---- Driver arc adjustment ----------------------------------------------
+    // 1 deg a flick between 65 and 70 (Shane, 2026-11-10). Deliberately NOT
+    // DeflectorLogic.POSITIONS: that list is the shared arc presets and 5618
+    // still reads it, so a TeleOp-only range belongs here.
+    public static double ARC_STEP_DEG = 1.0;
+    public static double ARC_MIN_DEG = 65.0;
+    public static double ARC_MAX_DEG = 70.0;
 
     private final Launcher.Controls controls = new Launcher.Controls();
     private final ElapsedTime loopTimer = new ElapsedTime();
@@ -131,6 +267,53 @@ public class DriveTeleOp extends OpMode {
     private boolean turretParked = false;
     private int headingResets = 0;                      // gamepad1 X presses seen
     private final ElapsedTime headingResetTimer = new ElapsedTime();
+    /**
+     * How far the POSE heading is turned left of the direction the driver last
+     * declared "away from me" (gamepad 1 X). Field-centric driving subtracts
+     * this; NOTHING ELSE READS IT.
+     *
+     * WHY THIS EXISTS INSTEAD OF RESETTING THE POSE (Shane, 2026-11-12)
+     * X used to overwrite the pose heading with awayFromDriversHeading(). That
+     * was harmless while the turret aimed by camera, but odometry aiming reads
+     * the pose heading -- so pressing X while the robot faced any other
+     * direction made the heading wrong by that much, the turret aimed at where
+     * the hive would be for the fake heading, and it clipped and sat on a soft
+     * limit. Worse, once the camera/odometry disagreement passed
+     * TurretDirector.MAX_TRIM_DEG the camera trim was REJECTED every loop, so
+     * the aim ran on pure bad odometry and missed consistently to one side --
+     * which is what 6494 did on the blue hive, and what forcing the trim off
+     * (Aim test "no camera trim") reproduced deliberately.
+     *
+     * The driver's "away from me" and the field's true heading are two different
+     * things. Conflating them was the bug. This keeps them apart: X re-references
+     * the sticks and the localizer never hears about it.
+     */
+    private double driverHeadingOffset = 0.0;
+
+    /**
+     * True when the operator controls are on gamepad 1. Latched at Start from the
+     * menu, so unplugging a gamepad mid-match cannot silently change the controls.
+     */
+    private boolean solo = false;
+
+    /**
+     * The gamepad the OPERATOR controls read. gamepad 1 when solo, gamepad 2
+     * otherwise. Rumbles go here too, so the feedback follows the controls.
+     *
+     * The three controls that would collide with driving are gated on !solo
+     * where they are read -- see Gamepads. Do not add a new operator control
+     * that uses gamepad 1's left stick, right stick X or X button without
+     * gating it the same way.
+     */
+    private Gamepad op() {
+        return solo ? gamepad1 : gamepad2;
+    }
+    /**
+     * Collector latch (operator A). A press toggles it; X (collector out) drops
+     * it. Not reset anywhere else: it survives the whole TeleOp, and stop()
+     * stops the motors, so it cannot outlive the op mode.
+     */
+    private boolean collectorLatched = false;
     private boolean turretManual = false;
     private boolean wasReady = false;
     private int lastTrips = 0;
@@ -138,6 +321,21 @@ public class DriveTeleOp extends OpMode {
 
     @Override
     public void init() {
+        // This robot's turret and camera numbers, before anything aims. Throws if
+        // the config name does not say which robot this is -- see RobotProfile.
+        RobotProfile.install();
+        // AFTER install(), so the row starts on this robot's default. start() is
+        // what makes the pick live.
+        // ODOMETRY BY DEFAULT (Shane, 2026-11-14) on both robots -- set() refuses
+        // it on a robot whose turret geometry is unmeasured, leaving CAMERA.
+        aimSource.set(TurretDirector.AimSource.ODOMETRY);
+        // Hiding a row does not reset it, so force the bench-only rows back to
+        // their match values when CompetitionMode is on. See that class.
+        if (CompetitionMode.ON) {
+            gamepads.set(Gamepads.TWO);
+            aimTest.set(TurretDirector.AimTest.NORMAL);
+        }
+
         hardware = new RobotHardware();
         hardware.init(hardwareMap, false);   // TurretCamera owns the webcam
         follower = Constants.createFollower(hardwareMap);
@@ -176,12 +374,26 @@ public class DriveTeleOp extends OpMode {
         } else {
             telemetry.addData("Auto pose", "none (no auto since power-up)");
         }
-        if (startPose.get() == StartPose.FACING_AWAY) {
-            telemetry.addLine("Point the robot AWAY from the " + alliance.get() + " drivers before Start.");
+        if (startPose.get() == StartPose.GARDEN_EDGE) {
+            Pose s = alliance.get().map(Waypoints.GARDEN_EDGE_START_FACING_RED);
+            telemetry.addLine(String.format(
+                    "Set the robot on the GARDEN EDGE start (like auto): (%.0f, %.0f) %.0f deg.",
+                    s.getX(), s.getY(), Math.toDegrees(s.getHeading())));
+            telemetry.addLine("    Facing the RED wall, collector edge on the end of the garden tape, touching the garden wall.");
         }
         telemetry.addData("Turret", "%s (%s)", turret.getState(), turret.getStatusNote());
         if (!turret.isHomed() && Turret.isMeasured()) {
-            telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
+            telemetry.addLine("Turret will HOME at Start -- make sure it points roughly BACKWARD.");
+        }
+        // Odometry aiming points the turret using the POSE, not the tags. With no
+        // auto handoff the pose is an assumption (field centre), so the turret will
+        // aim at where the hive would be if the robot were there -- which is how it
+        // ended up pinned on a soft limit, 2026-11-12.
+        if (aimSource.get() == TurretDirector.AimSource.ODOMETRY
+                && startPose.get() != StartPose.FROM_AUTO) {
+            telemetry.addLine(">>> Aiming by ODOMETRY with no auto pose: the turret aims from");
+            telemetry.addLine("    the ASSUMED garden-edge start and ignores the tags. Only as");
+            telemetry.addLine("    good as the robot really being on that spot.");
         }
         if (launcher.isPivotBlocked()) {
             telemetry.addLine(">>> Pivot NOT measured on robot " + WhichRobot.number()
@@ -189,20 +401,47 @@ public class DriveTeleOp extends OpMode {
         }
         telemetry.addData("Camera", camera.getNote());
         if (deflector.isPresent() && !deflector.isZeroed()) {
-            telemetry.addLine(">>> Deflector NOT ZEROED - it won't move. Run the pre-match zero first.");
+            // Homes at START, not here: INIT during the auto->TeleOp transition
+            // must not move anything (G403).
+            telemetry.addLine(">>> Deflector not zeroed - it will AUTO-HOME at Start:");
+            telemetry.addLine("    down to the hard stop, then up to the stow, then to the shot.");
         }
         telemetry.update();
     }
 
     @Override
     public void start() {
+        // Apply the menu pick ONCE here, not every loop: USE_ODOMETRY_AIM is also
+        // editable live in Panels, and rewriting it each loop would stomp that.
+        // COMPETITION: the row is hidden, so make the safe call for the drivers.
+        // Odometry needs a real pose; without an auto handoff the pose is only
+        // an assumed start, which is how the turret ended up pinned on a soft
+        // limit on 2026-11-12. So no handoff = camera.
+        if (CompetitionMode.ON) {
+            boolean realPose = startPose.get() == StartPose.FROM_AUTO && PoseHandoff.has();
+            aimSource.set(realPose ? TurretDirector.AimSource.ODOMETRY : TurretDirector.AimSource.CAMERA);
+        }
+        aimSource.get().apply();
+        aimTest.get().apply();
+        // Latch the control layout for the whole run. Reading the menu every loop
+        // would let a row change (or a gamepad dropping out) move the controls
+        // under the driver's thumbs mid-match.
+        solo = gamepads.get() == Gamepads.ONE;
+
         Pose start;
         boolean poseFromAuto = startPose.get() == StartPose.FROM_AUTO && PoseHandoff.has();
         if (poseFromAuto) {
             start = PoseHandoff.pose();
         } else {
-            start = new Pose(FieldConstants.CENTER, FieldConstants.CENTER,
-                    alliance.get().awayFromDriversHeading());
+            // The garden-edge start EVERY auto uses since 2026-11-14 (Shane): facing
+            // RED, collector edge on the end of the garden tape. Mapped for the
+            // alliance like RouteAuto (Waypoints are RED coordinates).
+            //
+            // THE ROBOT MUST REALLY FACE RED (toward its drivers) for this. Field-
+            // centric driving reads this heading, so a robot set down facing blue
+            // would drive with reversed sticks until X is pressed. (Before
+            // 2026-11-14 this was GARDEN_EDGE_START, facing blue.)
+            start = alliance.get().map(Waypoints.GARDEN_EDGE_START_FACING_RED);
         }
         follower.setStartingPose(start);
         PoseHandoff.clear();   // taken; a second TeleOp run must not reuse it
@@ -216,8 +455,16 @@ public class DriveTeleOp extends OpMode {
             cameraPicks = aimCell.get() == AimCell.CAMERA || aimCell.get() == AimCell.BY_SIDE;
             targetCell = cellFor(aimCell.get() == AimCell.AUDIENCE ? AimCell.AUDIENCE : AimCell.SCORING);
         }
-        aim = new TurretAim(targetCell.tagIds);   // default: search for THAT cell only
+        aim = new TurretDirector(targetCell.tagIds);   // default: search for THAT cell only
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
+        // Normally auto's zero carries over and nothing happens here.
+        if (!deflector.isZeroed()) deflector.startHoming();
+        // Then go to the shot. goTo only sets a target, so if homing is still
+        // running this is where it ends up once it finishes -- no waiting, and no
+        // driver having to dial it up from the stow every match.
+        if (deflector.isZeroed() || deflector.isHoming()) {
+            deflector.goTo(Deflector.DEFAULT_SHOT_DEG);
+        }
         launcher.start();
         loopTimer.reset();
     }
@@ -240,9 +487,17 @@ public class DriveTeleOp extends OpMode {
     // ---- Gamepad 1 ------------------------------------------------------------
 
     private void drive() {
+        // Before the button, so a press is judged against motion measured up to
+        // this loop rather than last loop's.
+        trackSpeed(follower.getPose());
+        if (gamepad1.dpadDownWasPressed()) tryWallReanchor();
+
         if (gamepad1.xWasPressed()) {
-            Pose p = follower.getPose();
-            follower.setPose(new Pose(p.getX(), p.getY(), alliance.get().awayFromDriversHeading()));
+            // "The robot faces away from me right now." This is a DRIVING
+            // reference, so it moves a driving-only offset and DOES NOT TOUCH
+            // THE POSE. See driverHeadingOffset for what went wrong when it did.
+            driverHeadingOffset = follower.getPose().getHeading()
+                    - alliance.get().awayFromDriversHeading();
             gamepad1.rumble(300);
             headingResets++;
             headingResetTimer.reset();
@@ -250,7 +505,8 @@ public class DriveTeleOp extends OpMode {
 
         double[] robot = FieldCentric.toRobot(
                 -gamepad1.left_stick_y, gamepad1.left_stick_x,
-                follower.getPose().getHeading(), alliance.get().awayFromDriversHeading());
+                follower.getPose().getHeading() - driverHeadingOffset,
+                alliance.get().awayFromDriversHeading());
         double forward = robot[0];
         double right = robot[1];
         double turn = gamepad1.right_stick_x;
@@ -262,21 +518,115 @@ public class DriveTeleOp extends OpMode {
         hardware.rr.setPower((forward + right - turn) / den * DRIVE_SPEED);
     }
 
-    // ---- Gamepad 2: balls -----------------------------------------------------
+    // ---- Wall re-anchor (gamepad 1, D-pad Down) --------------------------------
+    // "We are square on this wall, collector-first." The wall then supplies the
+    // across-wall coordinate and the heading, and the camera's BEARING to the hive
+    // tags supplies the position ALONG the wall. See WallFix.
+    //
+    // WHY THIS AND NOT TAG LOCALIZATION: bearing needs no range, no camera height,
+    // no tag orientation and no camera calibration, so it sidesteps every error
+    // that cost us 2026-11-12/13 -- the ~9% range scale, the vertical chain, the
+    // frame-edge bias, single-tag pose ambiguity. One tag is enough.
+    //
+    // AND WHY IT MATTERS: a drifted pose does NOT heal itself. updateTrim() only
+    // re-trusts the pose when the camera AGREES, so once the pose has wandered
+    // past MAX_TRIM_DEG the turret stays on camera aiming indefinitely, however
+    // many tags it sees. Correcting the pose is the only way back to odometry --
+    // and it comes back on its own, one agreeing frame later.
+
+    private WallReanchor.Verdict lastReanchor = null;
+    private WallFix.Result lastReanchorFix = null;
+    private double lastReanchorAgeSec = -1;
+    private final ElapsedTime sinceReanchor = new ElapsedTime();
+
+    /** Robot speed and turn rate, for the re-anchor's "are we actually parked" guard. */
+    private Pose lastPoseForSpeed = null;
+    private double robotSpeed = 0, robotTurnRateDeg = 0;
+    private final ElapsedTime speedTimer = new ElapsedTime();
+
+    private void trackSpeed(Pose pose) {
+        double dt = speedTimer.seconds();
+        speedTimer.reset();
+        if (lastPoseForSpeed != null && dt > 1e-3) {
+            robotSpeed = Math.hypot(pose.getX() - lastPoseForSpeed.getX(),
+                    pose.getY() - lastPoseForSpeed.getY()) / dt;
+            robotTurnRateDeg = TurretGeometry.wrapDegrees(
+                    Math.toDegrees(pose.getHeading() - lastPoseForSpeed.getHeading())) / dt;
+        }
+        lastPoseForSpeed = pose;
+    }
+
+    /**
+     * One press. Builds a sighting per visible hive tag, asks WallFix where we are
+     * along the wall, asks WallReanchor whether to believe it, and only then writes
+     * the pose. Rumbles either way so the driver knows without reading the screen.
+     */
+    private void tryWallReanchor() {
+        Pose pose = follower.getPose();
+
+        // FRONT = collector-first, the only convention that works: back-first puts
+        // the camera at the wall. This is what the turret flip bought.
+        WallFix.Result fix = WallReanchor.solveFrom(camera.getDetections(), pose,
+                HiveGeometry.tiltWithRaised(targetCell), turret.getAngle(),
+                WallFix.Face.FRONT, RobotConstants.ROBOT_LENGTH / 2);
+
+        WallReanchor.Verdict verdict = WallReanchor.check(fix, robotSpeed, robotTurnRateDeg,
+                turret.isOnTarget());
+        lastReanchor = verdict;
+        lastReanchorFix = fix;
+        sinceReanchor.reset();
+        lastReanchorAgeSec = 0;
+
+        if (verdict.accepted()) {
+            follower.setPose(fix.robot);
+            // The trim was measured against the pose we just replaced, so keeping
+            // it would aim at where the hive WAS. resetPhase() drops it, re-trusts
+            // the pose and clears the rejection state, so odometry aiming resumes
+            // from a clean slate.
+            aim.resetPhase();
+            lastPoseForSpeed = null;   // the jump is not motion; don't report it as speed
+            gamepad1.rumble(400);
+        } else {
+            gamepad1.rumbleBlips(2);
+        }
+    }
+
+    // ---- Operator: balls ------------------------------------------------------
+    // op() is gamepad 2 normally, gamepad 1 in solo mode. See Gamepads.
 
     private void operateLauncher() {
-        if (gamepad2.yWasPressed()) launcher.toggleFlywheel();
-        if (gamepad2.dpadDownWasPressed()) launcher.requestNectar();
+        if (op().yWasPressed()) launcher.toggleFlywheel();
+        // D-PAD DOWN WAS "a NECTAR is next". GONE, 2026-11-13: there is no nectar
+        // mechanism for the next competition (Shane), DIRECT_FEED ignores the
+        // guard anyway, and the button is worth more as the wall re-anchor. It is
+        // read off gamepad1 directly in loop() so it works in solo too.
 
-        controls.fire = gamepad2.b;   // was RB -- bumpers don't register well on our gamepads
-        controls.collectIn = gamepad2.a;
-        controls.collectOut = gamepad2.x;
-        controls.allForward = gamepad2.right_trigger > TRIGGER_HELD;
-        controls.allBack = gamepad2.left_trigger > TRIGGER_HELD;
+        // A LATCHES THE COLLECTOR -- press on, press off (Shane, 2026-11-14). It
+        // was a hold. Collecting is a whole trip down the field, so holding A for
+        // it used up a thumb the operator needs for the turret stick and the
+        // deflector flick. Parallel to Y: both are "leave this motor running".
+        if (op().aWasPressed()) collectorLatched = !collectorLatched;
+        controls.fire = op().b;   // was RB -- bumpers don't register well on our gamepads
+        // COLLECTOR-OUT IS OFF IN SOLO MODE: x is the driver's heading
+        // re-reference on gamepad 1. The && short-circuits, so gamepad 1's X is
+        // never even read here -- re-referencing the heading can't also spit a ball.
+        controls.collectOut = !solo && op().x;
+        // X DROPS THE LATCH, and it has to: updateCollector() takes collectIn over
+        // collectOut, so a latched collector would have made collector-out a dead
+        // button. Spitting a ball out is also the clearest "stop collecting" there
+        // is. LT needs no such help -- backward already wins over both.
+        if (controls.collectOut) collectorLatched = false;
+        controls.collectIn = collectorLatched;
+        controls.allForward = op().right_trigger > TRIGGER_HELD;
+        // LT WORKS IN BOTH MODES. The driver doesn't use either trigger, so solo
+        // keeps the full backward control -- which is what stands in for the
+        // missing collector-out, since this reverses the collector AND the indexer
+        // (Shane's call, 2026-11-12). The one way to clear a jam with one gamepad.
+        controls.allBack = op().left_trigger > TRIGGER_HELD;
         launcher.update(controls);
     }
 
-    // ---- Gamepad 2: turret ----------------------------------------------------
+    // ---- Operator: turret -----------------------------------------------------
 
     private void operateTurret(double dt) {
         // "Our side": switch cells when the robot crosses the midline. A D-pad
@@ -295,16 +645,19 @@ public class DriveTeleOp extends OpMode {
         if (cameraPicks) {
             setTarget(HiveGeometry.cameraCell(alliance.get(), hiveIdsIn(detections), targetCell));
         }
-        if (gamepad2.dpadLeftWasPressed()) setTarget(cellFor(AimCell.AUDIENCE));
-        if (gamepad2.dpadRightWasPressed()) setTarget(cellFor(AimCell.SCORING));
+        if (op().dpadLeftWasPressed()) setTarget(cellFor(AimCell.AUDIENCE));
+        if (op().dpadRightWasPressed()) setTarget(cellFor(AimCell.SCORING));
 
-        if (gamepad2.dpadUpWasPressed()) {
+        if (op().dpadUpWasPressed()) {
             turretParked = !turretParked;
             aim.resetPhase();
             if (turretParked && turret.isHomed()) turret.setTargetAngle(Turret.PARK_ANGLE);
         }
 
-        double stick = gamepad2.right_stick_x;
+        // NO MANUAL TURRET IN SOLO MODE: gamepad 1's right stick is the drive
+        // turn. 0 means "never manual", so the aim keeps running and D-pad Up
+        // (park) is how you stop a bad aim when you only have one gamepad.
+        double stick = solo ? 0 : op().right_stick_x;
         boolean manual = Math.abs(stick) > STICK_DEADZONE;
         if (manual) {
             // Stick right = turret turns right (clockwise) = angle goes DOWN.
@@ -320,17 +673,30 @@ public class DriveTeleOp extends OpMode {
         turretManual = manual;
 
         boolean aimAllowed = !turretParked && !manual && turret.isHomed();
-        aim.update(detections, turret, aimAllowed);
+        // The pose and the cell's opening let the director aim from odometry; it falls
+        // back to the camera on its own if either is missing or the hive is
+        // unmeasured, so passing them is safe whatever the flags say.
+        double[] opening = HiveGeometry.aimPointFor(targetCell);
+        aim.update(detections, turret, follower.getPose(), opening[0], opening[1],
+                aimAllowed, getRuntime());
         turret.update();
     }
 
-    // ---- Gamepad 2: deflector (shot arc) --------------------------------------
+    // ---- Operator: deflector (shot arc) ---------------------------------------
 
     private void operateDeflector() {
         // A flick, not a dial: one step per push, re-armed back near center.
-        double y = -gamepad2.left_stick_y;   // up = +
+        // NO DEFLECTOR CONTROL IN SOLO MODE: gamepad 1's left stick drives. 0
+        // means no flick is ever seen, so the deflector holds the angle Start
+        // sent it to (Deflector.DEFAULT_SHOT_DEG) for the whole run. update()
+        // still runs, so it gets there and holds it.
+        double y = solo ? 0 : -op().left_stick_y;   // up = +
         if (deflectorStickArmed && Math.abs(y) > 0.6) {
-            if (y > 0) deflector.stepUp(); else deflector.stepDown();
+            // One degree a flick, clamped to the TeleOp range. stepUp/stepDown walk
+            // DeflectorLogic.POSITIONS, which is 2.5 deg apart and shared with the
+            // other robot -- too coarse for a driver correcting a shot.
+            double want = deflector.getTarget() + (y > 0 ? ARC_STEP_DEG : -ARC_STEP_DEG);
+            deflector.goTo(Math.max(ARC_MIN_DEG, Math.min(ARC_MAX_DEG, want)));
             deflectorStickArmed = false;
         } else if (Math.abs(y) < 0.3) {
             deflectorStickArmed = true;
@@ -368,14 +734,14 @@ public class DriveTeleOp extends OpMode {
         NectarGuard guard = launcher.getGuard();
 
         boolean fault = guard.isFault();
-        if (fault && !wasFault) gamepad2.rumble(1000);
+        if (fault && !wasFault) op().rumble(1000);
         wasFault = fault;
 
-        if (guard.getTrips() > lastTrips) gamepad2.rumbleBlips(3);
+        if (guard.getTrips() > lastTrips) op().rumbleBlips(3);
         lastTrips = guard.getTrips();
 
         boolean ready = launcher.isReady() && aim.isOnTarget();
-        if (ready && !wasReady) gamepad2.rumble(150);
+        if (ready && !wasReady) op().rumble(150);
         wasReady = ready;
     }
 
@@ -383,22 +749,86 @@ public class DriveTeleOp extends OpMode {
         NectarGuard guard = launcher.getGuard();
         if (guard.isFault()) telemetry.addLine(">>> " + guard.getNote());
 
+        // ARC FIRST. The drivers adjust this between shots, so it goes at the top
+        // of the screen rather than fourth down -- it used to be below Flywheel,
+        // Gap and Turret, where nobody found it mid-match.
+        if (deflector.isPresent()) {
+            if (deflector.isHoming() || !deflector.isZeroed()) {
+                telemetry.addData("ARC", ">>> %s", deflector.getHomeNote());
+            } else {
+                telemetry.addData("ARC", "%.1f deg   -> %.1f%s   (%.0f-%.0f, flick = %.0f deg)",
+                        deflector.getAngle(), deflector.getTarget(),
+                        deflector.isOnTarget() ? "" : "  MOVING",
+                        ARC_MIN_DEG, ARC_MAX_DEG, ARC_STEP_DEG);
+            }
+        }
+
         telemetry.addData("Flywheel", "%s  %s  L %.0f / R %.0f (target %.0f)",
                 launcher.isFlywheelOn() ? "ON" : "off", launcher.getShooter().getNote(),
                 launcher.getShooter().getLeftRpm(), launcher.getShooter().getRightRpm(),
                 launcher.getShooter().getTargetRpm());
-        telemetry.addData("Gap", "%s  | guard %s: %s", launcher.isPivotBlocked() ? "PIVOT BLOCKED" : launcher.getGap(),
-                guard.getState(), guard.getNote());
+        // In DIRECT_FEED the guard is neither updated nor consulted, so printing
+        // its state would be reporting a machine that is not running. Say so
+        // instead -- a stale CLEAR is worse than no number.
+        if (Launcher.DIRECT_FEED) {
+            telemetry.addData("Gap", "%s  | guard OFF (direct feed)",
+                    launcher.isPivotBlocked() ? "PIVOT BLOCKED" : launcher.getGap());
+        } else {
+            telemetry.addData("Gap", "%s  | guard %s: %s",
+                    launcher.isPivotBlocked() ? "PIVOT BLOCKED" : launcher.getGap(),
+                    guard.getState(), guard.getNote());
+        }
+        // The raw operator inputs, as this op mode reads them, and WHICH gamepad
+        // they came from. Added 2026-11-13 after an hour lost to the indexer
+        // running with "nobody holding anything": the fire controls are on
+        // gamepad 2 unless solo mode was picked, a drifting trigger past 0.5
+        // reads as held, and neither was visible anywhere on this screen.
+        // The last re-anchor, and WHY if it was refused. Stays on screen rather
+        // than flashing: a driver who pressed it mid-match will look afterwards.
+        if (lastReanchor != null) {
+            telemetry.addData("Wall re-anchor", "%.0f s ago: %s",
+                    sinceReanchor.seconds(), WallReanchor.describe(lastReanchor, lastReanchorFix));
+        } else {
+            telemetry.addLine("Wall re-anchor: not used (gamepad 1 D-pad Down, parked on a wall)");
+        }
+        telemetry.addData("Op input", "%s | B %s  RT %.2f  LT %.2f  A(raw) %s",
+                solo ? "gamepad1 (SOLO)" : "gamepad2",
+                op().b ? "HELD" : "-", op().right_trigger, op().left_trigger,
+                op().a ? "HELD" : "-");
+        // Its own line, because a LATCHED collector is a motor running with nobody
+        // touching anything, and that should never be a surprise. Same rule as the
+        // Shot Map latch. A(raw) above is the button; this is the state it set.
+        telemetry.addData("Collector", collectorLatched
+                ? "LATCHED ON (A to stop, X also drops it)"
+                : "off -- A latches it on");
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
-        if (deflector.isPresent()) {
-            telemetry.addData("Arc", deflector.isZeroed()
-                    ? String.format("%.1f deg (target %.1f%s)  power %+.2f  max step %.0f/180",
-                            deflector.getAngle(), deflector.getTarget(),
-                            deflector.isOnTarget() ? "" : ", moving",
-                            deflector.getPower(), deflector.getMaxStepSeen())
-                    : "NOT ZEROED - won't move");
+        // Which path is aiming, and the distance odometry gives that the camera never
+        // could. "camera" here means odometry aiming is off or could not run.
+        telemetry.addData("Aim by", "%s%s%s", aim.getSource(),
+                aim.isUsingOdometry() ? String.format("  |  %.1f in", aim.getDistance()) : "",
+                aim.hasCameraFix() ? String.format("  |  trim %+.1f deg", aim.getTrimDeg()) : "");
+        // Tags in frame for the cell we're aiming at. The cell-centring correction
+        // cancels out at 4 and is at its worst at 1, so this is what tells you
+        // whether a bias is the row-offset sign or something else.
+        // Loud, because it means the pose went bad mid-match and the turret
+        // handed itself back to the camera. Shots still work; odometry doesn't.
+        if (!aim.isPoseTrusted()) {
+            telemetry.addLine(String.format(
+                    ">>> POSE NOT TRUSTED (camera disagreed by %.0f deg) -- aiming by",
+                    Math.abs(aim.getLastRejectedDeg())));
+            telemetry.addLine("    CAMERA. Odometry comes back on its own if the pose agrees again.");
+        } else if (aim.isRejectingTrim()) {
+            telemetry.addLine(">>> Camera and pose disagreeing -- about to drop to camera aiming.");
         }
+        if (solo) {
+            telemetry.addLine(">>> SOLO (one gamepad): LT = everything backward.");
+            telemetry.addLine("    No collector-out, no turret-by-hand, no deflector.");
+            telemetry.addLine("    D-pad Up parks the turret.");
+        }
+        telemetry.addData("Tags used", "%d of 4%s", aim.camera().getTagsUsed(),
+                aimTest.get() == TurretDirector.AimTest.NORMAL ? ""
+                        : "   [AIM TEST: " + aimTest.get() + "]");
         telemetry.addData("Aim at", "%s%s", targetCell.displayName,
                 cameraPicks ? "  (camera picks)"
                         : !bySide ? "" : targetCell == lastSideCell ? "  (our side)" : "  (picked - until we cross the middle)");
@@ -406,11 +836,13 @@ public class DriveTeleOp extends OpMode {
         Pose p = follower.getPose();
         telemetry.addData("Pose", "(%.1f, %.1f) %.1f deg  [%s]", p.getX(), p.getY(),
                 Math.toDegrees(p.getHeading()), alliance.get());
-        // X check: the count goes up on every press the code sees. Right after a
-        // press, heading should read the "away" heading (red 0, blue 180).
-        telemetry.addData("Heading reset", headingResets == 0 ? "never (gamepad1 X)"
-                : String.format("%d times, last %.0f s ago (sets %.0f deg)", headingResets,
-                        headingResetTimer.seconds(), Math.toDegrees(alliance.get().awayFromDriversHeading())));
+        // X check: the count goes up on every press the code sees. The POSE above
+        // must NOT jump when X is pressed -- only this offset moves. A pose
+        // heading that changes on X means the old bug is back.
+        telemetry.addData("Driver zero", headingResets == 0 ? "never pressed (gamepad1 X)"
+                : String.format("%d times, last %.0f s ago, offset %+.0f deg (drive only)",
+                        headingResets, headingResetTimer.seconds(),
+                        Math.toDegrees(driverHeadingOffset)));
         // For recalibrating the nectar trip at the real feed speed.
         telemetry.addData("Indexer amps", "now %.2f  last run peak %.2f  (trip %.2f)",
                 launcher.getIndexerAmps(), guard.getLastRunPeakAmps(), NectarGuard.TRIP_AMPS);

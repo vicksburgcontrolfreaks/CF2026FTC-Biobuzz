@@ -10,6 +10,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.shooting.ShooterLogic;
 import org.firstinspires.ftc.teamcode.subsystems.CollectionSystem;
+import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
 
@@ -53,7 +54,7 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *                 FEED_RPM / UNJAM_RPM. A fired shot feeds at FEED_RPM too.
  */
 @Configurable
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
 @Disabled
 @TeleOp(name = "Shooter Test", group = "Test")
 public class ShooterTest extends LinearOpMode {
@@ -62,7 +63,8 @@ public class ShooterTest extends LinearOpMode {
     // the wheels' max at full power (HD Hex + 3:1 + flywheel; 1500 never reached
     // READY). With no headroom, a tired battery may never reach READY, and the
     // wheels recover slowly between shots. If READY won't come on, drop to 1250.
-    public static double START_RPM = 1300;
+    // Now per robot: NaN means "use Launcher.defaultFlywheelRpm()" (6494 1300, 5618 1100).
+    public static double START_RPM = Double.NaN;
     public static double RPM_STEP = 50;
 
     private boolean aPrev, upPrev, downPrev, rbPrev, lbPrev, bPrev;
@@ -140,7 +142,8 @@ public class ShooterTest extends LinearOpMode {
 
         waitForStart();
 
-        double rpm = START_RPM;
+        // NaN = this robot's default (Launcher, per robot). Set a number to override.
+        double rpm = Double.isNaN(START_RPM) ? Launcher.defaultFlywheelRpm() : START_RPM;
         boolean wheelsOn = false;
 
         while (opModeIsActive()) {

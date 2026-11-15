@@ -28,7 +28,7 @@ public class VisionPoseFilterTest {
     // A fix that passes every rule. Each test below breaks exactly ONE thing.
     private static Verdict goodExcept(boolean settled, double speed, double turn,
                                       double age, double range, Pose vision) {
-        return VisionPoseFilter.check(settled, speed, turn, age, range, ODO, vision);
+        return VisionPoseFilter.check(settled, speed, turn, age, range, 0, 4, ODO, vision);
     }
 
     // ---------------- STEP 7: check ----------------
@@ -56,6 +56,37 @@ public class VisionPoseFilterTest {
         assertEquals(Verdict.TAG_OUT_OF_RANGE, goodExcept(true, 0, 0, 50, 120, CLOSE));
     }
 
+    @Test public void step7_tagNearTheFrameEdge() {
+        // A tag out at the edge of the image gives a fix about 4x worse than one
+        // in the middle (measured on 6494, 2026-11-13). Sign must not matter.
+        assertEquals(Verdict.TAG_OFF_CENTRE,
+                VisionPoseFilter.check(true, 0, 0, 50, 40, 25, 4, ODO, CLOSE));
+        assertEquals(Verdict.TAG_OFF_CENTRE,
+                VisionPoseFilter.check(true, 0, 0, 50, 40, -25, 4, ODO, CLOSE));
+        // Centred, and just inside the limit, both fine.
+        assertEquals(Verdict.ACCEPT,
+                VisionPoseFilter.check(true, 0, 0, 50, 40, 0, 4, ODO, CLOSE));
+        assertEquals(Verdict.ACCEPT,
+                VisionPoseFilter.check(true, 0, 0, 50, 40, 9.9, 4, ODO, CLOSE));
+    }
+
+    @Test public void step7_rangeIsCheckedBeforeBearing() {
+        // Both broken: the earlier rule wins, so a bad range is not reported as
+        // a bearing problem.
+        assertEquals(Verdict.TAG_OUT_OF_RANGE,
+                VisionPoseFilter.check(true, 0, 0, 50, 6, 25, 4, ODO, CLOSE));
+    }
+
+    @Test public void step7_oneTagIsNotEnough() {
+        // Four tags solved the turret base to z ~ 0; ONE tag put it at z ~ 3 and
+        // swinging (planar pose ambiguity, measured on 6494 2026-11-13).
+        // combine() can out-vote a flipped tag only when there are others.
+        assertEquals(Verdict.TOO_FEW_TAGS,
+                VisionPoseFilter.check(true, 0, 0, 50, 40, 0, 1, ODO, CLOSE));
+        assertEquals(Verdict.ACCEPT,
+                VisionPoseFilter.check(true, 0, 0, 50, 40, 0, 2, ODO, CLOSE));
+    }
+
     @Test public void step7_fixTooFarFromOdometry() {
         assertEquals(Verdict.TOO_FAR_FROM_ODOMETRY, goodExcept(true, 0, 0, 50, 40, at(80, 50, 90)));
         assertEquals(Verdict.TOO_FAR_FROM_ODOMETRY, goodExcept(true, 0, 0, 50, 40, at(50, 50, 150)));
@@ -63,7 +94,7 @@ public class VisionPoseFilterTest {
 
     @Test public void step7_headingsAcrossZeroAreClose() {
         // Odometry says 359 deg, vision says 1 deg: only 2 deg apart. Accept it.
-        Verdict v = VisionPoseFilter.check(true, 0, 0, 50, 40, at(50, 50, 359), at(50, 50, 1));
+        Verdict v = VisionPoseFilter.check(true, 0, 0, 50, 40, 0, 4, at(50, 50, 359), at(50, 50, 1));
         assertEquals(Verdict.ACCEPT, v);
     }
 

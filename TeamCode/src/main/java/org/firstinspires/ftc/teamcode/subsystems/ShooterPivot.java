@@ -197,7 +197,9 @@ public class ShooterPivot {
     //
     // RE-MEASURED 2026-11-02 after the rebuild: pollen 0.539 -> 0.67 (+0.131),
     // nectar 0.21 -> 0.287 (+0.077). Different shifts again.
-    public static double POLLEN_POSITION = 0.67;
+    // 6494's value, which is what an unknown robot falls back to. Kept equal to
+    // the R6494 case in loadRobotNumbers() so the two cannot disagree.
+    public static double POLLEN_POSITION = 0.69;
     public static double NECTAR_POSITION = 0.287;
 
     private final Servo pivot;
@@ -241,15 +243,29 @@ public class ShooterPivot {
     private static void loadRobotNumbers() {
         switch (WhichRobot.get()) {
             case R5618:
-                // Pivot Jog Test on 5618, Shane, 2026-11-06: hard stops 0.1268 (open)
-                // and 0.65 (tight); pollen 0.568, nectar 0.17.
-                MIN_SAFE_POSITION = 0.1268;   // widest
-                MAX_SAFE_POSITION = 0.65;     // tightest
-                // CHOSEN, not measured (same idea as 6494's): off the open stop so
-                // the servo isn't held against it, 0.035 wider than the nectar grip.
-                OPEN_POSITION = 0.135;
-                POLLEN_POSITION = 0.568;
-                NECTAR_POSITION = 0.17;
+                // RE-MEASURED 2026-11-13 after the linkage SLIPPED, Pivot Jog
+                // Test on 5618: open hard stop 0.478, pollen 0.9375. Pollen IS
+                // the tight end of travel now, so it doubles as MAX_SAFE. If the
+                // servo buzzes while holding pollen, it's pressing the stop:
+                // back POLLEN and MAX_SAFE off together by a few thousandths.
+                // Note the open end barely moved (0.486 -> 0.478) but pollen
+                // moved +0.09, so this was not a clean one-tooth slip.
+                // (Was 2026-11-11: open 0.486, closed 0.896, pollen 0.846.
+                //  Was 2026-11-06: stops 0.1268 / 0.65, pollen 0.568, nectar 0.17.)
+                // LOCKED AT 0.928 after the full 5618 rebuild (Jade, 2026-11-14).
+                // 5618 takes POLLEN ONLY and 0.928 is the goldilocks flywheel gap:
+                // "a fixed position, will not change no matter what". So all five
+                // numbers are 0.928, and the safe band is that single point --
+                // setPosition() clips EVERYTHING to it. Launcher's open-on-stop
+                // (jam release), the nectar grip and Pollen Shot Tune's pivot knob
+                // all land on 0.928. To unlock: re-measure the ends with Pivot Jog
+                // Test (which drives the servo directly, not through this band).
+                // (Was 2026-11-13, pre-rebuild: open 0.478, tight 0.9375.)
+                MIN_SAFE_POSITION = 0.928;
+                MAX_SAFE_POSITION = 0.928;
+                OPEN_POSITION = 0.928;
+                POLLEN_POSITION = 0.928;
+                NECTAR_POSITION = 0.928;   // pollen only -- no nectar grip on 5618
                 break;
             case R6494:
             default:
@@ -257,7 +273,10 @@ public class ShooterPivot {
                 MIN_SAFE_POSITION = 0.27;
                 MAX_SAFE_POSITION = 0.744;
                 OPEN_POSITION = 0.272;
-                POLLEN_POSITION = 0.67;
+                // Pollen 0.67 -> 0.69: Pollen Shot Tune, Jade, 2026-11-09, shooting
+                // real pollen on 6494. Inside the safe band. Session notes in
+                // docs/pollen-tune-6494.md.
+                POLLEN_POSITION = 0.69;
                 NECTAR_POSITION = 0.287;
                 break;
         }

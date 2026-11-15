@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -33,6 +35,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  *   4. Stop this op mode and start auto. Do NOT redeploy or power cycle now --
  *      that throws the zero away.
  */
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Deflector Zero", group = "Setup")
 public class DeflectorZero extends LinearOpMode {
 
@@ -92,6 +96,9 @@ public class DeflectorZero extends LinearOpMode {
             telemetry.addData("Angle", "%.1f deg   target %.1f (position %d of %d)%s",
                     d.getAngle(), d.getTarget(), d.getIndex() + 1, DeflectorLogic.POSITIONS.length,
                     d.isOnTarget() ? "  ON TARGET" : "");
+            // Auto-home measurement (2026-11-08): zero at level, jog DOWN onto the
+            // hard stop, and this is the number for Deflector.loadRobotNumbers().
+            telemetry.addData("On the hard stop? LEVEL_ABOVE_STOP_DEG", "%.1f", -d.getAngle());
         }
         telemetry.addData("Servo total", "%.0f deg  (2687 = 90 deg of deflector)", d.getServoTotal());
         telemetry.addData("Power", "%.2f   max step %.0f/180 servo deg per loop", d.getPower(), d.getMaxStepSeen());

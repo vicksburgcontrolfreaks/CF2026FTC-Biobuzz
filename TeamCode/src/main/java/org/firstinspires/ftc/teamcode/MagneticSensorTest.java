@@ -35,7 +35,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *
  * Controls: A resets all the counters and the zone measurement.
  */
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
 @Disabled
 @TeleOp(name = "Magnetic Sensor Test", group = "Test")
 public class MagneticSensorTest extends LinearOpMode {

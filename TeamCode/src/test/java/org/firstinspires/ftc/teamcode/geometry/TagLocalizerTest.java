@@ -112,20 +112,27 @@ public class TagLocalizerTest {
     }
 
     @Test public void badCameraMeasurementIsNotBelieved() {
-        // The real camera is tipped up 45, but the code thinks 30. The answer
+        // The real camera is tipped up 45 deg, the code believes 30. The answer
         // comes out tipped 15 deg -- it must be rejected, not quietly trusted.
+        //
+        // Both pitches are set explicitly here. They used to lean on whatever
+        // CAMERA_PITCH_DEG happened to be declared as, which quietly changed the
+        // size of the error under test when 6494's real measurement (35) landed
+        // in that field on 2026-11-11.
         double saved = TagLocalizer.CAMERA_PITCH_DEG;
-        Rigid3 realCamera;
         try {
-            TagLocalizer.CAMERA_PITCH_DEG = 45;
-            realCamera = TagLocalizer.cameraOnTurret();
+            TagLocalizer.CAMERA_PITCH_DEG = 45;                        // where it REALLY points
+            Rigid3 realCamera = TagLocalizer.cameraOnTurret();
+            TagLocalizer.CAMERA_PITCH_DEG = 30;                        // what the code BELIEVES
+
+            Rigid3 truth = turretAimedAt(60, 30, Cell.RED_AUDIENCE, Tilt.FAR_UP);
+            int id = Cell.RED_AUDIENCE.tagIds[0];
+            TagLocalizer.TurretFix fix = TagLocalizer.solveTurret(
+                    sdkRobotPose(tagInCamera(truth, realCamera, id, Tilt.FAR_UP), id));
+            assertFalse("a 15 deg camera error should fail the level check", fix.believable);
         } finally {
             TagLocalizer.CAMERA_PITCH_DEG = saved;
         }
-        Rigid3 truth = turretAimedAt(60, 30, Cell.RED_AUDIENCE, Tilt.FAR_UP);
-        int id = Cell.RED_AUDIENCE.tagIds[0];
-        TagLocalizer.TurretFix fix = TagLocalizer.solveTurret(sdkRobotPose(tagInCamera(truth, realCamera, id, Tilt.FAR_UP), id));
-        assertFalse("a 15 deg camera error should fail the level check", fix.believable);
     }
 }
 

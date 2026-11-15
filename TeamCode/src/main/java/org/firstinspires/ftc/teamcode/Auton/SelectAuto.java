@@ -25,7 +25,12 @@ public class SelectAuto extends RouteAuto {
     // it always parks (if so, the menu won't offer "Don't park" for it).
     enum AutoRoute {
         GARDEN_SHOOT_PARK("Garden Shoot + Park", Routes.Park.GARDEN_SIDE, false),   // 2026 robot
-        GARDEN_LEAVE_PARK_2026("Garden Leave + Park (backup)", Routes.Park.GARDEN_SIDE, true),   // 2026 robot
+        GARDEN_SHOOT_2X("Garden Shoot 2X", Routes.Park.GARDEN_SIDE, false),   // 2026 robot, 2026-11-14
+        GARDEN_LEAVE_PARK_2026("Garden Leave + Park", Routes.Park.GARDEN_SIDE, true),   // 2026 robot, facing red 2026-11-14
+        FAR_LEAVE_PARK_2026("Far Wall Leave + Park", Routes.Park.FAR_SIDE, true),   // 2026 robot, facing red 2026-11-14
+        FAR_TIP_SHOOT_PARK("Far Wall Tip Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
+        FAR_QUICK_SHOOT_PARK("Far Wall Quick Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
+        FAR_WAIT_SHOOT("Far Wall Wait and Shoot", Routes.Park.FAR_SIDE, true),   // 2026 robot, 2026-11-14
         GARDEN_WALL("Garden Wall", Routes.Park.GARDEN_SIDE, false),
         FAR_WALL("Far Wall", Routes.Park.GARDEN_SIDE, false),
         GARDEN_WALL_LAUNCH("Garden Wall + Launch", Routes.Park.GARDEN_SIDE, false),
@@ -46,7 +51,12 @@ public class SelectAuto extends RouteAuto {
         Route route(Routes.Park park) {
             switch (this) {
                 case GARDEN_SHOOT_PARK:  return Routes.gardenShootPark(park);
+                case GARDEN_SHOOT_2X:    return Routes.gardenShoot2X(park);
                 case GARDEN_LEAVE_PARK_2026: return Routes.gardenLeavePark2026(park);
+                case FAR_LEAVE_PARK_2026:    return Routes.farLeavePark2026(park);
+                case FAR_TIP_SHOOT_PARK:     return Routes.farTipShootPark(park);
+                case FAR_QUICK_SHOOT_PARK:   return Routes.farQuickShootPark(park);
+                case FAR_WAIT_SHOOT:         return Routes.farWallWaitShoot(park);
                 case GARDEN_WALL:        return Routes.startUpGardenWall(park);
                 case FAR_WALL:           return Routes.startUpFarWall(park);
                 case GARDEN_WALL_LAUNCH: return Routes.gardenWallLaunch(park);
@@ -55,6 +65,11 @@ public class SelectAuto extends RouteAuto {
                 case FAR_WALL_LEAVE_PARK:    return Routes.farWallLeavePark(park);
                 default: throw new IllegalStateException("No route for " + this);
             }
+        }
+
+        /** Does the "Wait (sec)" setting apply? Not for routes that wait for a tip. */
+        boolean usesStartWait() {
+            return this != FAR_WAIT_SHOOT;
         }
 
         @Override
@@ -68,14 +83,19 @@ public class SelectAuto extends RouteAuto {
     private final AutoMenu.Choice<Alliance> alliance =
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
     private final AutoMenu.Choice<AutoRoute> autoRoute =
-            // Only the 2026-robot routes (2026-11-07, competition). The older routes
-            // below still exist but face the red wall, predate this robot, and
-            // Garden Wall + Launch cannot finish in 30 s with 15 s launches -- add
-            // one back here only after it is rebuilt and robot-tested.
-            menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_LEAVE_PARK_2026);
+            // COMPETITION MENU, 2026-11-15 (Shane): four routes, all starting facing
+            // red -- two on the garden-edge start, two on the far-edge start. First
+            // = default. Garden Shoot + Park, Far Wall Tip Shoot + Park and Far Wall
+            // Quick Shoot + Park still exist in Routes but are off the menu: pre-flip
+            // or never robot-run, and replaced by these.
+            menu.add("Route", AutoRoute.GARDEN_SHOOT_2X, AutoRoute.FAR_WAIT_SHOOT,
+                    AutoRoute.GARDEN_LEAVE_PARK_2026, AutoRoute.FAR_LEAVE_PARK_2026);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8)
-                    .summary("Wait %ds");
+                    .summary("Wait %ds")
+                    // Far Wall Wait and Shoot already waits for the tip; a start
+                    // wait would only eat into it (Shane, 2026-11-14).
+                    .showWhen(() -> autoRoute.get().usesStartWait());
     private final AutoMenu.Choice<Routes.Park> park =
             menu.add("Park", Routes.Park.GARDEN_SIDE, Routes.Park.FAR_SIDE, Routes.Park.NONE)
                     .allowWhen(p -> p != Routes.Park.NONE || !autoRoute.get().alwaysParks);
@@ -91,7 +111,8 @@ public class SelectAuto extends RouteAuto {
 
     // Hand the menu's current picks to RouteAuto.
     private void applyMenu() {
-        useRoute(alliance.get(), autoRoute.get().route(park.get()), startWait.get());
+        int wait = autoRoute.get().usesStartWait() ? startWait.get() : 0;   // hidden = 0
+        useRoute(alliance.get(), autoRoute.get().route(park.get()), wait);
         setYieldUntil(yieldUntil.get());
     }
 
@@ -103,6 +124,7 @@ public class SelectAuto extends RouteAuto {
 
     @Override
     public void init_loop() {
+        boolean wasLocked = menu.isLocked();
         if (menu.update(gamepad1)) {
             if (autoRoute.get() != lastRoute) {
                 lastRoute = autoRoute.get();
@@ -110,10 +132,28 @@ public class SelectAuto extends RouteAuto {
             }
             applyMenu(); // something changed -- rebuild the paths and recheck them
         }
+        // LOCKING (A) IS WHAT STARTS HOMING. A deliberate press, long after all the
+        // construction in init(), so no settle window can be eaten by follower and
+        // path building -- and the mechanisms moving is what tells the drive team
+        // the lock actually took, which is the fix for forgetting to press A.
+        // Unlock (B) and lock again to retry a failed home.
+        if (!wasLocked && menu.isLocked()) {
+            startHomingIfNeeded();
+        }
+
         BuildInfo.show(telemetry);
         menu.show(telemetry);
         telemetry.addLine("");
-        addRouteTelemetry();
-        telemetry.update();
+
+        // super LAST, on purpose. RouteAuto.init_loop() drives the camera and the
+        // deflector and then adds the route telemetry and calls update(), so
+        // calling it here puts the menu above the route lines and flushes once.
+        //
+        // IT HAS TO BE CALLED AT ALL: deflector homing only progresses inside
+        // deflector.update(), which lives in there. Overriding this method
+        // without it meant RouteAuto.init() started homing and nothing ever
+        // applied power -- so auto-homing never ran in the one auto anybody
+        // uses (Shane, 2026-11-10, found on the robot).
+        super.init_loop();
     }
 }

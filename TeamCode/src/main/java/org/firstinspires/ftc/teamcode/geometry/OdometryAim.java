@@ -6,16 +6,24 @@ import com.pedropathing.geometry.Pose;
  * OdometryAim: robot pose + target -> the turret angle to actually COMMAND.
  *
  * TurretGeometry.aimAngle() answers "which way is the target?" -- any angle in
- * (-180, 180]. The real turret can't go everywhere: it has hard stops, and
- * Turret.MIN_ANGLE / MAX_ANGLE are -140 / +140. That leaves an 80 deg DEAD ZONE
- * behind the turret's zero (centered on 180) that it can never point into.
+ * (-180, 180]. The real turret can't go everywhere: Turret.MIN_ANGLE /
+ * MAX_ANGLE are -90 / +90 on 6494 and -90 / +85 on 5618. So HALF the circle is
+ * a DEAD ZONE behind the turret's zero that it can never point into -- a 180 deg
+ * blind arc on 6494, 185 deg on 5618. That is far bigger than the 80 deg this
+ * comment used to claim, back when the limits were +/-140.
  *
  *            0 (turret zero)
  *              |
- *    -140  .   |   .  +140       reachable: everything from -140 through 0 to +140
+ *     -90  .   |   .  +90        reachable: everything from -90 through 0 to +90
  *           \  |  /
  *            \ | /
- *        dead zone, 140..180..-140
+ *        dead zone, 90..180..-90   (the robot's whole rear half)
+ *
+ * That matters for aiming while driving: with the turret facing FORWARD
+ * (TURRET_ZERO_DEG = 0), the hive is unreachable whenever the robot's back is
+ * to it, and the turret parks on a limit instead. Driving so the hive stays
+ * ahead of the robot is a real constraint, not a nicety. Flipping the turret to
+ * face away from the collector would move the blind arc to the front instead.
  *
  * Because the travel is LESS than a full circle, every reachable direction has
  * exactly one turret angle. So no "which way round?" choice when the target is
@@ -23,7 +31,7 @@ import com.pedropathing.geometry.Pose;
  *
  *   Park at whichever limit the target will come back out of. If the robot spins
  *   and the target drifts across the dead zone, the turret could swing all
- *   the way from +140 to -140 (280 deg) just as the target crosses 180, then
+ *   the way from +90 to -90 (180 deg) just as the target crosses 180, then
  *   back again on the next wobble. HYSTERESIS_DEG stops that: the turret only
  *   switches sides once the target is that far past the middle of the dead zone.
  *

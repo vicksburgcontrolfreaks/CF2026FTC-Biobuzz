@@ -108,8 +108,9 @@ public class Turret {
     // HOMING_SEARCH_MAX_DEG are overwritten by init() from loadRobotNumbers(). Edit
     // the numbers THERE. The defaults written here are 6494's, only so laptop code
     // that reads them before any init() sees sane values.
-    public static double MIN_ANGLE = -90.0;
-    public static double MAX_ANGLE = 90.0;
+    // 6494 since the 2026-11-13 flip: Shane swept by hand and chose +/-150.
+    public static double MIN_ANGLE = -150.0;
+    public static double MAX_ANGLE = 150.0;
 
     // ---- Homing -------------------------------------------------------------
     // MEASURED 2026-10-15 on the rebuilt magnet mount, three Turret Range Test
@@ -161,12 +162,20 @@ public class Turret {
     // to be stopped by hand (6494, 2026-11-06).
     //
     // So the rule is: the magnet is never behind you when homing starts.
-    //   - MIN_ANGLE sits INSIDE the magnet band, so a homed turret can't park
-    //     past it.
-    //   - Before homing, the drive team sets it roughly forward (by hand, robot
-    //     off). From roughly forward the magnet is well inside this distance.
-    //   - If it's not found anyway: FAILED, "turn it forward by hand, press X".
-    //     Worst case, it went this far the wrong way, into the cable's slack side.
+    //   - Before homing, the drive team sets it roughly to CENTRE -- which since
+    //     the 2026-11-13 flip means roughly REARWARD -- by hand, robot off. From
+    //     there the magnet is ~80 deg away, well inside the search distance.
+    //   - If it's not found anyway: FAILED, "turn it to face REARWARD by hand,
+    //     press X".
+    //
+    // TWO PROTECTIONS WEAKENED BY THE FLIP, both deliberate, both on 6494:
+    //   - MIN_ANGLE used to sit INSIDE the magnet band, so a homed turret could
+    //     not park past the magnet. With travel now +/-150 the magnet is
+    //     mid-travel, so it CAN, and then homing fails. The pre-home instruction
+    //     above is the only thing preventing it.
+    //   - The search used to run toward the cable's SLACK side, so running the
+    //     full distance the wrong way cost nothing. It now runs toward the TIGHT
+    //     side, which is why HOMING_SEARCH_MAX_DEG came down to 110 for 6494.
     // Per robot -- see loadRobotNumbers().
     public static double HOMING_SEARCH_MAX_DEG = 150.0;
 
@@ -204,6 +213,8 @@ public class Turret {
     public static double PARK_ANGLE = 0.0;
 
     // ---- Closed loop --------------------------------------------------------
+    // Per robot -- kP and MAX_POWER are overwritten by loadRobotNumbers().
+    // MAX_POWER also caps JOG (hand turret on gamepad2), so raising it speeds that up too.
     public static double kP = 0.010;          // power per degree of error
     public static double MAX_POWER = 0.55;
     public static double MIN_POWER = 0.12;    // deadband: below this the servo just buzzes
@@ -247,13 +258,16 @@ public class Turret {
     private double homingSearchDir = HOMING_DIRECTION;
     private int searchLegStartTicks = 0;       // reading when this search leg began
     private HomingPhase homingPhase = HomingPhase.SEARCH;
+
+    // True between startHoming() and the first update() that drives. See startHoming().
+    private boolean homePending = false;
     private boolean backoffReleased = false;   // has the switch let go yet?
     private int backoffStartTicks = 0;         // reading when it let go
 
     // ---- Homing kept between op modes (Shane, 2026-11-06) -------------------
     // Home ONCE per power-up, not once per op mode: auto homes, TeleOp reuses it.
     // Saves match time, and means homing happens when the robot is being set up
-    // by hand -- the easy moment to follow "start the turret roughly forward".
+    // by hand -- the easy moment to follow "start the turret roughly REARWARD".
     //
     // Why this is safe:
     //   - The hub keeps counting the encoder between op modes; nothing in this
@@ -346,40 +360,121 @@ public class Turret {
     private static void loadRobotNumbers() {
         switch (WhichRobot.get()) {
             case R5618:
-                // Turret Range Test, Shane, 2026-11-06: cable stops +-93.3 (travel
-                // 186.6), magnet band -91.0..-83.1 (8 deg), truly forward read 0.0
-                // in the same frame, so no forward correction. Same layout as 6494:
-                // angle falls clockwise, cable slack clockwise, tight counter-clockwise.
-                HOME_SWITCH_ANGLE = -83.1;
-                MAGNET_BAND_DEG = 7.9;
-                // -90: inside the magnet band (same rule as 6494), 3.3 off the stop.
-                MIN_ANGLE = -90.0;
-                // +85, not +90: +93.3 is the TIGHT cable end, so +90 would leave only
-                // 3.3 deg for overshoot. 8.3 deg of margin instead.
-                MAX_ANGLE = 85.0;
-                HOMING_DIRECTION = -1.0;   // toward the slack (clockwise)
-                // Finds the magnet from any start between it and +66.9 (-83.1 + 150).
-                HOMING_SEARCH_MAX_DEG = 150.0;
+                // 5618 REBUILD, 2026-11-14 (Jade): turret taken apart and rebuilt,
+                // and FLIPPED TO FACE REARWARD like 6494 (2026-11-13, d4b228a):
+                // turret 0 points BACKWARD, away from the collector. The frame
+                // flip itself is TURRET_ZERO_DEG = 180 in RobotProfile.install5618().
+                //
+                // The magnet and cable limits have to be re-measured in the NEW
+                // frame, so the magnet is NaN = "not measured": homing REFUSES
+                // until Turret Range Test is re-run, instead of homing the rebuilt
+                // turret off old, front-facing numbers. Put the Range Test numbers
+                // here and remove the NaNs.
+                //
+                // Range Test reports angles from the MIDDLE of the sweep, and its
+                // HOME_SWITCH_ANGLE line uses the class default HOMING_DIRECTION
+                // (-1, pre-flip). So take BOTH band edges plus the angle it reads
+                // pointing straight BACK, and pick the edge homing meets first
+                // travelling +1 (the lower edge), shifted so straight back = 0.
+                //
+                // Old, pre-rebuild, FRONT-facing frame (Turret Range Test, Shane,
+                // 2026-11-06): cable stops +-93.3, magnet band -91.0..-83.1,
+                // HOME_SWITCH_ANGLE -83.1, band 7.9, limits -90 / +85.
+                // MEASURED 2026-11-14, Turret Range Test on rebuilt 5618 (Jade):
+                //   hard stops        -152.4 / +152.4 (symmetric, so the sweep's
+                //                     middle is taken as straight back -- CHECK
+                //                     that after homing, see RobotProfile)
+                //   magnet band edges  81.0 / 89.3, band ~8.2, centre ~85.2
+                // HOME_SWITCH_ANGLE is the edge homing meets FIRST travelling +1
+                // from centre = 81.0 (the lower edge). The screen said 89.3 because
+                // Range Test still assumes the pre-flip HOMING_DIRECTION -1.
+                // Check: bandFar = 81.0 + 1.0 * 8.2 = 89.2, matching the 89.3 edge.
+                // IF HOMING PARKS ~8 DEG OFF: the pair is swapped -- use 89.3 with
+                // HOMING_DIRECTION -1 (same note as 6494).
+                // ROBOT-VERIFIED 2026-11-14 (Jade, Turret Test): homes CCW, lands
+                // pointing straight back, repeatable 3x, and the +/-149 limits stop
+                // it short of both hard stops.
+                HOME_SWITCH_ANGLE = 81.0;
+                MAGNET_BAND_DEG = 8.2;
+                // +/-149: 5618 HAS hard stops at +/-152.4, so pulled in ~3 deg like
+                // the original rule, so the turret never rests against a stop.
+                MIN_ANGLE = -149.0;
+                MAX_ANGLE = 149.0;
+                // +1 = CCW, toward the magnet from the rear-facing centre -- same
+                // as 6494 after the flip, assuming the magnet sits in the same spot
+                // on the rebuilt turret. NOTE this is toward the cable's TIGHT side
+                // now, hence the shorter search (6494 uses 110 for the same reason).
+                // CONFIRMED by the 2026-11-14 Range Test: magnet at +81..+89.3, the
+                // POSITIVE side of centre, so +1 is right. 110 finds it from roughly
+                // straight back with ~29 deg to spare. Start homing with the turret
+                // roughly REARWARD -- if it's already past +89.3, the magnet is
+                // behind it and homing will run toward the +152.4 hard stop and fail.
+                HOMING_DIRECTION = 1.0;
+                HOMING_SEARCH_MAX_DEG = 110.0;
+                // SAME AS 6494 (Shane, 2026-11-14, competition eve): kP 0.020 /
+                // MAX_POWER 0.80. Was 0.010 / 0.55. 5618 HAS hard stops at +/-152.4
+                // and limits at +/-149, so watch it does not coast into a stop.
+                kP = 0.020;
+                MAX_POWER = 0.80;
                 break;
             case R6494:
             default:
-                // Shane, 2026-11-06. No hard stops; cable has slack clockwise (-),
-                // tight counter-clockwise (+). Magnet band -90.6..-80.5 on the
-                // Range Test sweep; -85.5 after two by-eye forward corrections, so the
-                // band is about -95.6..-85.5 in this frame. Homing repeatable (Shane).
-                HOME_SWITCH_ANGLE = -85.5;
-                MAGNET_BAND_DEG = 10.1;   // Range Test sweep
-                // -90, not -106: INSIDE the magnet band, so a homed turret can never
-                // park on the far side of the magnet, where homing can't find it
-                // (long-way test failed, 2026-11-06). Costs 16 deg of clockwise reach.
-                MIN_ANGLE = -90.0;
-                // +90, not +106: symmetric with -90, and keeps well off the tight
-                // side of the cable (Shane, 2026-11-06).
-                MAX_ANGLE = 90.0;
-                HOMING_DIRECTION = -1.0;   // toward the slack
-                // Finds the magnet from any start between it and +64.5 (-85.5 + 150),
-                // i.e. anywhere roughly forward. Beyond that: FAILED, turn it by hand.
-                HOMING_SEARCH_MAX_DEG = 150.0;
+                // TURRET FLIPPED 2026-11-13 -- turret 0 now points BACKWARD, see
+                // RobotProfile. All five numbers below are in the NEW frame and all
+                // were measured by Shane on the robot that day:
+                //
+                //   stops (where we choose to stop it)  +/-150
+                //   magnet band                         9.1 wide, edges 79.5 / 88.6
+                //
+                // The magnet did not move; the frame did. It used to sit at -85.5
+                // (clockwise of front) and the same physical spot is now CCW of the
+                // new centre, which is why HOMING_DIRECTION changes sign.
+                //
+                // HOME_SWITCH_ANGLE is the edge reached FIRST travelling in
+                // HOMING_DIRECTION -- not the band centre. Searching + (CCW) from
+                // roughly centre, the near edge is 79.5. The code's own band
+                // formula then lands on Shane's other measured edge exactly:
+                // bandFar = 79.5 + 1.0 * 9.1 = 88.6. That agreement is the check
+                // that this pair is the right way round.
+                //
+                // IF HOMING PARKS ~9 DEG OFF: the pair is swapped. Range Test should
+                // report the band edges at 79.5 / 88.6 after homing; if it reports
+                // them 9.1 low, use HOME_SWITCH_ANGLE 88.6 with HOMING_DIRECTION -1.
+                HOME_SWITCH_ANGLE = 79.5;
+                MAGNET_BAND_DEG = 9.1;     // Range Test sweep, 2026-11-13
+                MIN_ANGLE = -150.0;
+                MAX_ANGLE = 150.0;
+                // +1 = CCW, toward the magnet from centre. Shane's words: "rotate
+                // counterclockwise until the magnet and then back to center".
+                //
+                // NOTE THIS IS NOW TOWARD THE CABLE'S TIGHT SIDE. Before the flip
+                // the search ran toward the slack, so a FAILED search was harmless.
+                // It is not any more, which is why the search distance below came
+                // down.
+                HOMING_DIRECTION = 1.0;
+                // 110, not 150. The magnet is only ~80 deg from centre now, so 110
+                // finds it from roughly centre with 30 deg to spare -- while capping
+                // how far a FAILED search can wind the cable up on the tight side.
+                // 150 was chosen when the search ran toward the slack and running
+                // the full distance cost nothing.
+                //
+                // WHAT +/-150 GIVES UP: the old MIN_ANGLE sat INSIDE the magnet
+                // band, so a homed turret could never park on the far side of the
+                // magnet where homing cannot find it. The magnet is now mid-travel,
+                // so that guarantee is gone -- a turret parked past 88.6 has the
+                // magnet behind it and homing will fail (by design, no reversing;
+                // the long-way test failed 2026-11-06). The pre-home instruction is
+                // what protects it: set the turret roughly to CENTRE, i.e. roughly
+                // REARWARD, by hand before pressing X. That is a change from the
+                // "roughly forward" this file used to say.
+                HOMING_SEARCH_MAX_DEG = 110.0;
+                // 2026-11-10, NOT YET ROBOT-TESTED: faster turret trial (was kP 0.010,
+                // MAX_POWER 0.55). kP doubled so small corrections push harder; cap at
+                // 0.8, not 1.0, because 6494 has NO hard stops and a faster turret
+                // coasts further past the +90 soft limit toward the tight cable end.
+                // If it oscillates around the target, lower kP before touching MAX_POWER.
+                kP = 0.020;
+                MAX_POWER = 0.80;
                 break;
         }
     }
@@ -404,8 +499,12 @@ public class Turret {
         searchLegStartTicks = readRawTicks();
         homingPhase = HomingPhase.SEARCH;
         backoffReleased = false;
-        homingTimer.reset();
-        resetStallWatch();
+        // Timers start on the FIRST driving update, not here. RouteAuto.init() asks
+        // for homing and then spends over a second building the Pedro follower and
+        // the route paths, so a stall window started here has already expired by
+        // the time update() first runs -- the turret then "stalls" without ever
+        // having been driven (2026-11-10, same bug as the deflector).
+        homePending = true;
         statusNote = "homing: searching " + (homingSearchDir < 0 ? "-" : "+");
     }
 
@@ -493,6 +592,13 @@ public class Turret {
     // ---- Internals ----------------------------------------------------------
 
     private double updateHoming() {
+        if (homePending) {
+            // Driving starts now, so the timeout and stall windows start now.
+            homingTimer.reset();
+            resetStallWatch();
+            searchLegStartTicks = readRawTicks();
+            homePending = false;
+        }
         switch (homingPhase) {
             case SEARCH:   return homingSearch();
             case BACKOFF:  return homingBackoff();
@@ -531,8 +637,12 @@ public class Turret {
         }
         if (legDeg >= HOMING_SEARCH_MAX_DEG) {
             state = State.FAILED;
+            // "REARWARD" since the 2026-11-13 flip: turret 0 points away from the
+            // collector now, and the magnet is CCW of it. A turret parked past the
+            // magnet has it behind them, which is the one case this cannot recover
+            // from on its own.
             statusNote = String.format("HOMING FAILED - no magnet in %.0f deg. Was it past "
-                    + "the magnet? Turn it to face FORWARD by hand, then X.", legDeg);
+                    + "the magnet? Turn it to face REARWARD by hand, then X.", legDeg);
             return 0.0;
         }
 

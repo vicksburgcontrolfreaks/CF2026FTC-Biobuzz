@@ -32,7 +32,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Leds;
  *   X                  BLACK (lights out)
  *   Y                  hold to auto-advance, about 2 per second
  */
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
 @Disabled
 @TeleOp(name = "LED Pattern Browser", group = "Test")
 public class LedTest extends LinearOpMode {

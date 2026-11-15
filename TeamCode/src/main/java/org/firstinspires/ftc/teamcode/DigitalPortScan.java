@@ -51,7 +51,7 @@ import com.qualcomm.robotcore.hardware.DigitalChannel;
  *
  * Read-only. This op mode never commands a motor or a servo.
  */
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
 @Disabled
 @TeleOp(name = "Digital Port Scan", group = "Test")
 public class DigitalPortScan extends LinearOpMode {

@@ -15,10 +15,20 @@ package org.firstinspires.ftc.teamcode.shooting;
  *   3. Deflector angle = (total - total at zero) / SERVO_DEG_PER_DEFLECTOR_DEG.
  *
  * Unwrapping assumes the servo moves less than half a turn (180 servo deg) per
- * loop. At ~one turn per second that's fine down to ~400 ms loops; MAX_POWER
- * keeps a margin. A loop that stalls longer while it's moving loses a turn and
- * every angle after it is off by 12 deflector degrees -- re-zero if the arc
- * ever looks wrong.
+ * loop. UNDER POWER there is masses of room: measured 2026-11-10, loops run 1-14
+ * ms and the servo does ~360 servo deg/s, so about 5 servo deg per loop -- a 36x
+ * margin. A loop would have to stall past ~400 ms for the motor to break it.
+ *
+ * BY HAND IS A DIFFERENT STORY, and this is what actually trips it. The ~30:1
+ * reduction means 180 servo deg is barely 6 DEFLECTOR degrees, so flicking the
+ * deflector by hand covers it in one 14 ms loop easily -- a reading of 174 was
+ * seen doing exactly that. Then total gains or loses a turn and every angle
+ * afterwards is out by 12.06 deflector degrees, which is almost exactly the
+ * HOME-to-ZERO distance, so ZERO starts looking like HOME.
+ *
+ * So: jog it with the stick, not your hands, while an op mode is running. If
+ * something does move it by hand, RE-HOME -- the turn count is void and nothing
+ * on screen will say so except a large Max step.
  *
  * Angles: deflector degrees, 0 = level (parallel to the floor), 90 = straight up.
  */

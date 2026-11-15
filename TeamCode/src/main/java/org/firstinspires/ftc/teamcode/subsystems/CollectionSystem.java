@@ -48,9 +48,16 @@ public class CollectionSystem {
     // Indexer speeds, closed loop, in indexer RPM (after the 20:1). 50 RPM is
     // what Collection System Test, Load Recovery and the ball classifier use;
     // full power (~300 RPM) was far too fast (seen on 6494, 2026-11-05).
-    // 25 on 6494, 2026-11-06: at 75 the second ball followed the first with no
-    // visible pause. If you change it, scale ShooterLogic.NO_BALL_SEC to match.
-    public static double FEED_RPM = 25.0;   // forward = up into the flywheels
+    // 6494 history: 75 was tried 2026-11-06 and dropped to 25 ("the second ball
+    // followed the first with no visible pause"), then found again as the
+    // goldilocks feed on 2026-11-09 with the pivot and deflector tuned. 100 was
+    // tried on 2026-11-14 and taken back to 75 the same day (Shane) -- see
+    // loadRobotFeedNumbers(). This bare value is only the fallback for an unknown
+    // robot. If you change a feed rate, scale ShooterLogic.NO_BALL_SEC with it and
+    // re-measure NectarGuard.TRIP_AMPS. 6494's value: the catch in
+    // loadRobotFeedNumbers() falls back to these, and says so, so this has to
+    // track the R6494 case.
+    public static double FEED_RPM = 100.0;   // forward = up into the flywheels (tracks R6494)
     public static double UNJAM_RPM = 50.0;  // run in reverse by unjam()
 
     private static final double TICKS_PER_REV = RobotHardware.TICKS_PER_MOTOR_REV;
@@ -66,6 +73,77 @@ public class CollectionSystem {
         this.collector = collector;
         this.indexer = indexer;
         this.colorSensor = colorSensor;
+        loadRobotFeedNumbers();
+    }
+
+    /**
+     * Per-robot feed speed, plus the two numbers that are tied to it. Change all
+     * three together or the nectar guard and "no ball" timing go wrong.
+     *
+     * 5618 at 50 RPM (Shane, 2026-11-08, "to see how that goes"):
+     *   - NectarGuard.TRIP_AMPS 1.51 = the 50 RPM calibration (BallLoadClassifier,
+     *     6494 data, 10/30: baseline 0.79 + nectar rise 0.72). NOT measured on
+     *     5618 -- run Indexer Load Test there to confirm.
+     *   - ShooterLogic.NO_BALL_SEC 3.0 = same indexer travel as 6 s at 25.
+     *
+     * 6494 at 100 RPM (Shane, 2026-11-14 evening, all op modes). History: 75
+     * from Jade, 2026-11-09, Pollen Shot Tune; Shane tried 100 earlier on
+     * 11-14, went back to 75, then chose 100 again that evening.
+     *   - ShooterLogic.NO_BALL_SEC 1.5 = same indexer travel as 6 s at 25.
+     *   - NectarGuard.TRIP_AMPS is STILL 2.72, the 25 RPM calibration, so nectar
+     *     detection is uncalibrated until Indexer Load Test is re-run at 75. Low
+     *     risk while 6494 is pollen-only AND Launcher.DIRECT_FEED is true (the
+     *     direct path never consults or updates the guard); wrong the moment
+     *     either changes.
+     *   - The nectar guard above was never calibrated at 100 either. Same low
+     *     risk, same reasons.
+     */
+    private static void loadRobotFeedNumbers() {
+        try {
+            switch (org.firstinspires.ftc.teamcode.WhichRobot.get()) {
+                case R5618:
+                    // 150, 2026-11-11 (Shane, Pollen Shot Tune on the pollen-only 5618
+                    // rebuild: indexer 150, flywheel 1100, pivot 0.846).
+                    FEED_RPM = 150.0;
+                    // Scaled with the feed rate: same indexer travel as 6.0 s at 25 RPM.
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 1.0;
+                    // NECTAR GUARD TRIP OFF ON 5618 while it is pollen-only. 2.72 A is
+                    // the 25 RPM calibration, and pollen already peaked at 1.65 A there;
+                    // at 6x the feed speed a pollen could cross it. A trip would swing
+                    // the pivot to NECTAR_POSITION, which on 5618 is an unmeasured
+                    // placeholder -- worse than staying at pollen. To turn it back on:
+                    // measure nectar in Pivot Jog Test, re-run Indexer Load Test at
+                    // 150, and put the new threshold here.
+                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = Double.POSITIVE_INFINITY;
+                    break;
+                case R6494:
+                    // 75, and it has now been approached from both sides: 25 -> 75 was
+                    // Jade, 2026-11-09, shooting real pollen with the pivot and
+                    // deflector tuned, and 75 -> 100 -> 75 was Shane on 2026-11-14.
+                    // The 11-06 run is why faster is suspect here: at 75 "the second
+                    // ball followed the first with no visible pause", and 100 is faster
+                    // again. Changing this is a measurement, not a preference.
+                    //
+                    // 100, every op mode (Shane, 2026-11-14 evening). Supersedes the
+                    // "75 is settled" note above -- a deliberate mentor call.
+                    FEED_RPM = 100.0;
+                    // Scaled with the feed rate: same indexer travel as 6.0 s at 25 RPM.
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 1.5;
+                    // STILL THE 25 RPM CALIBRATION, so the nectar guard is uncalibrated:
+                    // the current signature of a ball changes with feed speed. Re-measure
+                    // with Indexer Load Test before trusting nectar detection. Low risk
+                    // for now -- 6494 is pollen-only for the first competition, and
+                    // DIRECT_FEED neither consults nor updates the guard -- but it will
+                    // mis-trip on nectar until re-measured, and reverting DIRECT_FEED
+                    // puts it back in the path.
+                    // TRIP OFF ON 6494 TOO (Shane, 2026-11-14, competition eve): both
+                    // robots pollen-only. Was 2.72, the uncalibrated 25 RPM value.
+                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = Double.POSITIVE_INFINITY;
+                    break;
+            }
+        } catch (IllegalStateException e) {
+            // Unknown robot: keep the defaults (the 6494 numbers).
+        }
     }
 
     // ---- Collector ----------------------------------------------------------

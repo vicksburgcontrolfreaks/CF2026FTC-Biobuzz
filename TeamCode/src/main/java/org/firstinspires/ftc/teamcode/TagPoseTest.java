@@ -1,0 +1,1091 @@
+package org.firstinspires.ftc.teamcode;
+
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
+import android.util.Size;
+
+import com.bylazar.configurables.PanelsConfigurables;
+import com.bylazar.configurables.annotations.Configurable;
+import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.Pose;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.util.ElapsedTime;
+
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.ExposureControl;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.controls.GainControl;
+import org.firstinspires.ftc.teamcode.Auton.Waypoints;
+import org.firstinspires.ftc.teamcode.field.WallStart;
+import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
+import org.firstinspires.ftc.teamcode.field.HiveTags;
+import org.firstinspires.ftc.teamcode.geometry.Rigid3;
+import org.firstinspires.ftc.teamcode.geometry.WallFix;
+import org.firstinspires.ftc.teamcode.geometry.TagLocalizer;
+import org.firstinspires.ftc.teamcode.geometry.TurretGeometry;
+import org.firstinspires.ftc.teamcode.geometry.VisionPoseFilter;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+import org.firstinspires.ftc.teamcode.subsystems.Turret;
+import org.firstinspires.ftc.vision.VisionPortal;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.concurrent.TimeUnit;
+import java.util.List;
+
+/**
+ * Does a tag sighting actually tell us where the ROBOT is? Read-only bring-up
+ * for TagLocalizer + VisionPoseFilter.
+ *
+ * WHY THIS EXISTS
+ * TagLocalizer and VisionPoseFilter are both written and both unit-tested on a
+ * laptop, and NOTHING CALLS EITHER ONE. The reason is one line: TurretCamera
+ * builds its processor with FieldAprilTags.getLibrary() and no setCameraPose(),
+ * so detection.robotPose is null and TagLocalizer.solve() returns null on its
+ * first statement. Until a camera is configured for LOCALIZATION, none of that
+ * code can run at all.
+ *
+ * This op mode configures one -- its own, so it changes nothing about the way
+ * DriveTeleOp aims in a match -- and puts the whole chain on the screen.
+ *
+ * WHAT IT DOES NOT DO
+ * It never writes the pose and it never drives the robot. It computes what a
+ * correction WOULD be and shows whether VisionPoseFilter would accept it. The
+ * blend into Pedro's pose is the next step, and it should not be written until
+ * the numbers here look right. It DOES move the turret, but only the homing you
+ * ask for with Y and the jogging you ask for yourself.
+ *
+ * IT OWNS THE WEBCAM. A webcam can only be opened once, so this cannot run at
+ * the same time as DriveTeleOp or anything else using TurretCamera.
+ *
+ * THE TURRET MUST BE HOMED. The camera is on the turret, so turning a tag
+ * sighting into a robot pose needs the turret's angle
+ * (TurretGeometry.robotPoseFromTurret). An unhomed turret's angle is measured
+ * from wherever it powered up, which makes every fix wrong by that much. Press
+ * Y to home. Nothing moves before that.
+ *
+ * HOW TO USE IT (this is the Phase 3 gate TagLocalizer's comment asks for)
+ *   1. Park the robot on a spot you can measure with a tape. Point the camera
+ *      at a hive.
+ *   2. Press Y, let the turret home.
+ *   3. Dial the measured position into the TRUTH lines at the bottom of the
+ *      screen: D-pad Up/Down picks X, Y or heading, the TRIGGERS move it.
+ *      No Panels needed. Parked on a wall start? Press X until it's the one.
+ *   4. Read "Error". That is the whole question: how far wrong is a tag fix?
+ *   5. Move to another spot and do it again. Near, far, left, right, and off to
+ *      one side -- the error being POSITION-DEPENDENT is what matters, because
+ *      that is the shape of a camera-mount or hive-geometry error rather than
+ *      noise.
+ *
+ * THE TURRET SWEEP: SHOULD THE CAMERA COME OFF THE TURRET?
+ * Taking the camera off the turret would allow a 360 deg turret and would delete
+ * the whole tag -> turret base -> robot chain from localization. Whether that is
+ * worth a rebuild depends on how much that chain is actually costing, and this
+ * measures it instead of guessing:
+ *
+ *   1. Park the robot. Do not move it again until step 4.
+ *   2. Press Y, let the turret home. Point it at a cell and press A.
+ *   3. Step the turret (D-pad L/R) to another angle, let it SETTLE, press A.
+ *      Repeat for 3-5 angles across the travel.
+ *   4. Read SPREAD. The robot never moved, so every inch of spread is the turret
+ *      chain: homing accuracy, TURRET_ZERO_DEG, TURRET_CCW_SIGN,
+ *      TICKS_PER_DEGREE, TURRET_OFFSET_X/Y and gear backlash.
+ *
+ * A small spread means the turret chain is fine and a body-mounted camera would
+ * buy little localization accuracy -- decide on the 360 deg turret alone. Inches
+ * of spread is exactly what moving the camera removes.
+ *
+ * It also separates two failure modes: error that CHANGES with turret angle is
+ * the turret chain, error that stays put is the camera mount or hive geometry.
+ *
+ * CONTROLS (gamepad 1)
+ *   Y              home the turret (once; nothing moves before it)
+ *   D-pad L / R    step the turret target by TURRET_STEP_DEG
+ *   Right stick X  jog the turret (right = clockwise, as in DriveTeleOp)
+ *   A              capture a sweep sample (refused unless settled and fresh)
+ *   B              clear the samples
+ *   D-pad U / D    pick which TRUTH value to edit (X / Y / heading)
+ *   Triggers       move the picked TRUTH value (RT up, LT down)
+ *   X              load the next wall-start preset as the truth (cycles all
+ *                  four: red/blue x audience/scoring wall -- see WallStart)
+ *
+ * WHAT TO DISTRUST (updated 2026-11-14)
+ * The HIVE is measured -- CELL_ARM, CELL_DROP, HIVE_SWING_DEG and PIVOT_Y all
+ * have tape behind them now. So is the CAMERA MOUNT, re-measured 2026-11-14
+ * after it was moved: FORWARD -1.25 (negative -- behind the turret axis as the
+ * camera looks), UP 16.0, PITCH 35, and YAW re-squared to ~0 by putting a tag
+ * dead ahead of the turret and reading the bearing.
+ *
+ * What is still assumed is on the ROBOT: TagLocalizer's CAMERA_LEFT is 0 by
+ * assumption, and the camera calibration is the SDK's C270 entry with the focal
+ * length scaled (822 -> 902) from ONE tape measurement -- the distortion
+ * coefficients are untouched, so frame-edge error is not corrected.
+ * "Believable" only checks that the turret base came out level and on the floor
+ * -- it does NOT mean the fix is accurate.
+ *
+ * CAMERA: live on GAMEPAD 2, because this has now been got wrong twice by
+ * assumption and never once measured.
+ *   A            auto <-> manual exposure
+ *   D-pad U / D  exposure +/- 2 ms
+ *   D-pad L / R  gain +/- 25
+ *   X            decimation: detector default -> 1 -> 2 -> 3 -> default
+ *
+ * The history, because both wrong answers looked right:
+ *   - AUTO (the original) is UNSTABLE here. Shane, 2026-11-13: jogging the
+ *     turret flashes 3-4 tags and stopping it settles to 1, consistently. Blur
+ *     never helps a decoder, so that is the AE loop converging -- a bright
+ *     background meters the exposure DOWN, and these tags are on a downward
+ *     face in their own cell's shadow. Moving keeps AE chasing, which is why
+ *     motion looked better.
+ *   - "6 ms is too DARK for a parked test" was the NEXT wrong answer, mine, and
+ *     the robot killed it the same afternoon. Swept live at (57, 9): 6 ms / gain
+ *     250 decodes 4 tags and gets WORSE as exposure rises, gone by about 14 ms.
+ *     So TurretCamera's values are right here too, and the reasoning that they
+ *     were only right for a slewing camera was wrong.
+ *
+ * MANUAL 6 ms / GAIN 250 IS THE MEASURED BEST. It is the default for that reason
+ * and not by copying. If you change it, sweep it on gamepad 2 and beat 4 tags.
+ *
+ * Why the tag count matters at all: a one-tag fix is the unreliable kind.
+ * Planar pose ambiguity put z at ~3 in on one tag and ~0 on four. But note the
+ * count was never the camera's fault -- see FUNNEL. The chain was dropping good
+ * tags on the floor test, and TAGS vs QUALITY is the distinction that shows it.
+ */
+@Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
+@TeleOp(name = "Tag Pose Test", group = "Test")
+public class TagPoseTest extends OpMode {
+
+    /**
+     * The tape-measured truth for the spot the robot is parked on, in Pedro
+     * field inches. Leave TRUTH_X at NaN and the error lines are hidden -- the
+     * Fix is still shown, so the op mode is useful before you have a tape out.
+     */
+    public static double TRUTH_X = Double.NaN;
+    public static double TRUTH_Y = Double.NaN;
+    public static double TRUTH_HEADING_DEG = Double.NaN;
+
+    /** One D-pad L/R press, degrees of turret target. */
+    public static double TURRET_STEP_DEG = 15.0;
+    /** Right stick at full deflection, degrees of turret target per second. */
+    public static double TURRET_JOG_DEG_PER_SEC = 45.0;
+    /** A captured sample's fix must be newer than this, or the capture is refused. */
+    public static double CAPTURE_MAX_FIX_AGE_SEC = 0.5;
+    /** Inches (or degrees) per second while a trigger is held, editing the truth. */
+    public static double TRUTH_EDIT_PER_SEC = 15.0;
+
+    /**
+     * Which face of the robot is on the wall, for the WALL line, when the truth
+     * is NOT a preset (each preset knows its own). FRONT = collector first, the
+     * way drivers would re-anchor in a match once the turret is flipped.
+     */
+    public static WallFix.Face WALL_FACE = WallFix.Face.FRONT;
+
+    // ---- Camera -------------------------------------------------------------
+    // HISTORY, because this got decided wrong once and the wrong version is the
+    // kind that looks like a fix. On 2026-11-13 this op mode was switched FROM
+    // auto exposure TO TurretCamera's 6 ms / gain 250, reasoning that a bring-up
+    // tool should not detect worse than the match camera. It detected WORSE:
+    // Shane had reliably held 4 tags from (57, 9), and on 6 ms / gain 250 the
+    // same spot gave 1-2.
+    //
+    // Why 6 ms is right there and wrong here: TurretCamera SLEWS on the turret,
+    // so it buys motion-blur immunity with darkness. A parked bench test has no
+    // motion to freeze, so it paid the darkness for nothing -- on tags that face
+    // DOWN and sit in their own cell's shadow. 6 ms plus gain 250 is dark AND
+    // noisy, and both hurt the decoder.
+    //
+    // So AUTO is the default again. Manual is still reachable, live, on gamepad
+    // 2, because "what exposure do these tags actually want" is worth knowing
+    // and has never been measured -- only assumed, twice, in both directions.
+    // MEASURED on the robot, Shane 2026-11-13, sweeping this live at (57, 9):
+    // 6 ms decodes 4 tags, and it DEGRADES as exposure rises (gone by ~14 ms).
+    // Auto is worse still and unstable. So manual 6 ms is the measured best, not
+    // an assumption any more -- and the detection scare was never the camera:
+    // 4 tags decode fine, the localization chain drops them (see FUNNEL).
+    public static boolean FORCE_MANUAL_EXPOSURE = true;
+    public static int EXPOSURE_MS = 6;
+    public static int CAMERA_GAIN = 250;
+    /**
+     * 0 = DON'T CALL setDecimation, leaving the native detector's own default --
+     * which is what the configuration that reliably held 4 tags did. It is not the
+     * same as passing a number: AprilTagProcessorImpl leaves its `decimation`
+     * field at 0 and `needToSetDecimation` false until someone calls the setter,
+     * so an untouched detector keeps a default this code never sees.
+     * 1-3 force a value (1 = most range, most CPU; TurretCamera uses 2).
+     */
+    public static int DECIMATION = 0;
+
+    /** gamepad 2 steps, per press. */
+    private static final int EXPOSURE_STEP_MS = 2;
+    private static final int GAIN_STEP = 25;
+
+    /**
+     * Ask the camera for a specific resolution, or take whatever the SDK gives.
+     * Read at INIT (the portal is built once), so change it and re-init -- it is
+     * NOT live like the exposure controls. See the note at the builder.
+     */
+    public static boolean PIN_RESOLUTION = true;
+    public static int RESOLUTION_WIDTH = 640;
+    public static int RESOLUTION_HEIGHT = 480;
+
+    private static final int MAX_SAMPLES = 8;
+    private static final double STICK_DEADZONE = 0.1;
+
+    private RobotHardware hw;
+    private Follower follower;
+    private Turret turret;
+    private TagLocalizer localizer;
+
+    private AprilTagProcessor processor;
+    private VisionPortal portal;
+
+    private boolean homingStarted = false;
+
+    // Manual exposure can only be set once the camera is STREAMING, and the mode
+    // change needs a moment to take before the values stick -- same sequence and
+    // same 50 ms settle TurretCamera uses. A failure here is not fatal; it just
+    // means auto exposure.
+    //
+    // NOT one-shot any more. It used to latch `exposureSet` and never look again,
+    // so editing EXPOSURE_MS or CAMERA_GAIN mid-run did nothing and every value
+    // cost a redeploy -- which is why nobody ever swept it. The `applied*` fields
+    // record what the camera was last actually told; anything else re-applies.
+    private String cameraNote = "starting";
+    private String resolutionNote = "?";
+    private final ElapsedTime exposureSettle = new ElapsedTime();
+    private boolean modeSet = false;
+    private boolean manualFailed = false;
+    private Boolean appliedManual = null;        // null = nothing applied yet
+    private int appliedExposure = -1, appliedGain = -1, appliedDecimation = -1;
+
+    /**
+     * Pushes FORCE_MANUAL_EXPOSURE / EXPOSURE_MS / CAMERA_GAIN / DECIMATION at the
+     * camera whenever they differ from what it was last told. Cheap when nothing
+     * changed (an int compare), so it is safe to call every loop.
+     */
+    private void setUpExposure() {
+        if (portal.getCameraState() != VisionPortal.CameraState.STREAMING) return;
+
+        if (DECIMATION != appliedDecimation) {
+            // 0 means leave it alone -- see the constant. Once it HAS been forced
+            // there is no way back to the native default without a re-init, so the
+            // note says "forced" rather than pretending 0 undoes it.
+            if (DECIMATION > 0) processor.setDecimation((float) DECIMATION);
+            appliedDecimation = DECIMATION;
+        }
+
+        if (!FORCE_MANUAL_EXPOSURE) {
+            // DELIBERATELY DOES NOT TOUCH THE MODE when nothing has been applied
+            // yet (appliedManual == null). The configuration that reliably held 4
+            // tags never called setMode at all -- it left the camera in whatever
+            // it powers up in -- and "set it to auto" is NOT the same thing. This
+            // op mode's job today is to reproduce that state exactly, so the
+            // untouched path has to be genuinely untouched.
+            //
+            // Only a toggle BACK from manual restores a mode, because Manual is
+            // sticky once set. ContinuousAuto, not Auto: the SDK's own comment
+            // says Auto is "single trigger auto exposure", which meters once and
+            // holds -- not what anyone means by putting it back on auto.
+            if (Boolean.TRUE.equals(appliedManual)) {
+                try {
+                    ExposureControl exposure = portal.getCameraControl(ExposureControl.class);
+                    if (exposure.getMode() != ExposureControl.Mode.ContinuousAuto) {
+                        exposure.setMode(ExposureControl.Mode.ContinuousAuto);
+                    }
+                    cameraNote = "ContinuousAuto exposure";
+                } catch (RuntimeException e) {
+                    cameraNote = "auto restore FAILED: " + e.getMessage();
+                }
+                appliedManual = Boolean.FALSE;
+                modeSet = false;
+                manualFailed = false;
+            } else if (appliedManual == null) {
+                appliedManual = Boolean.FALSE;
+                cameraNote = "camera default, UNTOUCHED (known-good path)";
+            }
+            return;
+        }
+
+        if (manualFailed) return;   // asked for manual, camera refused: stop retrying
+
+        boolean valuesStale = EXPOSURE_MS != appliedExposure || CAMERA_GAIN != appliedGain;
+        if (Boolean.TRUE.equals(appliedManual) && !valuesStale) return;
+
+        try {
+            ExposureControl exposure = portal.getCameraControl(ExposureControl.class);
+            if (!modeSet) {
+                if (exposure.getMode() != ExposureControl.Mode.Manual) {
+                    exposure.setMode(ExposureControl.Mode.Manual);
+                }
+                exposureSettle.reset();
+                modeSet = true;
+                return;
+            }
+            if (exposureSettle.milliseconds() < 50) return;
+            exposure.setExposure(EXPOSURE_MS, TimeUnit.MILLISECONDS);
+            portal.getCameraControl(GainControl.class).setGain(CAMERA_GAIN);
+            appliedManual = Boolean.TRUE;
+            appliedExposure = EXPOSURE_MS;
+            appliedGain = CAMERA_GAIN;
+            cameraNote = String.format("MANUAL %d ms, gain %d, decimation %d",
+                    appliedExposure, appliedGain, appliedDecimation);
+        } catch (RuntimeException e) {
+            manualFailed = true;
+            cameraNote = "AUTO exposure (manual failed: " + e.getMessage() + ")";
+        }
+    }
+
+    /** The per-tag line, rebuilt each loop. */
+    private String perTag = "";
+    /** How many of this frame's tags passed the believable test, from describe(). */
+    private int believableTags = 0;
+
+    private String decimationNote() {
+        if (appliedDecimation < 0) return "?";
+        return appliedDecimation == 0 ? "detector default" : String.valueOf(appliedDecimation);
+    }
+
+    /**
+     * One entry per tag the decoder actually read this frame: its ID, how far off
+     * the camera centreline it sat, and whether the SDK gave it a field pose.
+     *
+     * Why this earns a line: "1-2 tags" has three completely different causes and
+     * the old counters could not tell them apart. A tag MISSING here was never
+     * decoded (too dark, too small, out of frame, too oblique -- a camera or
+     * geometry problem). A tag present but marked `nopose` decoded fine and the
+     * localization chain dropped it (a configuration problem). Which one you are
+     * looking at decides where to go next, and guessing wrong costs a session.
+     */
+    private String describe(List<AprilTagDetection> detections) {
+        believableTags = 0;
+        if (detections.isEmpty()) return "none decoded";
+        StringBuilder sb = new StringBuilder();
+        for (AprilTagDetection d : detections) {
+            if (sb.length() > 0) sb.append("  ");
+            sb.append(d.id);
+            if (d.ftcPose != null) {
+                sb.append(String.format("@%+.0f", d.ftcPose.bearing));
+            }
+            if (d.robotPose == null) {
+                sb.append("(nopose)");
+                continue;
+            }
+            // Each tag's OWN z and level, and whether TagLocalizer.solve() will
+            // keep it. This is the line that was missing: solve() returns null for
+            // an unbelievable tag with no explanation, so a frame could decode 4
+            // tags, drop 3 on the floor test, and look like a detection problem.
+            TagLocalizer.TurretFix tf = TagLocalizer.turretFixOf(d);
+            if (tf == null) {
+                sb.append("(nofix)");
+                continue;
+            }
+            sb.append(String.format(" z%+.1f", tf.z));
+            if (!tf.believable) {
+                // Say WHICH test failed: z past FLOOR_TOLERANCE and level past
+                // LEVEL_TOLERANCE_DEG mean different things went wrong.
+                sb.append(tf.floorError > TagLocalizer.FLOOR_TOLERANCE ? " FLOOR" : "")
+                  .append(tf.levelErrorDeg > TagLocalizer.LEVEL_TOLERANCE_DEG
+                          ? String.format(" LVL%.0f", tf.levelErrorDeg) : "");
+            } else {
+                believableTags++;
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Gamepad 2 only, so gamepad 1's workflow is untouched: A toggles auto/manual,
+     * D-pad U/D steps exposure, D-pad L/R steps gain, X cycles decimation 1-2-3.
+     * setUpExposure() notices the change on the next loop and applies it.
+     */
+    private void editCamera() {
+        if (gamepad2.aWasPressed()) FORCE_MANUAL_EXPOSURE = !FORCE_MANUAL_EXPOSURE;
+        if (gamepad2.dpadUpWasPressed()) EXPOSURE_MS += EXPOSURE_STEP_MS;
+        if (gamepad2.dpadDownWasPressed()) EXPOSURE_MS = Math.max(1, EXPOSURE_MS - EXPOSURE_STEP_MS);
+        if (gamepad2.dpadRightWasPressed()) CAMERA_GAIN = Math.min(255, CAMERA_GAIN + GAIN_STEP);
+        if (gamepad2.dpadLeftWasPressed()) CAMERA_GAIN = Math.max(0, CAMERA_GAIN - GAIN_STEP);
+        // 0 (detector default) -> 1 -> 2 -> 3 -> 0. Going back to 0 only stops
+        // FORCING a value; it cannot un-force one until the next init.
+        if (gamepad2.xWasPressed()) DECIMATION = DECIMATION >= 3 ? 0 : DECIMATION + 1;
+    }
+
+    // For VisionPoseFilter.check(), which wants to know if the robot is moving.
+    private final ElapsedTime loopTimer = new ElapsedTime();
+    private Pose lastPose = null;
+    private double speed = 0, turnRate = 0;
+
+    // The last fix we got, kept so the screen doesn't blank between frames.
+    private TagLocalizer.Fix lastFix = null;
+    private VisionPoseFilter.Verdict lastVerdict = null;
+    private double lastFixAgeMs = 0;
+    private int framesWithFix = 0, framesWithoutPose = 0;
+    private final ElapsedTime sinceFix = new ElapsedTime();
+
+    // ---- The turret sweep ---------------------------------------------------
+    // Park the robot, capture a fix at several TURRET angles without moving the
+    // robot, and the reported ROBOT position should not change -- the robot
+    // hasn't moved. However far it does move is what the turret chain costs:
+    // homing accuracy, TURRET_ZERO_DEG, TURRET_CCW_SIGN, TICKS_PER_DEGREE,
+    // TURRET_OFFSET_X/Y and gear backlash, all of which a body-mounted camera
+    // would delete. That is the number the fixed-vs-turret camera decision turns
+    // on, so it is measured here rather than argued about.
+    private final double[] sampleTurretDeg = new double[MAX_SAMPLES];
+    private final double[] sampleX = new double[MAX_SAMPLES];
+    private final double[] sampleY = new double[MAX_SAMPLES];
+    private final double[] sampleHeadingDeg = new double[MAX_SAMPLES];
+    private int samples = 0;
+    private String captureNote = "A captures a sample once the turret has settled";
+
+    // Has the odometry pose been given a real origin yet? See start(). Until it
+    // has, VisionPoseFilter's "too far from odometry" rule is meaningless, so the
+    // Filter line says so rather than printing a verdict nobody should act on.
+    private boolean poseSeeded = false;
+    private String poseOrigin = "";
+
+    // ---- Is this reading STEADY, or is it bouncing? -------------------------
+    // 2026-11-13: z was reported as "+3.8" at one spot and "-2 to +4" at
+    // another, and only the second report mentioned the swing. A single sample
+    // of a bouncing quantity looks exactly like a measurement, which cost a
+    // whole prediction test. So show the RANGE over the last second, not the
+    // instant value -- a wide range means the solve is unstable (oblique view,
+    // AprilTag pose ambiguity) and nothing on the screen should be written down.
+    private static final double STEADY_WINDOW_SEC = 1.0;
+    private final ElapsedTime steadyWindow = new ElapsedTime();
+    private double zMin = Double.NaN, zMax = Double.NaN;
+    private double levelMin = Double.NaN, levelMax = Double.NaN;
+    private double errMin = Double.NaN, errMax = Double.NaN;
+
+    /** Fold this frame into the min/max, restarting the window when it expires. */
+    private void trackSteadiness(double z, double level, double err) {
+        if (steadyWindow.seconds() > STEADY_WINDOW_SEC || Double.isNaN(zMin)) {
+            steadyWindow.reset();
+            zMin = zMax = z;
+            levelMin = levelMax = level;
+            errMin = errMax = err;
+            return;
+        }
+        zMin = Math.min(zMin, z);
+        zMax = Math.max(zMax, z);
+        levelMin = Math.min(levelMin, level);
+        levelMax = Math.max(levelMax, level);
+        if (!Double.isNaN(err)) {
+            errMin = Double.isNaN(errMin) ? err : Math.min(errMin, err);
+            errMax = Double.isNaN(errMax) ? err : Math.max(errMax, err);
+        }
+    }
+
+    private static String range(double lo, double hi, String unit) {
+        if (Double.isNaN(lo)) return "--";
+        double swing = hi - lo;
+        return String.format("%+.1f..%+.1f%s%s", lo, hi, unit,
+                swing > 1.5 ? "  BOUNCING" : "");
+    }
+
+    /**
+     * Editing the truth FROM THE GAMEPAD, because TRUTH_X/Y are @Configurable and
+     * Panels is not something everyone on this team uses. D-pad Up/Down picks the
+     * field, the triggers move it, X cycles through the four wall-start presets.
+     *
+     * Tape-measuring to a robot's centre of rotation is good to about an inch at
+     * best, so 1 in of editing resolution is not the limiting error here.
+     */
+    private enum TruthField { X, Y, HEADING }
+
+    private TruthField editing = TruthField.X;
+
+    /**
+     * The truth presets X cycles through: the four wall starts. See WallStart for
+     * why all four, and the mirrored-pair test they enable. For that comparison
+     * to mean anything, tip the hives into mirrored states too (red audience cell
+     * up <-> blue scoring cell up), and expect ~2 in of x difference from our
+     * field alone: Shane taped red wall to red hive 58 in, blue wall to blue hive 60.
+     */
+
+    /** The preset X loaded last, or null if none / the truth was hand-edited since. */
+    private WallStart preset = null;
+
+    @Override
+    public void init() {
+        // Per-robot turret geometry and CAMERA numbers, before anything is solved.
+        RobotProfile.install();
+        PanelsConfigurables.INSTANCE.refreshClass(this);
+
+        hw = new RobotHardware();
+        hw.init(hardwareMap, false);   // we open the webcam ourselves, below
+        turret = hw.turret;
+        follower = Constants.createFollower(hardwareMap);
+        localizer = new TagLocalizer(TurretGeometry.forRobot());
+
+        // THE WHOLE POINT: the localization library (tags know where they are on
+        // the field) plus the camera's pose on the turret. Without both of these
+        // the SDK leaves detection.robotPose null.
+        // DECIMATION 1, not the default 2. Decimation downsamples before the
+        // detector runs, which is fast but costs detection range on a small tag
+        // -- and ours are 3.25 in. seen from 30-60 in. On 2026-11-13 this op mode
+        // could only hold ONE tag at a time, and a 1-tag fix is the unreliable
+        // kind (planar pose ambiguity: z came out ~3 in on one tag and ~0 on
+        // four). This is a bench test with CPU to spare, so buy the detections.
+        processor = TagLocalizer.configure(new AprilTagProcessor.Builder())
+                .setDrawTagOutline(true)
+                .setDrawTagID(true)
+                .build();
+        // Decimation is NOT set here any more; setUpExposure() owns it, and only
+        // when DECIMATION > 0. An unconditional call here is what made "the
+        // detector's own default" unreachable.
+        VisionPortal.Builder builder = new VisionPortal.Builder()
+                .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
+        if (PIN_RESOLUTION) {
+            builder.setCameraResolution(new Size(RESOLUTION_WIDTH, RESOLUTION_HEIGHT));
+            resolutionNote = String.format("pinned %dx%d", RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
+        } else {
+            resolutionNote = "SDK default (not pinned)";
+        }
+        portal = builder
+                // PINNED, and it matters. Our camera is a Logitech C270, and the
+                // SDK's built-in calibration for it exists at 640x480 ONLY
+                // (focalLength 822.317, distortion -0.045 / 1.173 / -3.632 --
+                // see TeamCode/src/main/res/xml/teamwebcamcalibrations.xml, where
+                // the same entry is commented out because the SDK ships it).
+                //
+                // Nothing here used to ask for a resolution, so we were trusting
+                // the default to land on the calibrated one. Two measurements on
+                // 2026-11-13 say it did not: range read about 10% short, and the
+                // fix got ~4x worse toward the edges of the frame. Both are what
+                // you get when the focal length and distortion coefficients are
+                // NOT being applied, and that big a radial term should have been
+                // corrected away if they were.
+                //
+                // If pinning this fixes those two, the same line belongs in
+                // TurretCamera -- but that one feeds match aiming through
+                // TurretAim, so measure here first.
+                //
+                // NOW A SUSPECT, 2026-11-13 (afternoon). Pinning was argued from
+                // the "range reads ~10% short" figure -- and that figure has since
+                // been disowned: the five-spot run behind it was taken with
+                // crippled camera settings and probably measured single-tag pose
+                // ambiguity. So this line rests on evidence we no longer trust,
+                // AND it landed in the same window as the detection regression
+                // (4 tags from (57, 9) before, 1-2 after). It may well be a no-op
+                // -- the SDK's own default is 640x480 -- but "may well be" is not
+                // a measurement, so it is switchable now. PIN_RESOLUTION is read
+                // at INIT, so change it and re-init; no redeploy needed.
+                .addProcessor(processor)
+                .build();
+    }
+
+    @Override
+    public void init_loop() {
+        editCamera();
+        setUpExposure();
+        // The tag list works before Start too -- counting what decodes needs no
+        // turret and no pose, so camera settings can be swept right here at INIT.
+        List<AprilTagDetection> detections = processor.getDetections();
+        perTag = describe(detections == null ? Collections.emptyList() : detections);
+        telemetry.addLine("TAG POSE TEST -- read only, writes nothing");
+        BuildInfo.show(telemetry);
+        telemetry.addData("Robot", WhichRobot.number());
+        telemetry.addData("Camera", "%s   %s | dec %s | %s",
+                portal.getCameraState(), cameraNote, decimationNote(), resolutionNote);
+        telemetry.addData("TAGS", "%s", perTag);
+        telemetry.addLine("gp2: A auto/manual, dpad U/D exposure, L/R gain, X decimation");
+        telemetry.addLine();
+        telemetry.addLine("Park on a spot you can measure. Point the camera at a hive.");
+        telemetry.addLine("At Start, press Y to HOME THE TURRET -- fixes are wrong until you do.");
+        telemetry.addLine("Nothing moves until then.");
+        telemetry.update();
+    }
+
+    @Override
+    public void start() {
+        // WHERE ODOMETRY STARTS, AND WHY IT MATTERS HERE (fixed 2026-11-12).
+        //
+        // This used to seed a placeholder (CAMERA_FORWARD, 0, 0) on the grounds
+        // that nothing read it. That was wrong: VisionPoseFilter's fifth rule
+        // rejects a fix more than MAX_JUMP (18 in) from the odometry pose, so a
+        // fictional pose made the Filter line read TOO_FAR_FROM_ODOMETRY forever
+        // -- a scary-looking verdict that meant nothing. Shane hit it the first
+        // time he ran this.
+        //
+        // So: start odometry at the TRUTH when there is one. Then the fix should
+        // land within an inch or two of it, and TOO_FAR_FROM_ODOMETRY becomes a
+        // real finding (the fix is more than 18 in off a spot you measured).
+        // With no truth set, the FIRST fix seeds it instead -- see loop() -- and
+        // the jump rule then checks later fixes against the first one, which is
+        // a consistency check rather than an accuracy one.
+        if (!Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y)) {
+            double heading = Double.isNaN(TRUTH_HEADING_DEG) ? 0 : Math.toRadians(TRUTH_HEADING_DEG);
+            follower.setStartingPose(new Pose(TRUTH_X, TRUTH_Y, heading));
+            poseSeeded = true;
+            poseOrigin = "your TRUTH_X/Y"
+                    + (Double.isNaN(TRUTH_HEADING_DEG) ? " (heading assumed 0)" : "");
+        } else {
+            follower.setStartingPose(new Pose(0, 0, 0));
+            poseOrigin = "nothing yet -- waiting for the first fix to seed it";
+        }
+        loopTimer.reset();
+    }
+
+    @Override
+    public void loop() {
+        double dt = loopTimer.seconds();
+        loopTimer.reset();
+        editCamera();
+        setUpExposure();
+        follower.update();
+
+        if (gamepad1.yWasPressed() && !homingStarted && Turret.isMeasured()) {
+            turret.startHoming();
+            homingStarted = true;
+        }
+        // Jog only once homed, so the soft limits are on and a step can't drive
+        // the turret into the cable or a stop. Same sign convention as
+        // DriveTeleOp: stick RIGHT turns the turret right, angle goes DOWN.
+        if (turret.isHomed()) {
+            if (gamepad1.dpadLeftWasPressed()) {
+                turret.setTargetAngle(turret.getTargetAngle() + TURRET_STEP_DEG);
+            }
+            if (gamepad1.dpadRightWasPressed()) {
+                turret.setTargetAngle(turret.getTargetAngle() - TURRET_STEP_DEG);
+            }
+            double stick = gamepad1.right_stick_x;
+            if (Math.abs(stick) > STICK_DEADZONE) {
+                turret.setTargetAngle(turret.getTargetAngle()
+                        - stick * TURRET_JOG_DEG_PER_SEC * dt);
+            }
+        }
+        if (gamepad1.aWasPressed()) captureSample();
+        if (gamepad1.bWasPressed()) {
+            samples = 0;
+            captureNote = "cleared";
+        }
+        editTruth(dt);
+        turret.update();
+
+        Pose pose = follower.getPose();
+        if (lastPose != null && dt > 1e-6) {
+            speed = Math.hypot(pose.getX() - lastPose.getX(), pose.getY() - lastPose.getY()) / dt;
+            // wrapDegrees takes and returns DEGREES, so convert first, then wrap.
+            turnRate = TurretGeometry.wrapDegrees(
+                    Math.toDegrees(pose.getHeading() - lastPose.getHeading())) / dt;
+        }
+        lastPose = pose;
+
+        List<AprilTagDetection> detections = processor.getDetections();
+        if (detections == null) detections = Collections.emptyList();
+
+        // How many tags the SDK gave a field pose for. ZERO while any tag is in
+        // frame is the "camera not configured for localization" symptom, and the
+        // first thing to check if this op mode shows nothing.
+        int withPose = 0;
+        for (AprilTagDetection d : detections) {
+            if (d.robotPose != null) withPose++;
+        }
+
+        perTag = describe(detections);
+        lastWall = solveWall(detections, pose);
+
+        TagLocalizer.Fix fix = localizer.solveFrame(detections, turret.getAngle());
+        if (fix != null) {
+            // No truth typed in, so let the first fix be the origin. Everything
+            // after it is then compared against something real, which is what
+            // makes the Filter verdict worth reading at all.
+            if (!poseSeeded) {
+                follower.setPose(fix.robot);
+                pose = fix.robot;
+                lastPose = pose;
+                poseSeeded = true;
+                poseOrigin = "the first fix (no TRUTH set)";
+            }
+            lastFix = fix;
+            sinceFix.reset();
+            framesWithFix++;
+            lastFixAgeMs = (System.nanoTime() - fix.frameNanos) / 1e6;
+            lastVerdict = VisionPoseFilter.check(turret.isOnTarget(), speed, turnRate,
+                    lastFixAgeMs, fix.tagRange, fix.tagBearingDeg, fix.tagsUsed, pose, fix.robot);
+        } else if (!detections.isEmpty() && withPose == 0) {
+            framesWithoutPose++;
+        }
+
+        showTelemetry(detections.size(), withPose, dt);
+    }
+
+    /**
+     * Record this turret angle and the fix that goes with it.
+     *
+     * Refuses rather than records a meaningless sample. A fix taken mid-slew is
+     * computed against a turret angle the turret has already left, and a stale
+     * fix describes a turret position from before the last step -- either one
+     * would show up as turret-chain error that isn't real, which is the exact
+     * thing this test is trying to measure.
+     */
+    private void captureSample() {
+        if (!turret.isHomed()) {
+            captureNote = "REFUSED: turret not homed (press Y)";
+        } else if (!turret.isOnTarget()) {
+            captureNote = "REFUSED: turret still moving -- let it settle";
+        } else if (lastFix == null || sinceFix.seconds() > CAPTURE_MAX_FIX_AGE_SEC) {
+            captureNote = "REFUSED: no fresh fix -- point the camera at a cell's tags";
+        } else if (samples >= MAX_SAMPLES) {
+            captureNote = "REFUSED: " + MAX_SAMPLES + " samples is full (B clears)";
+        } else {
+            sampleTurretDeg[samples] = turret.getAngle();
+            sampleX[samples] = lastFix.robot.getX();
+            sampleY[samples] = lastFix.robot.getY();
+            sampleHeadingDeg[samples] = Math.toDegrees(lastFix.robot.getHeading());
+            samples++;
+            captureNote = "captured " + samples + " of " + MAX_SAMPLES;
+        }
+    }
+
+    /** Farthest captured fix from the mean of them, inches. 0 with fewer than 2. */
+    private double positionSpread() {
+        if (samples < 2) return 0;
+        double mx = 0, my = 0;
+        for (int i = 0; i < samples; i++) {
+            mx += sampleX[i];
+            my += sampleY[i];
+        }
+        mx /= samples;
+        my /= samples;
+        double worst = 0;
+        for (int i = 0; i < samples; i++) {
+            worst = Math.max(worst, Math.hypot(sampleX[i] - mx, sampleY[i] - my));
+        }
+        return worst;
+    }
+
+    // ---- WALL FIX (2026-11-13) -------------------------------------------------
+    // Read-only, like everything else here: what WallFix WOULD say if the robot
+    // were re-anchored on this wall right now. The presets ARE wall spots, so
+    // parking on one tests the full solve (ERROR line) and the wall fix (WALL
+    // line) against the same truth at once. See WallFix for why it should beat
+    // the full solve: it takes heading and wall distance from the wall and only
+    // the BEARING from the camera.
+    private WallFix.Result lastWall = null;
+    private final ElapsedTime wallWindow = new ElapsedTime();
+    private double wallErrMin = Double.NaN, wallErrMax = Double.NaN;
+
+    private WallFix.Face wallFace() {
+        return preset != null ? preset.face : WALL_FACE;
+    }
+
+    /** Pose origin to a face. Same half-sizes Waypoints builds the presets from. */
+    private static double faceDistance(WallFix.Face face) {
+        return face == WallFix.Face.FRONT || face == WallFix.Face.BACK
+                ? RobotConstants.ROBOT_LENGTH / 2 : RobotConstants.ROBOT_WIDTH / 2;
+    }
+
+    private WallFix.Result solveWall(List<AprilTagDetection> detections, Pose pose) {
+        List<WallFix.Sighting> sightings = new ArrayList<>();
+        for (AprilTagDetection d : detections) {
+            if (d.ftcPose == null || FieldAprilTags.Cell.forTag(d.id) == null) continue;
+            // The hive's tilt moves a tag ~1.4 in. sideways here, so take it from
+            // the level test -- which picks between two answers 60 deg apart, a
+            // job even a shaky single-tag solve gets right.
+            TagLocalizer.TurretFix tf = TagLocalizer.turretFixOf(d);
+            if (tf == null) continue;
+            Rigid3 tag = HiveTags.tagPose(d.id, tf.hiveTilt);
+            sightings.add(new WallFix.Sighting(tag.x(), tag.y(),
+                    WallFix.bearingDeg(d.ftcPose.x, d.ftcPose.y, d.ftcPose.z,
+                            TagLocalizer.CAMERA_PITCH_DEG, TagLocalizer.CAMERA_YAW_DEG)));
+        }
+        WallFix.Face face = wallFace();
+        return WallFix.solve(pose.getHeading(), face, faceDistance(face), turret.getAngle(),
+                TurretGeometry.forRobot(), TagLocalizer.CAMERA_FORWARD, TagLocalizer.CAMERA_LEFT,
+                sightings);
+    }
+
+    /**
+     * One line: the wall fix, and its error ALONG the wall -- the only number it
+     * gets from the camera. The across-wall coordinate and the heading come from
+     * the wall itself, so against a preset truth they are right by construction.
+     */
+    private void showWall() {
+        WallFix.Result w = lastWall;
+        if (w == null || !w.ok()) {
+            telemetry.addData("WALL", "%s face: %s", wallFace(), w == null ? "--" : w.why);
+            return;
+        }
+        boolean haveTruth = !Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y);
+        double along = w.alongX() ? w.robot.getX() : w.robot.getY();
+        double err = !haveTruth ? Double.NaN : along - (w.alongX() ? TRUTH_X : TRUTH_Y);
+        if (wallWindow.seconds() > STEADY_WINDOW_SEC || Double.isNaN(wallErrMin)) {
+            wallWindow.reset();
+            wallErrMin = wallErrMax = err;
+        } else if (!Double.isNaN(err)) {
+            wallErrMin = Math.min(wallErrMin, err);
+            wallErrMax = Math.max(wallErrMax, err);
+        }
+        telemetry.addData("WALL  <-- and this", "%s %s %.1f, err %s",
+                w.wall, w.alongX() ? "x" : "y", along,
+                haveTruth ? range(wallErrMin, wallErrMax, "in") : "(set TRUTH)");
+        telemetry.addData("  wall q", "%s face, %d tags, spread %.1f in, %.1f in/deg, snap %+.1f deg",
+                wallFace(), w.tagsUsed, w.spread, w.inchesPerDeg, w.snapDeg);
+    }
+
+    /**
+     * Dial the tape measurement in from the gamepad. See TruthField.
+     *
+     * X cycles through the four WallStarts -- the wall starts, whose
+     * coordinates are known AND physically repeatable, so parking on one needs
+     * no tape at all. The first press loads red audience (GARDEN_EDGE_START, the
+     * spot DriveTeleOp assumes at Start); each press after moves to the next.
+     * Touching the triggers afterwards means the truth is no longer exactly a
+     * preset, and the screen says so.
+     */
+    private void editTruth(double dt) {
+        if (gamepad1.dpadUpWasPressed()) {
+            editing = TruthField.values()[(editing.ordinal() + TruthField.values().length - 1)
+                    % TruthField.values().length];
+        }
+        if (gamepad1.dpadDownWasPressed()) {
+            editing = TruthField.values()[(editing.ordinal() + 1) % TruthField.values().length];
+        }
+        if (gamepad1.xWasPressed()) {
+            preset = preset == null ? WallStart.values()[0] : preset.next();
+            TRUTH_X = preset.pose.getX();
+            TRUTH_Y = preset.pose.getY();
+            TRUTH_HEADING_DEG = preset.headingDeg();
+        }
+        double adjust = (gamepad1.right_trigger - gamepad1.left_trigger) * TRUTH_EDIT_PER_SEC * dt;
+        if (adjust == 0) return;
+        preset = null;   // hand-edited: no longer exactly the preset
+        switch (editing) {
+            case X:
+                TRUTH_X = (Double.isNaN(TRUTH_X) ? 0 : TRUTH_X) + adjust;
+                break;
+            case Y:
+                TRUTH_Y = (Double.isNaN(TRUTH_Y) ? 0 : TRUTH_Y) + adjust;
+                break;
+            case HEADING:
+                TRUTH_HEADING_DEG = (Double.isNaN(TRUTH_HEADING_DEG) ? 0 : TRUTH_HEADING_DEG) + adjust;
+                break;
+        }
+    }
+
+    /**
+     * Two lines, at the TOP of the screen. Nothing here is saved anywhere and
+     * nothing needs to be: the numbers are live, and the ERROR line below updates
+     * as you move them. X OVERWRITES all three with the next preset, so do not
+     * press it after dialling a tape measurement in.
+     */
+    private void showTruthEditor() {
+        telemetry.addLine(String.format("TRUTH  %sx %s   %sy %s   %shdg %s",
+                editing == TruthField.X ? ">" : " ", fmt(TRUTH_X),
+                editing == TruthField.Y ? ">" : " ", fmt(TRUTH_Y),
+                editing == TruthField.HEADING ? ">" : " ", fmt(TRUTH_HEADING_DEG)));
+        telemetry.addLine("  preset: " + (preset == null ? "none (hand-set)" : preset.label));
+        telemetry.addLine("  D-pad U/D pick | TRIGGERS move | X = next wall preset (overwrites)");
+    }
+
+    private static String fmt(double v) {
+        return Double.isNaN(v) ? "--" : String.format("%.1f", v);
+    }
+
+    /** Turret angle covered by the captures, degrees. Near 0 = a noise-floor run. */
+    private double turretSpan() {
+        if (samples < 2) return 0;
+        double lo = sampleTurretDeg[0], hi = sampleTurretDeg[0];
+        for (int i = 1; i < samples; i++) {
+            lo = Math.min(lo, sampleTurretDeg[i]);
+            hi = Math.max(hi, sampleTurretDeg[i]);
+        }
+        return hi - lo;
+    }
+
+    /**
+     * Least-squares line through (turret angle, captured heading).
+     *
+     * @return {slope deg/deg, intercept deg, RMS residual deg}. Slope is r - 1,
+     *         where r = TICKS_PER_DEGREE assumed / true -- see showSweep().
+     *         Returns zeros if the captures don't span enough turret angle to
+     *         fit anything, which is the noise-floor case.
+     */
+    private double[] headingFit() {
+        int n = samples;
+        if (n < 3) return new double[] {0, 0, 0};
+        double sx = 0, sy = 0, sxy = 0, sxx = 0;
+        for (int i = 0; i < n; i++) {
+            sx += sampleTurretDeg[i];
+            sy += sampleHeadingDeg[i];
+            sxy += sampleTurretDeg[i] * sampleHeadingDeg[i];
+            sxx += sampleTurretDeg[i] * sampleTurretDeg[i];
+        }
+        double den = n * sxx - sx * sx;
+        if (Math.abs(den) < 1e-9) return new double[] {0, 0, 0};
+        double slope = (n * sxy - sx * sy) / den;
+        double intercept = (sy - slope * sx) / n;
+        double sumSq = 0;
+        for (int i = 0; i < n; i++) {
+            double e = sampleHeadingDeg[i] - (slope * sampleTurretDeg[i] + intercept);
+            sumSq += e * e;
+        }
+        return new double[] {slope, intercept, Math.sqrt(sumSq / n)};
+    }
+
+    /** Biggest gap between any two captured headings, degrees. 0 with fewer than 2. */
+    private double headingSpread() {
+        double worst = 0;
+        for (int i = 0; i < samples; i++) {
+            for (int j = i + 1; j < samples; j++) {
+                worst = Math.max(worst, Math.abs(TurretGeometry.wrapDegrees(
+                        sampleHeadingDeg[i] - sampleHeadingDeg[j])));
+            }
+        }
+        return worst;
+    }
+
+    private void showSweep() {
+        // One line when idle, a handful when sweeping. The per-sample list is
+        // gone on purpose -- it crowded the editor and the ERROR line off the
+        // Driver Station, and SPREAD is the number the test is actually for.
+        if (samples == 0) {
+            telemetry.addData("SWEEP", "A captures (%s)", captureNote);
+            return;
+        }
+        telemetry.addData("SWEEP", "%d captured   (%s)", samples, captureNote);
+        if (samples < 2) return;
+        telemetry.addData("SPREAD", "%.2f in, heading %.1f deg",
+                positionSpread(), headingSpread());
+
+        // Which test did you just run? Captures all at ONE turret angle measure
+        // the NOISE FLOOR; captures across angles measure the turret chain on top
+        // of it. Telling them apart by the angle span means one op mode does both
+        // and neither gets mistaken for the other -- which nearly happened on
+        // 2026-11-12, when a 4.2 in across-angle spread looked like it might be
+        // tag noise until 8 captures at one angle came back at 0.6 in.
+        double span = turretSpan();
+        if (span < 5.0) {
+            telemetry.addLine(String.format(
+                    "    ^ all within %.1f deg of turret: NOISE FLOOR, not the chain.", span));
+            return;
+        }
+
+        // The slope of heading error against turret angle is the invariant.
+        // SPREAD depends on which angles you happened to sample; the slope does
+        // not, so it is what to compare between runs.
+        //
+        // The tag gives the turret base's field heading WITHOUT the encoder, and
+        // the robot heading is that minus the reported turret angle. The robot
+        // never moved, so its true heading is constant and
+        //     computed heading = true heading + turretAngle * (r - 1)
+        // where r = TICKS_PER_DEGREE_assumed / TICKS_PER_DEGREE_true. So the fitted
+        // slope IS r - 1, and the intercept is the real heading.
+        double[] fit = headingFit();
+        double slope = fit[0], residual = fit[2];
+        telemetry.addData("SLOPE", "%+.4f deg/deg over %.0f deg | residual %.2f deg%s",
+                slope, span, residual,
+                Math.abs(slope) > 0.01
+                        ? String.format(" | TPD %.1f", Turret.TICKS_PER_DEGREE / (1 + slope))
+                        : "");
+        // How to read SLOPE: residual near the noise floor means a clean scale
+        // error and the TPD figure is trustworthy; a big residual means it is not
+        // a simple scale error (backlash or a nonlinearity), and capturing all
+        // one direction versus mixed separates those. Kept as a comment rather
+        // than four telemetry lines -- see showTelemetry() on why.
+    }
+
+    /**
+     * SHORT ON PURPOSE. The Driver Station telemetry pane does not scroll -- it
+     * shows what fits and silently drops the rest. The first version of this
+     * screen put the TRUTH editor and the Error line at the BOTTOM of about 20
+     * lines, so Shane ran the whole test on 2026-11-13 without ever seeing
+     * either one, dialled in nothing, and got no error read-out.
+     *
+     * So: the thing you STEER and the thing you READ go first, blocking warnings
+     * above them, and the diagnostics get one line each. If you add a line here,
+     * take one out.
+     */
+    private void showTelemetry(int tagsSeen, int withPose, double dt) {
+        // Blocking problems first -- nothing below means anything if these fire.
+        if (!turret.isHomed()) {
+            telemetry.addLine(">>> TURRET NOT HOMED -- press Y. Every fix is wrong until you do.");
+        }
+        if (tagsSeen > 0 && withPose == 0) {
+            telemetry.addLine(">>> Tags seen but NO field pose: processor not configured");
+            telemetry.addLine("    for localization. TagLocalizer cannot run. Tell Claude.");
+        }
+
+        // The camera config and what it is actually yielding, together on purpose:
+        // the whole point is to watch the tag list respond as you change settings.
+        telemetry.addData("CAM", "%s | dec %s | %s", cameraNote, decimationNote(), resolutionNote);
+        telemetry.addData("TAGS", "%d: %s", tagsSeen, perTag);
+        // THE FUNNEL, and the reason this line exists: "4 tags on TAGS but 1 on
+        // QUALITY" is the whole diagnosis, and until 2026-11-13 nothing showed the
+        // middle of it. decoded -> had a field pose -> believable -> kept by
+        // combine(). Whichever arrow loses the tags is the bug; they have nothing
+        // to do with each other.
+        telemetry.addData("FUNNEL", "decoded %d -> posed %d -> believable %d -> used %d%s",
+                tagsSeen, withPose, believableTags,
+                lastFix == null ? 0 : lastFix.tagsUsed,
+                believableTags > 0 && lastFix != null && lastFix.tagsUsed < believableTags
+                        ? "   <- combine() dropped outliers" : "");
+
+        showTruthEditor();
+
+        Pose v = lastFix == null ? null : lastFix.robot;
+        if (v != null) {
+            boolean haveTruth = !Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y);
+            trackSteadiness(lastFix.turret.z, lastFix.turret.levelErrorDeg,
+                    haveTruth ? Math.hypot(v.getX() - TRUTH_X, v.getY() - TRUTH_Y) : Double.NaN);
+        }
+        if (v != null && !Double.isNaN(TRUTH_X) && !Double.isNaN(TRUTH_Y)) {
+            double ex = v.getX() - TRUTH_X;
+            double ey = v.getY() - TRUTH_Y;
+            telemetry.addData("ERROR  <-- write this down", "%.2f in   dx %+.2f  dy %+.2f%s",
+                    Math.hypot(ex, ey), ex, ey,
+                    Double.isNaN(TRUTH_HEADING_DEG) ? ""
+                            : String.format("   hdg %+.1f deg", TurretGeometry.wrapDegrees(
+                                    Math.toDegrees(v.getHeading()) - TRUTH_HEADING_DEG)));
+        } else if (v != null) {
+            telemetry.addLine("ERROR: set TRUTH above (triggers) and it appears here.");
+        }
+        // Before the NO FIX early return on purpose: one tag the full solve
+        // rejects can still give a wall fix, and seeing that is part of the test.
+        showWall();
+
+        if (v == null) {
+            telemetry.addLine("NO FIX yet -- point the camera at a hive cell's tags.");
+            // The counters only earn screen space here: "tags seen, never a pose"
+            // is the localization-not-configured symptom, and "fixes seen, none
+            // now" means it worked a moment ago and the tags have just gone.
+            telemetry.addData("Tags", "%d in frame, %d with a pose   (%d fixes, %d poseless)",
+                    tagsSeen, withPose, framesWithFix, framesWithoutPose);
+            showSweep();
+            telemetry.addData("Loop", "%.0f ms", dt * 1000);
+            telemetry.update();
+            return;
+        }
+
+        telemetry.addData("FIX", "(%.1f, %.1f) %.1f deg", v.getX(), v.getY(),
+                Math.toDegrees(v.getHeading()));
+        // "off centre" matters most: past MAX_TAG_BEARING_DEG the filter throws the
+        // fix away, because an edge-of-frame tag measured 4x worse (2026-11-13).
+        telemetry.addData("QUALITY", "%d tags, spread %.2f in, %.0f in away, %.0f deg off centre",
+                lastFix.tagsUsed, lastFix.spread, lastFix.tagRange, lastFix.tagBearingDeg);
+        telemetry.addData("FILTER", "%s%s", lastVerdict,
+                lastFix.turret.believable ? "" : "   TURRET BASE NOT BELIEVABLE");
+        // BASE is a free consistency check and the reason it is back on screen:
+        // the turret base really is on the floor and level, so z and level should
+        // solve to ~0. Several inches of z means the VERTICAL chain is wrong
+        // (CAMERA_UP, CAMERA_PITCH_DEG, or the tag height), and a vertical error
+        // comes with a horizontal range error -- which is the open question as of
+        // 2026-11-13. I had compacted these two off the screen; that was a
+        // mistake, they are the cheapest diagnostic here.
+        // One line, was two ("BASE 1s" and "err 1s"), to make room for WALL.
+        telemetry.addData("1s", "z %s | lvl %s | err %s | %s | turret %+.1f",
+                range(zMin, zMax, "in"), range(levelMin, levelMax, "deg"),
+                range(errMin, errMax, "in"), lastFix.turret.hiveTilt, turret.getAngle());
+        showSweep();
+        telemetry.update();
+    }
+
+    @Override
+    public void stop() {
+        if (portal != null) portal.close();
+    }
+}

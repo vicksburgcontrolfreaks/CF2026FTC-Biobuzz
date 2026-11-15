@@ -11,8 +11,9 @@ import org.firstinspires.ftc.teamcode.field.FieldAprilTags;
 
 import java.util.List;
 
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
-@Disabled
+// Shown again 2026-11-11 so the real tag detection range can be measured by
+// walking the robot back from a hive -- no Panels needed. Was hidden for
+// competition 2026-11-07; put @Disabled back above @TeleOp to hide it again.
 @TeleOp(name = "AprilTag ID Test", group = "Test")
 public class AprilTagIdTest extends LinearOpMode {
 

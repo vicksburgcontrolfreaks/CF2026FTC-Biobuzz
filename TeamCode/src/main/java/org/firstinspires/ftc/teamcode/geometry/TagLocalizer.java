@@ -51,17 +51,64 @@ import java.util.List;
  * check: that the camera numbers below match the real robot. Phase 3's gate
  * (park on tape-measured spots, compare) is where that gets proven.
  *
- * !!!! The CAMERA_* numbers and everything in HiveTags are MADE-UP (2026-10-24). !!!!
+ * CAMERA NUMBERS: per robot, installed by RobotProfile. On 6494, FORWARD, UP and
+ * PITCH are measured; LEFT and YAW are still assumed 0. On 5618 all five are
+ * inherited guesses.
+ *
+ * WHAT IS AND IS NOT MEASURED (updated 2026-11-13 -- the old version of this
+ * banner still called CELL_ARM and CELL_DROP made up long after Shane had
+ * measured them, and it sent two separate debugging sessions at the hive when
+ * the hive was fine. Keep it current.)
+ *
+ * THE HIVE IS MEASURED. CELL_ARM (14.0, measured and cross-checked against the
+ * manual's back-face spacing), CELL_DROP (1.44, solved from tape against the
+ * levelled pivot), HIVE_SWING_DEG (60), HIVE_PIVOT_HEIGHT (~44) and the cell's
+ * box and face layout all come from Shane's 2026-11-11 session. PIVOT_Y = 72
+ * was confirmed with a tape 2026-11-13. RED_HIVE_X stays at the manual's 59.6
+ * on purpose even though our field measures 58 -- see HiveTags.
+ *
+ * !!!! WHAT IS NOT MEASURED IS ON THE ROBOT, NOT THE HIVE:                     !!!!
+ * !!!!   - the webcam's INTRINSICS. Suspected in two separate findings: a      !!!!
+ * !!!!     ~10% range under-read (2026-11-13 accuracy run) and a bias that     !!!!
+ * !!!!     grows toward the edges of the frame (2026-11-13 sweep). Focal       !!!!
+ * !!!!     length and distortion would explain both.                          !!!!
+ * !!!!   - CAMERA_LEFT, assumed 0. Note it is CONFOUNDED with yaw at a single  !!!!
+ * !!!!     distance: a lateral lens offset reads as atan(left/dist), which     !!!!
+ * !!!!     shrinks with range, while a true yaw is constant. Two distances     !!!!
+ * !!!!     separate them.                                                      !!!!
+ *
+ * CAMERA_YAW_DEG IS NO LONGER ON THAT LIST (2026-11-14). A tag placed directly
+ * in front of the turret read +8 deg of bearing on the remounted camera -- the
+ * body aimed 8 deg right of where the turret points, and the same shape as the
+ * steady -2 to -3 deg heading error older fixes came back with. Shane re-squared
+ * the mount instead of modelling it, and a dead-ahead tag now reads within a
+ * degree or two of 0. The measurement is cheap and worth repeating after any
+ * camera work: it needs one tag and no field.
+ *
+ * Check TurretFix.believable before trusting a fix, and see
+ * docs/turret-odometry-aim-status.md for the measurements behind all of this.
  */
 public class TagLocalizer {
 
     // ---- Camera on the turret, with the turret at 0 deg ---------------------
-    // MADE-UP until measured from CAD. Relative to the turret axis at FLOOR level.
-    public static double CAMERA_FORWARD = 4.0;   // in, along the turret's pointing direction
-    public static double CAMERA_LEFT = 0.0;      // in
-    public static double CAMERA_UP = 12.0;       // in, lens height above the tiles
-    public static double CAMERA_PITCH_DEG = 30;  // tipped UP from level, to see the downward tags
-    public static double CAMERA_YAW_DEG = 0;     // turned left of the turret's pointing direction
+    // Relative to the turret axis at FLOOR level.
+    //
+    // PER ROBOT: RobotProfile.install() fills all five of these in at op-mode
+    // init, so a KEEPER value goes in RobotProfile, not here. The values below
+    // are 6494's, left as real numbers rather than NaN (the way
+    // TurretGeometry's offsets are) because TagLocalizerTest builds a camera
+    // pose on a laptop, where WhichRobot cannot run and install() never happens.
+    //
+    // Measured on 6494 2026-11-14 (Shane), after the camera was remounted to get
+    // it out of the ball's exit path. YAW was measured at +8 on the first mount
+    // and then re-squared mechanically, so 0 is now a CHECK rather than an
+    // assumption. LEFT is still an assumption -- the camera is taken to be
+    // centred on the turret axis.
+    public static double CAMERA_FORWARD = -1.25;  // in, along the turret's pointing direction (NEGATIVE = behind the axis)
+    public static double CAMERA_LEFT = 0.0;       // in. ASSUMED 0, not measured
+    public static double CAMERA_UP = 16.0;        // in, lens height above the tiles
+    public static double CAMERA_PITCH_DEG = 35;   // tipped UP from level, to see the hive tags
+    public static double CAMERA_YAW_DEG = 0;      // left of the pointing direction. Re-squared to ~0 on 2026-11-14
 
     // How far from level (deg) and off the floor (in) the turret base may come
     // out and still be believed. The wrong hive tilt misses by ~HIVE_SWING_DEG.
@@ -94,7 +141,16 @@ public class TagLocalizer {
         public final double headingRad;      // the field direction the turret points
         public final Tilt hiveTilt;          // the tilt that came out level
         public final double levelErrorDeg;   // how far from level it came out
-        public final double floorError;      // how far off the floor, inches
+        /**
+         * How far off the floor the turret base solved, SIGNED, inches. The base
+         * really is on the floor, so this should be ~0 -- it is a free check on
+         * the whole vertical chain (CAMERA_UP, CAMERA_PITCH_DEG, the tag height).
+         * Signed because the direction is the diagnostic: a vertical error of a
+         * few inches comes with a horizontal range error, which is what a bad
+         * camera pitch looks like.
+         */
+        public final double z;
+        public final double floorError;      // |z|, for the believable test
         public final boolean believable;     // within LEVEL_TOLERANCE_DEG and FLOOR_TOLERANCE
 
         TurretFix(Rigid3 turret, Tilt hiveTilt) {
@@ -104,7 +160,8 @@ public class TagLocalizer {
             this.headingRad = Math.atan2(pointing[1], pointing[0]);
             this.hiveTilt = hiveTilt;
             this.levelErrorDeg = Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, turret.get(2, 2)))));
-            this.floorError = Math.abs(turret.z());
+            this.z = turret.z();
+            this.floorError = Math.abs(this.z);
             this.believable = levelErrorDeg <= LEVEL_TOLERANCE_DEG && floorError <= FLOOR_TOLERANCE;
         }
     }
@@ -136,20 +193,40 @@ public class TagLocalizer {
         public final TurretFix turret;     // combined fix: the kept tag nearest the average
         public final int tagId;            // combined fix: that same tag
         public final double tagRange;      // in, for VisionPoseFilter's range rule (combined: the mean)
+        /**
+         * How far off the camera's centreline the tag sat, degrees, always
+         * positive. Combined fix: the WORST of the kept tags, because it is the
+         * edge-most tag that biases the solve.
+         *
+         * MEASURED 2026-11-13 on 6494: with tags centred, repeated fixes spread
+         * 1.26 in; with the same turret travel but tags walked to the edges of
+         * the frame, 4.2 in. So where the tag sits in the image is the dominant
+         * error in the whole chain, and VisionPoseFilter gates on this.
+         *
+         * This is ftcPose.bearing, which TurretAim deliberately does NOT use for
+         * aiming (see TurretAim.bearingOf -- it mixes in elevation for a tag seen
+         * steeply from below, so it is a poor ANGLE). As a rough "is the tag near
+         * the middle of the image" gauge it is fine, and that is all it is used
+         * for here. If it ever proves too crude, detection.center in pixels is
+         * the rigorous version.
+         */
+        public final double tagBearingDeg;
         public final long frameNanos;      // when the frame was captured
         public final int tagsUsed;         // 1 from solve(); how many survived in solveFrame()
         public final double spread;        // in, farthest kept fix from the average; 0 for one tag
 
-        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, long frameNanos) {
-            this(robot, turret, tagId, tagRange, frameNanos, 1, 0.0);
+        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, double tagBearingDeg,
+            long frameNanos) {
+            this(robot, turret, tagId, tagRange, tagBearingDeg, frameNanos, 1, 0.0);
         }
 
-        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, long frameNanos,
-            int tagsUsed, double spread) {
+        Fix(Pose robot, TurretFix turret, int tagId, double tagRange, double tagBearingDeg,
+            long frameNanos, int tagsUsed, double spread) {
             this.robot = robot;
             this.turret = turret;
             this.tagId = tagId;
             this.tagRange = tagRange;
+            this.tagBearingDeg = tagBearingDeg;
             this.frameNanos = frameNanos;
             this.tagsUsed = tagsUsed;
             this.spread = spread;
@@ -168,17 +245,27 @@ public class TagLocalizer {
      * Prefer solveFrame(): a frame usually shows all 4 of a cell's tags.
      */
     public Fix solve(AprilTagDetection detection, double turretDegAtFrame) {
+        TurretFix fix = turretFixOf(detection);
+        if (fix == null || !fix.believable) return null;
+
+        Pose robot = turret.robotPoseFromTurret(fix.x, fix.y, fix.headingRad, turretDegAtFrame);
+        return new Fix(robot, fix, detection.id, detection.ftcPose.range,
+                Math.abs(detection.ftcPose.bearing), detection.frameAcquisitionNanoTime);
+    }
+
+    /**
+     * Steps 2-3 for one detection: the tilt-corrected turret base, NOT checked for
+     * believable. Null if the SDK had no field pose for it. WallFix uses this for
+     * the hive tilt alone, which only needs the level test to pick the right one
+     * of two answers 60 deg apart.
+     */
+    public static TurretFix turretFixOf(AprilTagDetection detection) {
         if (detection.robotPose == null) return null;
         Position p = detection.robotPose.getPosition().toUnit(DistanceUnit.INCH);
         YawPitchRollAngles o = detection.robotPose.getOrientation();
         Rigid3 fromSdk = Rigid3.fromPose3D(p.x, p.y, p.z,
                 o.getYaw(AngleUnit.DEGREES), o.getPitch(AngleUnit.DEGREES), o.getRoll(AngleUnit.DEGREES));
-
-        TurretFix fix = solveTurret(fromSdk);
-        if (!fix.believable) return null;
-
-        Pose robot = turret.robotPoseFromTurret(fix.x, fix.y, fix.headingRad, turretDegAtFrame);
-        return new Fix(robot, fix, detection.id, detection.ftcPose.range, detection.frameAcquisitionNanoTime);
+        return solveTurret(fromSdk);
     }
 
     /**
@@ -245,12 +332,16 @@ public class TagLocalizer {
 
         // Heading: average the offsets from the reference, so 359 and 1 average to 0.
         double sumX = 0, sumY = 0, sumHeadingOff = 0, sumRange = 0;
+        // Bearing takes the WORST, not the mean: one tag out at the frame edge is
+        // enough to bias the solve, so the fix should be judged by it.
+        double worstBearing = 0;
         for (Fix f : kept) {
             sumX += f.robot.getX();
             sumY += f.robot.getY();
             sumHeadingOff += TurretGeometry.wrapDegrees(
                     Math.toDegrees(f.robot.getHeading() - reference.robot.getHeading()));
             sumRange += f.tagRange;
+            worstBearing = Math.max(worstBearing, f.tagBearingDeg);
         }
         int n = kept.size();
         Pose mean = new Pose(sumX / n, sumY / n,
@@ -263,7 +354,8 @@ public class TagLocalizer {
             spread = Math.max(spread, d);
             if (d < distance(nearest.robot, mean.getX(), mean.getY())) nearest = f;
         }
-        return new Fix(mean, nearest.turret, nearest.tagId, sumRange / n, nearest.frameNanos, n, spread);
+        return new Fix(mean, nearest.turret, nearest.tagId, sumRange / n, worstBearing,
+                nearest.frameNanos, n, spread);
     }
 
     private static double distance(Pose p, double x, double y) {

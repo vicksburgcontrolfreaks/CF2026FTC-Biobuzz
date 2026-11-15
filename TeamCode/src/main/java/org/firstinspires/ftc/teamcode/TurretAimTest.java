@@ -121,7 +121,7 @@ import java.util.concurrent.TimeUnit;
  * what works and put it in TurretAim.
  */
 @Configurable
-// Hidden for competition (2026-11-07). Delete @Disabled to show it again, then redeploy.
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
 @Disabled
 @TeleOp(name = "Turret Aim Test", group = "Test")
 public class TurretAimTest extends LinearOpMode {
@@ -168,6 +168,7 @@ public class TurretAimTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        RobotProfile.install();   // this robot's camera pitch, before any bearing math
         turret.init(hardwareMap);
         aim = new TurretAim(cell.tagIds);
 

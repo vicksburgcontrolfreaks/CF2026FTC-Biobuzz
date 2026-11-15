@@ -94,8 +94,12 @@ public final class FieldAprilTags {
     /**
      * Like getLibrary(), but each tag also knows where it is on the field, so
      * the SDK can fill in detection.robotPose. Positions are for the hives tipped
-     * HiveTags.REFERENCE -- TagLocalizer corrects for the real tilt. Uses the
-     * MADE-UP numbers in HiveTags until those are measured.
+     * HiveTags.REFERENCE -- TagLocalizer corrects for the real tilt.
+     *
+     * The HiveTags numbers behind these positions were measured 2026-11-11 and
+     * PIVOT_Y confirmed 2026-11-13; this comment used to call them made up and
+     * was years-of-debugging stale. What is still unmeasured is on the robot --
+     * the camera's intrinsics and mounting. See TagLocalizer's banner.
      */
     public static AprilTagLibrary getLocalizationLibrary() {
         AprilTagLibrary.Builder builder = new AprilTagLibrary.Builder();
