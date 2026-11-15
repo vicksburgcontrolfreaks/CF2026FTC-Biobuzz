@@ -284,6 +284,15 @@ public final class Waypoints {
     // doesn't need it.
     public static final Pose FAR_TURN_BACK = new Pose(24, FieldConstants.FIELD_SIZE - 30, FACING_BLUE);
 
+    /**
+     * The same spot moved `inches` toward the RED alliance wall (x = 0), same
+     * heading. Red coordinates, like everything here -- mirror after. Used for
+     * 6494's park shift (RouteAuto.PARK_WALL_SHIFT_6494).
+     */
+    public static Pose towardRedWall(Pose p, double inches) {
+        return new Pose(p.getX() - inches, p.getY(), p.getHeading());
+    }
+
     /** The same spot, facing the RED wall (collector toward red). */
     public static Pose facingRed(Pose p) {
         return new Pose(p.getX(), p.getY(), FACING_RED_WALL);

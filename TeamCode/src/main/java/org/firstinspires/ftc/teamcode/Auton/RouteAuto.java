@@ -289,10 +289,34 @@ public abstract class RouteAuto extends OpMode {
         yieldUntilSeconds = seconds;
     }
 
+    /**
+     * 6494 PARKS TOO FAR FROM OUR WALL (Shane, 2026-11-15, comp day): on both
+     * park spots it ends up further toward the hive than the 4 in. wall gap the
+     * spots are drawn for -- most likely its strafe-pod drift (docs/TODO.md item
+     * 0), not the spots themselves. So on 6494 ONLY, the FINAL park point is
+     * moved this many inches toward our alliance wall (commanded gap 4 -> 1 in.).
+     * 5618 parks where it always did. The earlier park legs are untouched -- they
+     * are what keep us off the hive and the red-wall flower.
+     */
+    public static double PARK_WALL_SHIFT_6494 = 3.0;
+    /** This robot's shift, set once in init(). 0 on 5618 or an unknown robot. */
+    private double parkWallShift = 0;
+
+    private static double parkWallShiftForThisRobot() {
+        try {
+            return org.firstinspires.ftc.teamcode.WhichRobot.get()
+                    == org.firstinspires.ftc.teamcode.WhichRobot.Robot.R6494 ? PARK_WALL_SHIFT_6494 : 0;
+        } catch (IllegalStateException e) {
+            return 0;   // can't tell which robot: park where the spots say
+        }
+    }
+
     private void buildPaths() {
         startPose = alliance.map(route.start);
         Pose from = startPose;
-        for (Route.Step s : route.steps) {
+        int last = route.steps.size() - 1;
+        for (int i = 0; i <= last; i++) {
+            Route.Step s = route.steps.get(i);
             // LAUNCH_HERE goes nowhere: NULL path, target = where we already are.
             // The lists stay index-parallel with route.steps, which everything
             // here indexes by, and a null path counts as arrived (see
@@ -303,7 +327,14 @@ public abstract class RouteAuto extends OpMode {
                 paths.add(null);
                 continue;
             }
-            Pose to = alliance.map(s.target);
+            // The park point is the LAST step of a route that marked a park.
+            // Shift it in RED coordinates, before the alliance mirror, so blue
+            // moves toward the blue wall the same way.
+            Pose red = s.target;
+            if (route.parkFrom >= 0 && i == last && parkWallShift != 0) {
+                red = Waypoints.towardRedWall(red, parkWallShift);
+            }
+            Pose to = alliance.map(red);
             Path path = new Path(new BezierLine(from, to));
             path.setLinearHeadingInterpolation(from.getHeading(), to.getHeading());
             targets.add(to);
@@ -773,6 +804,7 @@ public abstract class RouteAuto extends OpMode {
 
         follower = Constants.createFollower(hardwareMap);
         follower.setMaxPower(MAX_POWER);
+        parkWallShift = parkWallShiftForThisRobot();   // before any useRoute() builds paths
         if (route != null) {
             useRoute(alliance, route, waitSeconds);
         }
@@ -883,6 +915,9 @@ public abstract class RouteAuto extends OpMode {
     protected void addRouteTelemetry() {
         telemetry.addLine(String.format("%s start: (%.1f, %.1f)   wait %.0f sec",
                 alliance, startPose.getX(), startPose.getY(), waitSeconds));
+        if (route != null && route.parkFrom >= 0 && parkWallShift != 0) {
+            telemetry.addLine(String.format("Park: %.0f in. closer to our wall (this robot only)", parkWallShift));
+        }
         if (warnings.isEmpty()) {
             telemetry.addLine("Path check: OK");
         } else {
