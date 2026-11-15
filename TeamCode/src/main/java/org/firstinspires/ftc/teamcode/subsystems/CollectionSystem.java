@@ -136,7 +136,9 @@ public class CollectionSystem {
                     // DIRECT_FEED neither consults nor updates the guard -- but it will
                     // mis-trip on nectar until re-measured, and reverting DIRECT_FEED
                     // puts it back in the path.
-                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = 2.72;
+                    // TRIP OFF ON 6494 TOO (Shane, 2026-11-14, competition eve): both
+                    // robots pollen-only. Was 2.72, the uncalibrated 25 RPM value.
+                    org.firstinspires.ftc.teamcode.shooting.NectarGuard.TRIP_AMPS = Double.POSITIVE_INFINITY;
                     break;
             }
         } catch (IllegalStateException e) {

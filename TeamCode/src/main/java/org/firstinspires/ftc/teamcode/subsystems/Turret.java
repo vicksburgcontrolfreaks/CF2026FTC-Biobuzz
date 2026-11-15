@@ -411,9 +411,11 @@ public class Turret {
                 // behind it and homing will run toward the +152.4 hard stop and fail.
                 HOMING_DIRECTION = 1.0;
                 HOMING_SEARCH_MAX_DEG = 110.0;
-                // Original speed, unchanged.
-                kP = 0.010;
-                MAX_POWER = 0.55;
+                // SAME AS 6494 (Shane, 2026-11-14, competition eve): kP 0.020 /
+                // MAX_POWER 0.80. Was 0.010 / 0.55. 5618 HAS hard stops at +/-152.4
+                // and limits at +/-149, so watch it does not coast into a stop.
+                kP = 0.020;
+                MAX_POWER = 0.80;
                 break;
             case R6494:
             default:
