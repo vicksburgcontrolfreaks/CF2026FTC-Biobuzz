@@ -26,6 +26,7 @@ public class SelectAuto extends RouteAuto {
     enum AutoRoute {
         GARDEN_SHOOT_PARK("Garden Shoot + Park", Routes.Park.GARDEN_SIDE, false),   // 2026 robot
         GARDEN_SHOOT_2X("Garden Shoot 2X", Routes.Park.GARDEN_SIDE, false),   // 2026 robot, 2026-11-14
+        GARDEN_SHOOT_2X_TIP_CHECK("Garden Shoot 2X Tip Check", Routes.Park.GARDEN_SIDE, false),   // 2026 robot, 2026-11-15
         GARDEN_LEAVE_PARK_2026("Garden Leave + Park", Routes.Park.GARDEN_SIDE, true),   // 2026 robot, facing red 2026-11-14
         FAR_LEAVE_PARK_2026("Far Wall Leave + Park", Routes.Park.FAR_SIDE, true),   // 2026 robot, facing red 2026-11-14
         FAR_TIP_SHOOT_PARK("Far Wall Tip Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
@@ -52,6 +53,7 @@ public class SelectAuto extends RouteAuto {
             switch (this) {
                 case GARDEN_SHOOT_PARK:  return Routes.gardenShootPark(park);
                 case GARDEN_SHOOT_2X:    return Routes.gardenShoot2X(park);
+                case GARDEN_SHOOT_2X_TIP_CHECK: return Routes.gardenShoot2XTipCheck(park);
                 case GARDEN_LEAVE_PARK_2026: return Routes.gardenLeavePark2026(park);
                 case FAR_LEAVE_PARK_2026:    return Routes.farLeavePark2026(park);
                 case FAR_TIP_SHOOT_PARK:     return Routes.farTipShootPark(park);
@@ -88,7 +90,10 @@ public class SelectAuto extends RouteAuto {
             // = default. Garden Shoot + Park, Far Wall Tip Shoot + Park and Far Wall
             // Quick Shoot + Park still exist in Routes but are off the menu: pre-flip
             // or never robot-run, and replaced by these.
-            menu.add("Route", AutoRoute.GARDEN_SHOOT_2X, AutoRoute.FAR_WAIT_SHOOT,
+            // + Garden Shoot 2X Tip Check, second (2026-11-15): Garden Shoot 2X that
+            // skips the second volley if the hive has tipped.
+            menu.add("Route", AutoRoute.GARDEN_SHOOT_2X, AutoRoute.GARDEN_SHOOT_2X_TIP_CHECK,
+                    AutoRoute.FAR_WAIT_SHOOT,
                     AutoRoute.GARDEN_LEAVE_PARK_2026, AutoRoute.FAR_LEAVE_PARK_2026);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8)

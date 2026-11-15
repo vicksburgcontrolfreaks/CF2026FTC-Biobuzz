@@ -42,6 +42,13 @@ public final class Route {
         TIP_LAUNCH_HERE, // TIP_LAUNCH without going anywhere (null path, like
                          // LAUNCH_HERE): wait for the tip where the robot stands.
                          // Far Wall Wait and Shoot, Shane 2026-11-14.
+        LAUNCH_HERE_IF_UP, // LAUNCH_HERE, but LOOK first: fire only if the camera
+                           // still sees our cell's tags (the hive has NOT tipped).
+                           // No tags within RouteAuto.HIVE_CHECK_SEC = tipped: skip
+                           // the shot and go on to the next step (the park). If the
+                           // camera never saw that cell this match it can't judge,
+                           // so it fires anyway. Garden Shoot 2X Tip Check, Shane
+                           // 2026-11-15.
         YIELD,    // on arrival, hold still until the "yield until" time, to
                   // stay out of our alliance partner's way
     }
@@ -210,6 +217,17 @@ public final class Route {
      */
     public Route launchHere(double fireSec) {
         return then(new Step(null, Action.LAUNCH_HERE, fireSec, true, Double.NaN, Double.NaN, Double.NaN));
+    }
+
+    /**
+     * Like launchHere(), but only if the hive has NOT tipped: on arrival, look
+     * for our cell's tags for up to RouteAuto.HIVE_CHECK_SEC. Seen = fire
+     * fireSec as normal. Not seen = the cell has swung down out of view, so skip
+     * the shot and go on to the next step. A camera that never saw the cell this
+     * match proves nothing, so then it fires anyway. See Action.LAUNCH_HERE_IF_UP.
+     */
+    public Route launchHereIfUp(double fireSec) {
+        return then(new Step(null, Action.LAUNCH_HERE_IF_UP, fireSec, true, Double.NaN, Double.NaN, Double.NaN));
     }
 
     public Route launchFrom(Pose target) {

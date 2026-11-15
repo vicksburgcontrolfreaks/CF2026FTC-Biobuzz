@@ -144,6 +144,17 @@ public abstract class RouteAuto extends OpMode {
      */
     public static double TIP_AIM_SEC = 2.0;
 
+    // ---- HIVE CHECK (Garden Shoot 2X Tip Check, Shane 2026-11-15) ------------
+    /**
+     * LAUNCH_HERE_IF_UP: how long to LOOK for our cell's tags on arrival before
+     * deciding the hive has tipped and skipping the shot. Seeing them
+     * (TIP_CONFIRM_FRAMES new frames) ends the look early and fires at once, so a
+     * normal run only spends the ~0.2 s those frames take. Generous on purpose:
+     * the robot has just braked and the turret may still be settling, and a false
+     * "tipped" costs the whole second volley.
+     */
+    public static double HIVE_CHECK_SEC = 1.5;
+
     // 1.0 = full speed (Shane, 2026-11-06). Was 0.5 while 6494's odometry drifts
     // ~1" per round trip (docs/TODO.md item 0) -- at full speed that drift and
     // braking overshoot both grow, so retest every route on both robots.
@@ -186,6 +197,17 @@ public abstract class RouteAuto extends OpMode {
     private boolean tipSeen = false;         // TIP_LAUNCH: our cell's tags confirmed
     private int tipFrames = 0;               // camera frames with our cell's tags in them
     private long lastTipFrame = 0;           // so one frame seen over several loops counts once
+    // LAUNCH_HERE_IF_UP: still looking for our cell's tags before deciding.
+    private boolean hiveCheckPending = false;
+    /** What the hive check decided, for the Driver Station. "" = hasn't run. */
+    private String hiveCheckNote = "";
+    /**
+     * Every hive cell the camera has seen a tag of, since INIT. The hive check's
+     * safeguard: "no tags now" only means "tipped" if the camera has PROVED it
+     * can see that cell earlier. Never cleared -- a sighting in INIT counts.
+     */
+    private final java.util.EnumSet<FieldAprilTags.Cell> cellsSeen =
+            java.util.EnumSet.noneOf(FieldAprilTags.Cell.class);
 
     // End of route: turret to the magnet, then off until TeleOp (see stowTurret).
     public static double STOW_MAX_SEC = 3.0;
@@ -387,12 +409,53 @@ public abstract class RouteAuto extends OpMode {
                     tipSeen = !isTip(action);   // plain LAUNCH doesn't wait
                     tipFrames = 0;
                     lastTipFrame = 0;
+                    hiveCheckPending = action == Route.Action.LAUNCH_HERE_IF_UP;
+                    // ONLY FRAMES FROM NOW ON COUNT: start the frame counter at the
+                    // newest frame already in hand, so a sighting from the drive back
+                    // (before the hive maybe tipped) can't vote. Compares camera
+                    // timestamps with each other only, never with our own clock.
+                    if (hiveCheckPending) lastTipFrame = newestCellFrame();
                 }
                 // cutForPark steps with a park after them: at PARK_LEAVE_BY_SEC,
                 // stop whatever we're doing (waiting or firing) and go park.
                 boolean mustLeave = route.steps.get(step).cutForPark && step + 1 < paths.size()
                         && runTimer.getElapsedTimeSeconds() >= PARK_LEAVE_BY_SEC;
-                if (!tipSeen) {
+
+                // HIVE CHECK (LAUNCH_HERE_IF_UP, Shane 2026-11-15): is our cell
+                // still up? Decide, then either fall into the normal launch below
+                // (next loop) or skip the shot.
+                boolean skipShot = false;
+                if (hiveCheckPending) {
+                    String cell = aimCell.displayName;
+                    double looked = launchTimer.getElapsedTimeSeconds();
+                    if (!cellsSeen.contains(aimCell)) {
+                        // SAFEGUARD: never saw this cell all match -- a dead or
+                        // blocked camera looks exactly like a tip. Can't judge: shoot.
+                        hiveCheckPending = false;
+                        hiveCheckNote = "camera never saw " + cell + " -- shooting anyway";
+                        launchTimer.resetTimer();
+                        return;
+                    } else if (tipTagsSeen()) {
+                        hiveCheckPending = false;
+                        hiveCheckNote = String.format("%s tags seen in %.1f s -- not tipped, shooting",
+                                cell, looked);
+                        launchTimer.resetTimer();
+                        return;
+                    } else if (looked >= HIVE_CHECK_SEC) {
+                        hiveCheckPending = false;
+                        hiveCheckNote = String.format("no %s tags in %.1f s -- TIPPED, skipped shot",
+                                cell, HIVE_CHECK_SEC);
+                        skipShot = true;
+                    } else {
+                        launchNote = String.format("checking hive: %s tags %d / %d frames (%.1f / %.1f s)",
+                                cell, tipFrames, TIP_CONFIRM_FRAMES, looked, HIVE_CHECK_SEC);
+                        return;
+                    }
+                }
+
+                if (skipShot) {
+                    launchNote = hiveCheckNote;   // fall through: on to the next step
+                } else if (!tipSeen) {
                     if (mustLeave) {
                         launchNote = "no tip seen -- parking";
                     } else if (tipTagsSeen()) {
@@ -466,6 +529,7 @@ public abstract class RouteAuto extends OpMode {
         dwelling = false;
         launching = false;
         launchFiring = false;
+        hiveCheckPending = false;
         if (to >= paths.size()) {   // nothing left to jump to: that was the route
             flywheel(false);
             finish();
@@ -587,7 +651,7 @@ public abstract class RouteAuto extends OpMode {
 
     private static boolean isLaunch(Route.Action a) {
         return a == Route.Action.LAUNCH || isTip(a)
-                || a == Route.Action.LAUNCH_HERE;
+                || a == Route.Action.LAUNCH_HERE || a == Route.Action.LAUNCH_HERE_IF_UP;
     }
 
     /** Waits for the partner to tip the hive before it fires. */
@@ -597,7 +661,41 @@ public abstract class RouteAuto extends OpMode {
 
     private boolean routeLaunches() {
         return route.has(Route.Action.LAUNCH) || route.has(Route.Action.TIP_LAUNCH)
-                || route.has(Route.Action.LAUNCH_HERE) || route.has(Route.Action.TIP_LAUNCH_HERE);
+                || route.has(Route.Action.LAUNCH_HERE) || route.has(Route.Action.TIP_LAUNCH_HERE)
+                || route.has(Route.Action.LAUNCH_HERE_IF_UP);
+    }
+
+    /** Camera timestamp of the newest frame in hand with one of aimCell's tags; 0 = none. */
+    private long newestCellFrame() {
+        long newest = 0;
+        for (org.firstinspires.ftc.vision.apriltag.AprilTagDetection d : camera.getDetections()) {
+            if (d.metadata != null && aimCell.hasTag(d.id) && d.frameAcquisitionNanoTime > newest) {
+                newest = d.frameAcquisitionNanoTime;
+            }
+        }
+        return newest;
+    }
+
+    /**
+     * Remember every hive cell in view right now (see cellsSeen). Called every
+     * loop in INIT and the match, right after camera.update(). Returns whether
+     * `cell` is in view in THIS frame, for the INIT readout.
+     */
+    private boolean noteCellsSeen(FieldAprilTags.Cell cell) {
+        boolean inView = false;
+        for (org.firstinspires.ftc.vision.apriltag.AprilTagDetection d : camera.getDetections()) {
+            if (d.metadata == null) continue;
+            FieldAprilTags.Cell c = FieldAprilTags.Cell.forTag(d.id);
+            if (c == null) continue;
+            cellsSeen.add(c);
+            if (c == cell) inView = true;
+        }
+        return inView;
+    }
+
+    /** The cell the hive check will look at: aimCell once aiming, else our start-side cell. */
+    private FieldAprilTags.Cell checkCell() {
+        return aimCell != null ? aimCell : HiveGeometry.sideCell(alliance, startPose.getY(), null);
     }
 
     /**
@@ -765,6 +863,7 @@ public abstract class RouteAuto extends OpMode {
     @Override
     public void init_loop() {
         camera.update();
+        checkCellInView = noteCellsSeen(checkCell());
         // false = no hold-loop motion in INIT. Homing is exempt and DOES move here
         // (G304.H is satisfied because it cuts power when it finishes).
         deflector.update(false);
@@ -839,8 +938,20 @@ public abstract class RouteAuto extends OpMode {
                 telemetry.addLine("    by odometry, so it will only search for tags until the tip.");
             }
             telemetry.addData("Camera", camera.getNote());
+            // HIVE CHECK, LIVE (Garden Shoot 2X Tip Check). Tip the hive by hand
+            // in INIT and watch this flip: that is the test that the camera really
+            // loses the tags when the cell goes down, before risking a match on it.
+            if (route.has(Route.Action.LAUNCH_HERE_IF_UP)) {
+                FieldAprilTags.Cell cell = checkCell();
+                telemetry.addData("Hive check", "%s tags %s now  |  seen since INIT: %s",
+                        cell.displayName, checkCellInView ? "SEEN" : "NOT seen",
+                        cellsSeen.contains(cell) ? "YES" : "NO -- check would shoot anyway");
+            }
         }
     }
+
+    /** INIT readout: is the hive check's cell in view this frame? Set in init_loop(). */
+    private boolean checkCellInView = false;
 
     @Override
     public void start() {
@@ -871,6 +982,7 @@ public abstract class RouteAuto extends OpMode {
     public void loop() {
         follower.update();       // must run every loop or the robot won't move/hold
         camera.update();
+        noteCellsSeen(aimCell);  // the hive check's "camera has seen it" safeguard
         autonomousPathUpdate();  // BEFORE launcher.update() -- see launchDone()
 
         // Turret: aim the whole way at OUR cell on the side of the field we're
@@ -922,6 +1034,7 @@ public abstract class RouteAuto extends OpMode {
         if (!abandonNote.isEmpty()) telemetry.addData("GAVE UP", abandonNote);
         telemetry.addData("Collector", collectorOn ? "ON" : "off");
         if (launching) telemetry.addData("LAUNCH", launchNote);
+        if (!hiveCheckNote.isEmpty()) telemetry.addData("Hive check", hiveCheckNote);   // stays up after
         telemetry.addData("Flywheel", "%s  L %.0f / R %.0f", launcher.getShooter().getNote(),
                 launcher.getShooter().getLeftRpm(), launcher.getShooter().getRightRpm());
         telemetry.addData("Turret", "%s %+.0f deg | %s -> %s", turret.getState(), turret.getAngle(),

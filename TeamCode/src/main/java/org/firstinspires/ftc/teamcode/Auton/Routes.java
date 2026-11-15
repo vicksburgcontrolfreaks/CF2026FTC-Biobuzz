@@ -196,13 +196,38 @@ public final class Routes {
     public static final double SHOOT_2X_RETURN_TIMEOUT_SEC = 5;
 
     public static Route gardenShoot2X(Park park) {
+        return gardenShoot2X(park, false);
+    }
+
+    // GARDEN SHOOT 2X TIP CHECK (Shane, 2026-11-15). Garden Shoot 2X step for
+    // step, except the second volley LOOKS before it fires: back at the start,
+    // if the camera still sees our audience cell's tags the hive has not tipped,
+    // so fire the 4 s volley exactly as Garden Shoot 2X does. No tags within
+    // RouteAuto.HIVE_CHECK_SEC = our partner tipped the hive and the cell has
+    // swung down out of view, so skip the volley (keeping the balls for TeleOp)
+    // and go straight to the same park.
+    //
+    // SAFEGUARD: a camera that never saw the cell this match (unplugged, blocked,
+    // pointed wrong) would look exactly like a tip, so in that case it fires
+    // anyway -- the route falls back to plain Garden Shoot 2X instead of quietly
+    // never taking the second shot. See RouteAuto's hive check.
+    //
+    // Same code as Garden Shoot 2X below (one flag), so the two cannot drift.
+    // NOT robot-run.
+    public static Route gardenShoot2XTipCheck(Park park) {
+        return gardenShoot2X(park, true);
+    }
+
+    private static Route gardenShoot2X(Park park, boolean checkHive) {
         Route route = Route.startAt(GARDEN_EDGE_START_FACING_RED)
                 .launchHere(SHOOT_2X_FIRST_FIRE_SEC)            // shoot where we stand
                 .collectTo(GARDEN_CORNER, SHOOT_2X_COLLECT_SPEED, SHOOT_2X_WALL_DWELL_SEC)
                 .timeout(SHOOT_2X_SWEEP_TIMEOUT_SEC)            // blocked? leave it, keep going
                 .driveTo(GARDEN_EDGE_START_FACING_RED)          // back, same orientation
-                .timeout(SHOOT_2X_RETURN_TIMEOUT_SEC)
-                .launchHere(SHOOT_2X_FIRE_SEC);                 // second shooting sequence
+                .timeout(SHOOT_2X_RETURN_TIMEOUT_SEC);
+        route = checkHive
+                ? route.launchHereIfUp(SHOOT_2X_FIRE_SEC)       // second volley, only if not tipped
+                : route.launchHere(SHOOT_2X_FIRE_SEC);          // second shooting sequence
         if (park == Park.NONE) {
             return route;
         }
