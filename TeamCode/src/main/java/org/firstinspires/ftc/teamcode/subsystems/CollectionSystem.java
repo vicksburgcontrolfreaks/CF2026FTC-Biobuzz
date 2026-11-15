@@ -57,7 +57,7 @@ public class CollectionSystem {
     // re-measure NectarGuard.TRIP_AMPS. 6494's value: the catch in
     // loadRobotFeedNumbers() falls back to these, and says so, so this has to
     // track the R6494 case.
-    public static double FEED_RPM = 75.0;   // forward = up into the flywheels
+    public static double FEED_RPM = 100.0;   // forward = up into the flywheels (tracks R6494)
     public static double UNJAM_RPM = 50.0;  // run in reverse by unjam()
 
     private static final double TICKS_PER_REV = RobotHardware.TICKS_PER_MOTOR_REV;
@@ -86,18 +86,17 @@ public class CollectionSystem {
      *     5618 -- run Indexer Load Test there to confirm.
      *   - ShooterLogic.NO_BALL_SEC 3.0 = same indexer travel as 6 s at 25.
      *
-     * 6494 at 75 RPM (Jade, 2026-11-09, Pollen Shot Tune, shooting real pollen;
-     * re-confirmed by Shane 2026-11-14 after trying 100 and coming back):
-     *   - ShooterLogic.NO_BALL_SEC 2.0 = same indexer travel as 6 s at 25.
+     * 6494 at 100 RPM (Shane, 2026-11-14 evening, all op modes). History: 75
+     * from Jade, 2026-11-09, Pollen Shot Tune; Shane tried 100 earlier on
+     * 11-14, went back to 75, then chose 100 again that evening.
+     *   - ShooterLogic.NO_BALL_SEC 1.5 = same indexer travel as 6 s at 25.
      *   - NectarGuard.TRIP_AMPS is STILL 2.72, the 25 RPM calibration, so nectar
      *     detection is uncalibrated until Indexer Load Test is re-run at 75. Low
      *     risk while 6494 is pollen-only AND Launcher.DIRECT_FEED is true (the
      *     direct path never consults or updates the guard); wrong the moment
      *     either changes.
-     *   - 100 WAS TRIED AND DROPPED, 2026-11-14 (Shane). So this robot has now
-     *     rejected feeds on both sides of 75: 25 was too slow to be worth it and
-     *     100 did not stay. Treat 75 as settled and spend the time elsewhere
-     *     unless something mechanical changes at the indexer.
+     *   - The nectar guard above was never calibrated at 100 either. Same low
+     *     risk, same reasons.
      */
     private static void loadRobotFeedNumbers() {
         try {
@@ -124,9 +123,12 @@ public class CollectionSystem {
                     // The 11-06 run is why faster is suspect here: at 75 "the second
                     // ball followed the first with no visible pause", and 100 is faster
                     // again. Changing this is a measurement, not a preference.
-                    FEED_RPM = 75.0;
+                    //
+                    // 100, every op mode (Shane, 2026-11-14 evening). Supersedes the
+                    // "75 is settled" note above -- a deliberate mentor call.
+                    FEED_RPM = 100.0;
                     // Scaled with the feed rate: same indexer travel as 6.0 s at 25 RPM.
-                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 2.0;
+                    org.firstinspires.ftc.teamcode.shooting.ShooterLogic.NO_BALL_SEC = 1.5;
                     // STILL THE 25 RPM CALIBRATION, so the nectar guard is uncalibrated:
                     // the current signature of a ball changes with feed speed. Re-measure
                     // with Indexer Load Test before trusting nectar detection. Low risk
