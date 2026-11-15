@@ -4,7 +4,10 @@ import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.Path;
 
+import org.firstinspires.ftc.teamcode.RobotConstants;
 import org.firstinspires.ftc.teamcode.field.Alliance;
+import org.firstinspires.ftc.teamcode.field.FieldConstants;
+import org.firstinspires.ftc.teamcode.field.Zone;
 import org.firstinspires.ftc.teamcode.field.PathSafety;
 import org.junit.Test;
 
@@ -82,7 +85,90 @@ public class GardenShoot2XTest {
         assertEquals(Route.Action.COLLECT, r.steps.get(1).action);
         assertEquals(Route.Action.DRIVE, r.steps.get(2).action);
         assertEquals(Route.Action.LAUNCH_HERE, r.steps.get(3).action);
-        assertEquals(5, r.steps.size());   // + the park
+        assertEquals(8, r.steps.size());   // + wall-back + turn-back + past-flower + park
+    }
+
+    /**
+     * REAL CLEARANCE, not just "does not overlap". The first version of this
+     * route passed PathSafety and still hit the hive on the robot: the commanded
+     * line cleared it by about 7 in., which is less than 6494's measured pose
+     * drift (docs/TODO.md item 0). So the laptop check has to enforce a margin
+     * that survives the drift, or it is checking the wrong thing.
+     *
+     * The hive is the one we hit, so it gets the big margin. The flowers are
+     * small, wall-mounted and only ever passed alongside, so they get the 3 in.
+     * the repo already uses (PAST_FLOWER_CLEARANCE).
+     */
+    @Test public void everyLegKeepsRealClearanceFromTheHiveAndFlowers() {
+        for (Alliance a : Alliance.values()) {
+            for (Routes.Park p : Routes.Park.values()) {
+                Route r = Routes.gardenShoot2X(p);
+                assertClearance(r, a, p, FieldConstants.HIVE, 12.0);
+                for (Zone flower : FieldConstants.FLOWERS) {
+                    assertClearance(r, a, p, flower, 3.0);
+                }
+            }
+        }
+    }
+
+    private static void assertClearance(Route route, Alliance alliance, Routes.Park park,
+                                        Zone obstacle, double minGap) {
+        double worst = Double.POSITIVE_INFINITY;
+        Pose worstAt = null;
+        Pose from = alliance.map(route.start);
+        for (Route.Step s : route.steps) {
+            if (s.action == Route.Action.LAUNCH_HERE) continue;   // no path, no motion
+            Pose to = alliance.map(s.target);
+            Path path = new Path(new BezierLine(from, to));
+            path.setLinearHeadingInterpolation(from.getHeading(), to.getHeading());
+            int steps = Math.max(10, (int) Math.ceil(path.length()));
+            for (int i = 0; i <= steps; i++) {
+                double t = (double) i / steps;
+                Pose at = path.getPoint(t);
+                double gap = gap(footprint(at.getX(), at.getY(), path.getHeadingGoal(t)), obstacle);
+                if (gap < worst) {
+                    worst = gap;
+                    worstAt = at;
+                }
+            }
+            from = to;
+        }
+        assertTrue(String.format("%s / %s: only %.1f in. from %s near (%.0f, %.0f) -- want %.0f",
+                        alliance, park, worst, obstacle.name,
+                        worstAt == null ? -1 : worstAt.getX(), worstAt == null ? -1 : worstAt.getY(),
+                        minGap),
+                worst >= minGap);
+    }
+
+    /**
+     * Inches between two boxes: the largest separation on any one axis, which is
+     * what "they do not overlap" means. Zero or less = touching or overlapping.
+     */
+    private static double gap(Zone robot, Zone obstacle) {
+        return Math.max(
+                Math.max(obstacle.minX - robot.maxX, robot.minX - obstacle.maxX),
+                Math.max(obstacle.minY - robot.maxY, robot.minY - obstacle.maxY));
+    }
+
+    /** The wall-aligned box the robot covers, same as PathSafety's. */
+    private static Zone footprint(double x, double y, double heading) {
+        double cos = Math.abs(Math.cos(heading));
+        double sin = Math.abs(Math.sin(heading));
+        double halfX = (RobotConstants.ROBOT_LENGTH * cos + RobotConstants.ROBOT_WIDTH * sin) / 2;
+        double halfY = (RobotConstants.ROBOT_LENGTH * sin + RobotConstants.ROBOT_WIDTH * cos) / 2;
+        return new Zone("Robot", x - halfX, x + halfX, y - halfY, y + halfY);
+    }
+
+    /** The turn-back is at least a foot toward red of the shot spot (Shane's call). */
+    @Test public void turnBackMovesAtLeastAFootTowardRed() {
+        Route r = Routes.gardenShoot2X(Routes.Park.GARDEN_SIDE);
+        Pose turnBack = r.steps.get(5).target;
+        assertTrue("turn-back should be >= 12 in. toward red of the shot spot",
+                r.start.getX() - turnBack.getX() >= 12.0);
+        // And it must not have traded the hive for the red-wall flower.
+        assertTrue("turn-back should clear the red-wall flower",
+                turnBack.getX() - RobotConstants.ROBOT_LENGTH / 2
+                        - FieldConstants.FLOWER_RED_WALL.maxX >= 3.0);
     }
 
     @Test public void bothLaunchesFireFourSecondsAndHaveNoTarget() {
@@ -149,6 +235,6 @@ public class GardenShoot2XTest {
         assertTrue("drive back should use the route speed",
                 Double.isNaN(r.steps.get(2).speed));
         assertTrue("park should use the route speed",
-                Double.isNaN(r.steps.get(4).speed));
+                Double.isNaN(r.steps.get(7).speed));
     }
 }

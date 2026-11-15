@@ -171,7 +171,18 @@ public final class Routes {
         if (park == Park.NONE) {
             return route;
         }
-        return route.driveTo(facingBlue(park.spot));            // turns 180: collector toward blue
+        return route
+                // TOWARD RED FIRST, THEN TURN, then north to the park. Going
+                // straight to the park RAN INTO THE HIVE on the robot (Shane,
+                // 2026-11-14) even though the commanded line cleared it by ~7 in.
+                // and PathSafety was happy -- that margin is smaller than 6494's
+                // pose drift. Turning on the way out is what costs the clearance,
+                // so this leg does not turn at all and the next one does, tucked
+                // in at x = 21. See SHOOT_2X_WALL_BACK.
+                .driveTo(SHOOT_2X_WALL_BACK)                    // flat out, still facing red
+                .driveTo(SHOOT_2X_TURN_BACK)                    // north, turning to face blue
+                .driveTo(SHOOT_2X_PAST_FLOWER)                  // hold x until past the flower
+                .driveTo(facingBlue(park.spot));                // collector toward blue
     }
 
     // 2026 ROBOT BACKUP (2026-11-07): Garden Shoot + Park's start, no launch,

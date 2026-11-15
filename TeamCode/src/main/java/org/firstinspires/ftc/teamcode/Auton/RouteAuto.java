@@ -99,6 +99,13 @@ public abstract class RouteAuto extends OpMode {
      */
     public static boolean AUTO_HOME_IN_INIT = true;
 
+    /**
+     * Aim the turret at the hive during INIT, once the route is locked in and the
+     * turret has homed. See aimDuringInit() for what it does and what it means
+     * for G304. false = the old behaviour, turret parked at home until Start.
+     */
+    public static boolean AIM_IN_INIT = true;
+
     // The shot arc lives in Deflector.DEFAULT_SHOT_DEG now -- one number shared by
     // auto, TeleOp and the tuner, so the three cannot drift apart. Was AUTO_ARC_DEG
     // here at 70 (67.5 came up short, Shane 2026-11-06); 67 is the current value,
@@ -172,6 +179,8 @@ public abstract class RouteAuto extends OpMode {
     // Which step we're on. -1 = waiting at the start, steps.size() = done.
     private int step = -1;
     private boolean started = false;      // Start pressed (stop() during INIT must not hand off a pose)
+    /** The route is locked in (A). Set by startHomingIfNeeded(); see aimDuringInit(). */
+    private boolean menuLocked = false;
 
     private final List<String> warnings = new ArrayList<>();
 
@@ -535,6 +544,10 @@ public abstract class RouteAuto extends OpMode {
      * press A.
      */
     protected void startHomingIfNeeded() {
+        // SelectAuto calls this on the unlocked -> locked transition and nowhere
+        // else, so this is also where we learn the route is locked in. Set before
+        // the AUTO_HOME_IN_INIT early return: aiming in INIT is a separate switch.
+        menuLocked = true;
         if (!AUTO_HOME_IN_INIT) return;
 
         if (deflector.isPresent() && !deflector.isHoming()
@@ -547,12 +560,68 @@ public abstract class RouteAuto extends OpMode {
         }
     }
 
+    /**
+     * Point the turret at OUR cell for wherever the route starts. Safe to call
+     * repeatedly, and it KEEPS an existing director rather than replacing it, so
+     * a trim that converged during INIT is not thrown away at Start.
+     */
+    private void aimAtStartCell() {
+        FieldAprilTags.Cell side = HiveGeometry.sideCell(alliance, startPose.getY(), aimCell);
+        if (aim == null) {
+            aimCell = side;
+            aim = new TurretDirector(aimCell.tagIds);
+        } else if (side != aimCell) {
+            aimCell = side;
+            aim.setTargetTagIds(aimCell.tagIds);
+        }
+    }
+
+    /**
+     * AIM DURING INIT, once the route is locked and the turret has homed
+     * (Shane, 2026-11-14): "as soon as the robot starts we are going to be
+     * shooting at the hive, so it is imperative that we're aimed before the
+     * match start." Every route, not just the shooting ones.
+     *
+     * THE POSE IS startPose, NOT follower.getPose(). setStartingPose() does not
+     * run until start(), so during INIT the follower still believes it is at the
+     * origin -- aiming from that would point the turret at nothing. We do know
+     * where the robot is: the route says so, and the drive team has set it there.
+     *
+     * The camera is already running in INIT, so if it can see the cell's tags the
+     * trim converges before Start too, and aimAtStartCell() hands that trim to
+     * the match instead of starting over.
+     *
+     * TWO THINGS THE DRIVE TEAM SHOULD KNOW:
+     *   - The turret now MOVES on lock (A) and then HOLDS under power until
+     *     Start. Previously INIT motion was homing only, which cut power when it
+     *     finished. The robot is still motionless when it ends, which is what
+     *     G304.H asks, and the deflector already relies on that reading.
+     *   - It makes the 18 in. starting-cube question smaller rather than bigger:
+     *     the aim is a move to a fixed angle, while homing already sweeps up to
+     *     HOMING_SEARCH_MAX. And since the 2026-11-14 remount the camera sits
+     *     1.25 in. from the turret axis instead of 4.5, so there is much less
+     *     hanging off the turret to swing out. Still wants a mentor's read
+     *     against G304 before a competition -- see the note in init().
+     */
+    private void aimDuringInit() {
+        if (!AIM_IN_INIT || !menuLocked) return;
+        if (!Turret.isMeasured() || !turret.isHomed()) return;   // nothing to aim yet
+        aimAtStartCell();
+        double[] opening = HiveGeometry.aimPointFor(aimCell);
+        aim.update(camera.getDetections(), turret, startPose, opening[0], opening[1],
+                true, getRuntime());
+    }
+
     @Override
     public void init_loop() {
         camera.update();
         // false = no hold-loop motion in INIT. Homing is exempt and DOES move here
         // (G304.H is satisfied because it cuts power when it finishes).
         deflector.update(false);
+        // Once homed, point at the hive and HOLD it, so the first shot does not
+        // spend the start of the match turning. Sets a target only; the single
+        // turret.update() below is still the one place the turret moves.
+        aimDuringInit();
         // Turret homing also only progresses inside update(), same as the
         // deflector. Without this, startHoming() in init() would set the state and
         // nothing would ever apply power -- the SelectAuto bug, again.
@@ -584,7 +653,22 @@ public abstract class RouteAuto extends OpMode {
                 telemetry.addData("Turret", "%s%s -- %s", turret.getState(),
                         turret.isHomed() ? " (homed)" : "", turret.getStatusNote());
                 if (!turret.isHomed() && turret.getState() != Turret.State.HOMING) {
-                    telemetry.addLine("    LOCK the menu (A) to home it. Face it roughly forward first.");
+                    telemetry.addLine("    LOCK the menu (A) to home it. Face it roughly REARWARD first.");
+                }
+                // AIMED BEFORE START, or say why not. The whole point of aiming in
+                // INIT is that the drive team can SEE it is pointed at the hive
+                // before the match starts, so this is a readout, not a comment.
+                if (AIM_IN_INIT && turret.isHomed()) {
+                    if (aim == null) {
+                        telemetry.addLine(">>> NOT AIMED YET: lock the menu (A).");
+                    } else {
+                        telemetry.addData("Aim (INIT)", "%s at %s -- %s",
+                                aim.isOnTarget() ? "ON TARGET" : "aiming",
+                                aimCell.displayName, aim.getStatus());
+                        telemetry.addData("Aim by", "%s%s", aim.getSource(),
+                                aim.hasCameraFix()
+                                        ? String.format("  |  trim %+.1f deg", aim.getTrimDeg()) : "");
+                    }
                 }
             }
             if (deflector.isPresent()) {
@@ -614,8 +698,11 @@ public abstract class RouteAuto extends OpMode {
         // Fallback only: INIT normally homes it now. A no-op when already homed,
         // and the retry that covers an INIT too short to finish the sweep.
         if (!turret.isHomed() && Turret.isMeasured()) turret.startHoming();
-        aimCell = HiveGeometry.sideCell(alliance, startPose.getY(), null);
-        aim = new TurretDirector(aimCell.tagIds);
+        // KEEPS WHATEVER INIT BUILT. aimAtStartCell() is a no-op if INIT already
+        // made the director and picked the cell, so a camera trim that converged
+        // during INIT survives into the match instead of being thrown away by a
+        // fresh TurretDirector at Start. See aimDuringInit().
+        aimAtStartCell();
         launcher.start();
         // Still homing at Start? goTo just sets the target; it goes there once homed.
         if (deflector.isZeroed() || deflector.isHoming()) deflector.goTo(Deflector.DEFAULT_SHOT_DEG);

@@ -203,6 +203,69 @@ public final class Waypoints {
     // the flower box, worst point) and ~15 in. off the hive.
     public static final Pose GARDEN_TURN_BACK = new Pose(24, 30, FACING_BLUE);
 
+    // GARDEN SHOOT 2X: get well clear of the hive BEFORE heading up to the park.
+    //
+    // WHY IT EXISTS (Shane, 2026-11-14): the route went straight from the shot
+    // spot (33, 9) to the park and RAN INTO THE HIVE on the robot. The commanded
+    // path cleared it by about 7 in. at the worst point and PathSafety found
+    // nothing -- so this was never a geometry error, it was 7 in. of pose error
+    // (6494's sideways drift, docs/TODO.md item 0) eating a 7 in. margin, after a
+    // round trip at 0.2 speed. The fix is margin, not a different line.
+    //
+    // From here the leg to the park runs NORTH with the robot's far edge at
+    // x = 30, which is 17 in. clear of the hive instead of 7.
+    //
+    // x = 21 is 12 in. toward red of the shot spot -- the foot Shane asked for --
+    // and it is bounded from the other side by the RED-WALL FLOWER (it sticks out
+    // to x = 6), so going further would trade a hive strike for a flower strike.
+    // 6 in. of flower clearance at the waypoint, double PAST_FLOWER_CLEARANCE,
+    // for the same reason: 7 in. of drift is now a measured quantity.
+    //
+    // IT TAKES TWO POINTS, and the second one is the one that does the work.
+    // Turning WHILE moving away from the shot spot is what nearly put a corner in
+    // the hive: a single turn-back point leaves the worst clearance at 10 in.,
+    // mid-turn, while the robot is still out at x ~ 24 (GardenShoot2XTest
+    // measures it). So go toward red FIRST, flat out, still facing red -- no turn,
+    // so no corner swing -- and only turn once the robot is tucked in at x = 21,
+    // on the way north. That is the same move FAR_STRAFE_OFF_WALL makes for the
+    // far-wall flower, for the same reason. Worst hive clearance then: 13.3 in.
+    //
+    // x = 21 for both: 12 in. toward red of the shot spot (the foot Shane asked
+    // for) and 6 in. clear of the red-wall flower, which is what stops it going
+    // further. SHOOT_2X_FLOWER_GAP is double PAST_FLOWER_CLEARANCE because 7 in.
+    // of drift is now a measured quantity rather than a worry.
+    //
+    // y = 30 on the turn point for the same reason GARDEN_TURN_BACK uses it: the
+    // turn has to finish down here, and doing it against the garden wall would
+    // swing a corner into the wall.
+    public static final double SHOOT_2X_FLOWER_GAP = 6;
+    private static final double SHOOT_2X_BACK_X =
+            FieldConstants.FLOWER_RED_WALL.maxX + HALF_LENGTH + SHOOT_2X_FLOWER_GAP;
+
+    /** Straight back along the garden wall toward red, still facing red. No turn. */
+    public static final Pose SHOOT_2X_WALL_BACK =
+            new Pose(SHOOT_2X_BACK_X, ON_GARDEN_WALL_Y, FACING_RED_WALL);
+    /** North off the wall, turning to face blue, well clear of the hive. */
+    public static final Pose SHOOT_2X_TURN_BACK =
+            new Pose(SHOOT_2X_BACK_X, 30, FACING_BLUE);
+    /**
+     * Still at x = 21, now fully past the RED-WALL FLOWER in y, which is where
+     * the slide in to the park (x = 15) is allowed to start.
+     *
+     * Without this the park leg cuts the corner and passes the flower at x ~ 18,
+     * leaving 2.9 in. -- measured, and under the 3 in. this repo already treats
+     * as the minimum. Holding x = 21 until here makes it 6 in. The park itself
+     * sits at x = 15 (edge on x = 6, flush with the flower) but by then it is at
+     * y = 92, nowhere near it.
+     *
+     * Turning here instead of at SHOOT_2X_TURN_BACK does NOT work: mid-turn the
+     * corners swing out ~12.7 in. in BOTH axes, so a turn level with the flower
+     * costs more clearance than the straight line saves (2.7 in., measured).
+     * Turn low, then run straight.
+     */
+    public static final Pose SHOOT_2X_PAST_FLOWER = new Pose(SHOOT_2X_BACK_X,
+            FieldConstants.FLOWER_RED_WALL.maxY + HALF_WIDTH + 1, FACING_BLUE);
+
     // GARDEN_TURN_BACK mirrored to the far side, for Far Wall Tip Shoot + Park
     // going to the GARDEN-side park: straight from FAR_SHOT clips the hive
     // corner near (46, 110) (GardenShootParkTest, 2026-11-08). The far-side park
