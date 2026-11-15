@@ -129,7 +129,7 @@ public final class Routes {
 
     // GARDEN SHOOT 2X (Shane, 2026-11-14). Shoot the preloads where we stand,
     // sweep the garden wall for more, come back to the same spot, shoot again,
-    // then park facing blue.
+    // then park (still facing red -- no turn, as of 2026-11-14 evening).
     //
     // RUN ON 5618 TWICE on 2026-11-14, and it has not finished yet: the first
     // run clipped the hive on the way to the park (fixed with the two-point way
@@ -149,9 +149,18 @@ public final class Routes {
     //      running before it switches off.
     //   4. driveTo the start pose again at full speed, same orientation.
     //   5. launchHere(4) again, NO spin-up (wheels already on) -- launchFrom() here would be a zero-length path.
-    //   6. Park facing BLUE, which turns the robot 180 deg so the collector
-    //      leads for the drivers. See the note on the TeleOp handoff below.
+    //   6. Park STILL FACING RED -- no turn (Shane, 2026-11-14 evening; see the
+    //      park legs below for why).
     //
+    // TELEOP HANDOFF WHILE PARKED FACING RED: nothing to do. Field-centric
+    // driving uses the real pose heading (180), so stick-forward is still away
+    // from the drivers with driverHeadingOffset at 0 -- the collector just
+    // starts out pointing AT the drivers. DO NOT PRESS X at the start of TeleOp:
+    // X means "the robot faces away from me now", and pressing it while the
+    // robot faces the drivers sets a 180 deg offset and reverses the sticks.
+    // Press X only once the robot really does face away.
+    //
+    // (Below: the reasoning from when the park turned to face blue.)
     // THE TELEOP HANDOFF IS NOT A POSE EDIT, deliberately. Red's "away from the
     // drivers" IS heading 0, and the robot's heading is the direction the
     // COLLECTOR points (WallFix.Face.FRONT is collector-first), so parking at
@@ -161,9 +170,9 @@ public final class Routes {
     // that made odometry aiming miss the blue hive -- see
     // DriveTeleOp.driverHeadingOffset.
     //
-    // "Don't park" stops after the second shot, still facing RED. The drivers
-    // then press X ("the robot faces away from me now") once in TeleOp, which is
-    // exactly what that button is for. It is not parked and scores no park points.
+    // "Don't park" stops after the second shot, still facing RED, and
+    // needs nothing in TeleOp either -- same as the park above: do NOT press X
+    // until the robot faces away. It is not parked and scores no park points.
     public static final double SHOOT_2X_FIRE_SEC = 4;
     public static final double SHOOT_2X_COLLECT_SPEED = 0.4;   // 0.2 too slow, 0.3 -> 0.4 to be sure it gets there (Shane, 2026-11-14)
     public static final double SHOOT_2X_WALL_DWELL_SEC = 2;
@@ -211,10 +220,17 @@ public final class Routes {
                 // pose drift. Turning on the way out is what costs the clearance,
                 // so this leg does not turn at all and the next one does, tucked
                 // in at x = 21. See SHOOT_2X_WALL_BACK.
-                .driveTo(SHOOT_2X_WALL_BACK)                    // flat out, still facing red
-                .driveTo(SHOOT_2X_TURN_BACK)                    // north, turning to face blue
-                .driveTo(SHOOT_2X_PAST_FLOWER)                  // hold x until past the flower
-                .driveTo(facingBlue(park.spot));                // collector toward blue
+                //
+                // NO TURN AT ALL NOW (Shane, 2026-11-14 evening): the whole park
+                // stays facing RED, collector toward the red wall. On the last run
+                // the robot BELIEVED it parked at (15, 94) but was really near the
+                // far end of the loading zone -- odometry ~30 in. off in y. The
+                // in-motion 180 deg turn is the prime suspect, so this run tests
+                // that by removing it. Same points, heading 180 throughout.
+                .driveTo(SHOOT_2X_WALL_BACK)                    // flat out toward red
+                .driveTo(facingRed(SHOOT_2X_TURN_BACK))         // north off the wall, no turn
+                .driveTo(facingRed(SHOOT_2X_PAST_FLOWER))       // hold x until past the flower
+                .driveTo(facingRed(park.spot));                 // collector still toward red
     }
 
     // 2026 ROBOT BACKUP (2026-11-07): Garden Shoot + Park's start, no launch,

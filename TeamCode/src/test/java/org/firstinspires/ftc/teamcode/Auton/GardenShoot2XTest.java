@@ -206,16 +206,19 @@ public class GardenShoot2XTest {
     }
 
     /**
-     * The park turns the robot 180 deg so the COLLECTOR faces blue. For red that
-     * is heading 0, which is also Alliance.RED.awayFromDriversHeading() -- so
-     * TeleOp's field-centric forward is collector-first away from the drivers
-     * with driverHeadingOffset left at 0, and nothing has to edit the pose.
+     * The park no longer turns (Shane, 2026-11-14 evening): every park leg stays
+     * at heading 180, collector toward red. Removing the in-motion 180 deg turn
+     * is the test for the ~30 in. odometry error seen on the last run. TeleOp
+     * needs nothing: field-centric uses the real heading.
      */
-    @Test public void parksFacingBlueForTheTeleOpHandoff() {
+    @Test public void parksStillFacingRedNoTurn() {   // Shane, 2026-11-14 evening
         for (Routes.Park p : new Routes.Park[] {Routes.Park.GARDEN_SIDE, Routes.Park.FAR_SIDE}) {
             Route r = Routes.gardenShoot2X(p);
             Pose park = r.steps.get(r.steps.size() - 1).target;
-            assertEquals(p + " park heading", 0.0, park.getHeading(), EPS);
+            assertEquals(p + " park heading", Math.PI, park.getHeading(), EPS);
+            for (int i = r.parkFrom; i < r.steps.size(); i++) {
+                assertEquals("park leg " + i + " must not turn", Math.PI, r.steps.get(i).target.getHeading(), EPS);
+            }
             assertEquals(p + " park spot", p.spot.getX(), park.getX(), EPS);
             assertEquals(p + " park spot", p.spot.getY(), park.getY(), EPS);
         }
