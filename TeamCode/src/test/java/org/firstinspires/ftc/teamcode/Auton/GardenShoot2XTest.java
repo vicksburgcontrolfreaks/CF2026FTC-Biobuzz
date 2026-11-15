@@ -186,7 +186,7 @@ public class GardenShoot2XTest {
         Route r = Routes.gardenShoot2X(Routes.Park.GARDEN_SIDE);
         Route.Step collect = r.steps.get(1);
         assertEquals(Routes.SHOOT_2X_COLLECT_SPEED, collect.speed, EPS);
-        assertEquals(2.0, collect.dwellSec, EPS);
+        assertEquals(Routes.SHOOT_2X_WALL_DWELL_SEC, collect.dwellSec, EPS);
         // Into the garden corner: along the wall (y unchanged), toward the red
         // wall (x down). Heading 180 means the collector points down-x, so the
         // robot drives collector-first and the balls go in rather than past.
