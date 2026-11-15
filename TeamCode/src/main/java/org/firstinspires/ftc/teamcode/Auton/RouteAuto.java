@@ -83,9 +83,9 @@ public abstract class RouteAuto extends OpMode {
     // launch". So a launch at the start waits 2 s, but Garden Shoot 2X's second
     // launch (wheels on since Start) and any launch reached by a drive longer
     // than 2 s feed immediately. See flywheel() and flywheelOnSinceSec.
-    // 2 -> 3 (Shane, 2026-11-14 evening): 6494 put the first two auto shots
+    // 2 -> 3 -> 4 (Shane, 2026-11-14 evening): 6494 put the first two auto shots
     // low and the last two in -- wheels not up to speed at 2 s.
-    public static double SPINUP_SEC = 3.0;
+    public static double SPINUP_SEC = 4.0;
     /** runTimer time the flywheel was last switched on; NaN = off. Set only by flywheel(). */
     private double flywheelOnSinceSec = Double.NaN;
     /** Seconds of feeding (collector + indexer + flywheels), counted after SPINUP_SEC. */

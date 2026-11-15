@@ -37,7 +37,7 @@ public class Launcher {
      * Fixed for now; ShotTable (distance -> RPM) comes with odometry aiming.
      * Per robot -- see loadRobotNumbers(). This bare value is 6494's / the fallback.
      */
-    public static double FLYWHEEL_RPM = 1280;
+    public static double FLYWHEEL_RPM = 1290;
 
     /**
      * The AUTO speed, per robot. RouteAuto calls useAutoRpm() after building
@@ -45,7 +45,7 @@ public class Launcher {
      * every new Launcher reloads the TeleOp number, so TeleOp can't inherit it.
      * Same as FLYWHEEL_RPM unless a robot needs a different auto shot.
      */
-    public static double AUTO_FLYWHEEL_RPM = 1280;
+    public static double AUTO_FLYWHEEL_RPM = 1290;
 
     /** Autos: shoot at this robot's AUTO_FLYWHEEL_RPM instead of the TeleOp speed. */
     public void useAutoRpm() {
@@ -81,8 +81,9 @@ public class Launcher {
                     // covers 20-52 in and there is no table to build yet. See
                     // docs/shot-map-2026-11-13.md. 1280 sits inside every band
                     // measured.
-                    FLYWHEEL_RPM = 1280;
-                    AUTO_FLYWHEEL_RPM = 1280;   // same as TeleOp (unchanged behaviour)
+                    // 1280 -> 1290 (Shane, 2026-11-14 evening), with auto spin-up 4 s.
+                    FLYWHEEL_RPM = 1290;
+                    AUTO_FLYWHEEL_RPM = 1290;   // same as TeleOp
                     break;
             }
         } catch (IllegalStateException e) {
