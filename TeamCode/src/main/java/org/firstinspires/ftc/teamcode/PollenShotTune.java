@@ -242,7 +242,7 @@ public class PollenShotTune extends OpMode {
                     deflector.getAngle(), Deflector.DEFAULT_SHOT_DEG);
         }
         if (!turret.isHomed() && Turret.isMeasured()) {
-            telemetry.addLine("Turret will HOME at Start -- make sure it's roughly forward.");
+            telemetry.addLine("Turret will HOME at Start -- make sure it points roughly BACKWARD.");
         }
         telemetry.addLine("Point the robot AWAY from the " + alliance.get() + " drivers before Start.");
         telemetry.update();
@@ -532,7 +532,9 @@ public class PollenShotTune extends OpMode {
         telemetry.addData("Turret", "%s %+.0f deg%s | %s", turret.getState(), turret.getAngle(),
                 turretParked ? " PARKED" : turretManual ? " MANUAL" : "", aim.getStatus());
         telemetry.addData("Aim at", targetCell.displayName);
-        if (!deflector.isZeroed()) {
+        if (!deflector.isPresent()) {
+            // Deflector.FITTED is false: fixed deflector, nothing to say.
+        } else if (!deflector.isZeroed()) {
             telemetry.addLine(">>> Deflector NOT zeroed -- arc isn't moving. Run Deflector Zero.");
         } else {
             telemetry.addData("Deflector", "%.1f deg (target %.1f%s)", deflector.getAngle(),

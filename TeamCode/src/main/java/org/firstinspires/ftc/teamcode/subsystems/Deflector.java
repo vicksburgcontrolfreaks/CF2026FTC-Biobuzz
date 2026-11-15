@@ -147,9 +147,19 @@ public class Deflector {
     private boolean jogIgnoresLimits = false;
     private double maxStepSeen = 0;   // biggest servo-degree change in one loop
 
+    /**
+     * OFF ON BOTH ROBOTS since 2026-11-14 (Jade): the deflector no longer moves
+     * on either robot, so there is nothing to home or zero. With this false the
+     * class acts exactly as if no deflector were in the config -- isPresent() is
+     * false, so TeleOp, the autos and the tuners skip homing, zeroing and every
+     * move, even if "deflector" / "deflectorPos" are still configured. The code
+     * is kept, not deleted: set this back to true if a moving deflector returns.
+     */
+    public static boolean FITTED = false;
+
     public Deflector(HardwareMap hardwareMap) {
-        servo = hardwareMap.tryGet(CRServo.class, SERVO_NAME);
-        feedback = hardwareMap.tryGet(AnalogInput.class, FEEDBACK_NAME);
+        servo = FITTED ? hardwareMap.tryGet(CRServo.class, SERVO_NAME) : null;
+        feedback = FITTED ? hardwareMap.tryGet(AnalogInput.class, FEEDBACK_NAME) : null;
         if (!isPresent()) return;
         loadRobotNumbers();
 

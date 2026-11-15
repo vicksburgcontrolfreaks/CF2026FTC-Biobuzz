@@ -496,6 +496,7 @@ public abstract class RouteAuto extends OpMode {
         RobotHardware hw = new RobotHardware();
         hw.init(hardwareMap, false);   // TurretCamera owns the webcam
         launcher = new Launcher(hw, hardwareMap);
+        launcher.useAutoRpm();   // this robot's AUTO speed (5618: 1275, TeleOp is 1225)
         turret = hw.turret;
         camera = new TurretCamera(hardwareMap);
         deflector = new Deflector(hardwareMap);
@@ -653,7 +654,9 @@ public abstract class RouteAuto extends OpMode {
                 telemetry.addData("Turret", "%s%s -- %s", turret.getState(),
                         turret.isHomed() ? " (homed)" : "", turret.getStatusNote());
                 if (!turret.isHomed() && turret.getState() != Turret.State.HOMING) {
-                    telemetry.addLine("    LOCK the menu (A) to home it. Face it roughly REARWARD first.");
+                    // Wording is Jade's, 2026-11-14: one phrase for this on every
+                    // screen, on both robots, now that turret 0 faces the rear.
+                    telemetry.addLine("    LOCK the menu (A) to home it. Point it roughly BACKWARD first.");
                 }
                 // AIMED BEFORE START, or say why not. The whole point of aiming in
                 // INIT is that the drive team can SEE it is pointed at the hive

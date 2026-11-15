@@ -197,20 +197,22 @@ public final class RobotProfile {
         // then write the numbers here.
         TurretGeometry.TURRET_OFFSET_X = Double.NaN;
         TurretGeometry.TURRET_OFFSET_Y = Double.NaN;
-        // Same turret design on both robots, so these two carry over -- but
-        // neither has been checked on 5618. The range test in TurretRangeTest
-        // settles CCW_SIGN in a minute if the turret ever behaves backwards.
-        TurretGeometry.TURRET_ZERO_DEG = 0.0;
+        // FLIPPED 2026-11-14 for the 5618 rebuild (Jade), matching 6494's
+        // 2026-11-13 flip: turret 0 points BACKWARD, away from the collector.
+        // The magnet/limit numbers for this frame live in Turret.loadRobotNumbers().
+        // Check after homing: does the camera point straight BACK? If not, this
+        // (or the homing numbers) is off. CCW_SIGN carries over from 6494 --
+        // Turret Aim Test settles it if the turret ever behaves backwards.
+        TurretGeometry.TURRET_ZERO_DEG = 180.0;
         TurretGeometry.TURRET_CCW_SIGN = 1.0;
 
-        // INHERITED, NOT MEASURED. These are the values 5618 was already running
-        // before the split, so nothing it does today gets worse -- but every one
-        // of them is 6494's mount or an outright guess. Camera aiming on 5618 is
-        // only as good as these.
-        CAMERA_FORWARD = 4.5;
-        CAMERA_LEFT = 0.0;
-        CAMERA_UP = 12.0;
-        CAMERA_PITCH_DEG = 30.0;
+        // MEASURED on the rebuilt 5618, 2026-11-14 (Jade). Same frame as 6494:
+        // from the turret axis at FLOOR level, turret at 0.
+        // (Was inherited/guessed: forward 4.5, up 12, pitch 30.)
+        CAMERA_FORWARD = -1.25;   // NEGATIVE: the camera sits 1.25 in BEHIND the turret axis
+        CAMERA_LEFT = 0.0;        // centred left to right
+        CAMERA_UP = 17.0;
+        CAMERA_PITCH_DEG = 42.65;
         CAMERA_YAW_DEG = 0.0;
         applyCamera();
 
@@ -261,9 +263,10 @@ public final class RobotProfile {
         try {
             switch (WhichRobot.get()) {
                 case R5618:
-                    // The rebuilt collection system ran backwards as FORWARD.
-                    // Flipped 2026-11-11; NOT robot-tested.
-                    return DcMotorSimple.Direction.REVERSE;
+                    // FORWARD again after the full 5618 rebuild (Jade, 2026-11-14:
+                    // "the indexer does not need to be reversed"). It was REVERSE
+                    // from 2026-11-11 for the earlier collection rebuild.
+                    return DcMotorSimple.Direction.FORWARD;
                 case R6494:
                 default:
                     // Confirmed feeding UP on the robot, 2026-11-05.
