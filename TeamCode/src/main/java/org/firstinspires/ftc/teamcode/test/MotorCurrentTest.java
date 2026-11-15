@@ -10,6 +10,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @Autonomous(name = "MotorCurrentTest", group = "Test")
 public class MotorCurrentTest extends LinearOpMode {
 

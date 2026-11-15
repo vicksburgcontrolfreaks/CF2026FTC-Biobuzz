@@ -54,6 +54,8 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *                 FEED_RPM / UNJAM_RPM. A fired shot feeds at FEED_RPM too.
  */
 @Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Shooter Test", group = "Test")
 public class ShooterTest extends LinearOpMode {
 

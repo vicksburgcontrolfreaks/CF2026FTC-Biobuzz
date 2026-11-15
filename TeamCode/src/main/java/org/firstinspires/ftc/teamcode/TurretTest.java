@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import com.bylazar.configurables.PanelsConfigurables;
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
@@ -32,6 +34,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  * Tune every Turret constant live at panels.bylazar.com while this runs.
  */
 @Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Turret Test", group = "Test")
 public class TurretTest extends LinearOpMode {
 

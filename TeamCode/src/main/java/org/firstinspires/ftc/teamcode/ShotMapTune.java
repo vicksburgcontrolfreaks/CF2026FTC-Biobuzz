@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
@@ -144,6 +146,8 @@ import java.util.Locale;
  * /sdcard as mass storage, so adb (or the REV Hardware Client) is the only way.
  */
 @Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Shot Map", group = "Tune")
 public class ShotMapTune extends OpMode {
 

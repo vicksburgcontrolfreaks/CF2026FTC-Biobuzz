@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -74,6 +76,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Deflector;
  * Config: CR servo "deflector" + analog input "deflectorPos".
  */
 @Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Deflector Auto Home", group = "Setup")
 public class DeflectorAutoHome extends LinearOpMode {
 

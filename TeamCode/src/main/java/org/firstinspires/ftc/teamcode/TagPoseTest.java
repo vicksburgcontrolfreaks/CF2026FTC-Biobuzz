@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import android.util.Size;
 
 import com.bylazar.configurables.PanelsConfigurables;
@@ -152,6 +154,8 @@ import java.util.List;
  * tags on the floor test, and TAGS vs QUALITY is the distinction that shows it.
  */
 @Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Tag Pose Test", group = "Test")
 public class TagPoseTest extends OpMode {
 

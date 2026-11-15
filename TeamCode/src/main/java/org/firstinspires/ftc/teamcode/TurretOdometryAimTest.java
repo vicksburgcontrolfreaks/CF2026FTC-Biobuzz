@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import com.bylazar.configurables.PanelsConfigurables;
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
@@ -51,6 +53,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
 @Configurable
 // Shown again 2026-11-10 to measure TURRET_OFFSET_X/Y. Was hidden for competition
 // on 2026-11-07; put @Disabled back above @TeleOp to hide it from the DS again.
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Turret Odometry Aim Test", group = "Test")
 public class TurretOdometryAimTest extends LinearOpMode {
 

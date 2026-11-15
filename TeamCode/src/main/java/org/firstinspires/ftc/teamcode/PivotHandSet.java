@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.AnalogInput;
@@ -45,6 +47,8 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  *   - On Y, the servo jumps to the middle of its safe band first (the same kind
  *     of jump Pollen Shot Tune makes at Start). Be ready on stop if it buzzes.
  */
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Pivot Hand Set", group = "Test")
 public class PivotHandSet extends LinearOpMode {
 

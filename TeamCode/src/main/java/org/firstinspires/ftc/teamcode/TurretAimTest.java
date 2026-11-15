@@ -121,6 +121,8 @@ import java.util.concurrent.TimeUnit;
  * what works and put it in TurretAim.
  */
 @Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Turret Aim Test", group = "Test")
 public class TurretAimTest extends LinearOpMode {
 

@@ -62,6 +62,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
  *    really 2.89:1 -- change it in RobotHardware and every op mode follows.
  */
 @Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Shooter Flywheel Test", group = "Test")
 public class ShooterFlywheelTest extends LinearOpMode {
 

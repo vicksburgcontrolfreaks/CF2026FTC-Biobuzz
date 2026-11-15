@@ -44,6 +44,8 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  *   4. When all four are right, take it off the blocks, give it room, and hold A.
  *      It should drive straight forward, not turn, strafe, or sit there buzzing.
  */
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Drive Motor Direction Test", group = "Test")
 public class DriveMotorDirectionTest extends LinearOpMode {
 

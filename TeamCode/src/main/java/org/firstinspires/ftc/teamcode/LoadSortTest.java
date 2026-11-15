@@ -75,6 +75,8 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterPivot;
  * pollen spacing. Harmless here, but do not build ball counting on this.
  */
 @Configurable
+// Hidden for competition (2026-11-15). Delete this @Disabled line to bring it back.
+@Disabled
 @TeleOp(name = "Load Sort Test", group = "Test")
 public class LoadSortTest extends LinearOpMode {
 
