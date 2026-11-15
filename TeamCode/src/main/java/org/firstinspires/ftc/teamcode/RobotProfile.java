@@ -190,13 +190,11 @@ public final class RobotProfile {
 
     // ---- 5618 ---------------------------------------------------------------
     private static void install5618() {
-        // NOT MEASURED. NaN on purpose: TurretGeometry.isConfigured() is false
-        // while either offset is NaN, so 5618 REFUSES to aim rather than aiming
-        // with 6494's -4.5. Measure with a tape (turret axis relative to the
-        // pose origin), prove it with the spin test in Turret Odometry Aim Test,
-        // then write the numbers here.
-        TurretGeometry.TURRET_OFFSET_X = Double.NaN;
-        TurretGeometry.TURRET_OFFSET_Y = Double.NaN;
+        // SAME AS 6494 (Shane, 2026-11-14): 4.5 in. behind centre, laterally
+        // centred. Not yet proven on 5618 by the spin test in Turret Odometry Aim
+        // Test -- if the aim wanders ~7 deg through a spin, this is why.
+        TurretGeometry.TURRET_OFFSET_X = -4.5;
+        TurretGeometry.TURRET_OFFSET_Y = 0.0;
         // FLIPPED 2026-11-14 for the 5618 rebuild (Jade), matching 6494's
         // 2026-11-13 flip: turret 0 points BACKWARD, away from the collector.
         // The magnet/limit numbers for this frame live in Turret.loadRobotNumbers().
