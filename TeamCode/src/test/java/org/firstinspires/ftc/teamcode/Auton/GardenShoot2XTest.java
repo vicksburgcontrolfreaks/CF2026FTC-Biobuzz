@@ -320,4 +320,48 @@ public class GardenShoot2XTest {
         assertEquals(0, marked.parkFrom);
         assertEquals(-1, plain.parkFrom);
     }
+
+    /**
+     * BLUE, checked leg by leg before the first blue run (Shane, 2026-11-14).
+     * Blue = red rotated 180 deg about the field centre, every point AND heading.
+     * The sweep must go toward the BLUE wall into the BLUE garden corner (the
+     * far-wall / blue-wall corner), and the return must come back to the blue
+     * start -- never anywhere near a red point.
+     */
+    @Test public void blueIsTheRedRouteRotated180() {
+        Route r = Routes.gardenShoot2X(Routes.Park.GARDEN_SIDE);
+        Alliance b = Alliance.BLUE;
+        Pose start = b.map(r.start);
+        assertEquals(111, start.getX(), EPS);
+        assertEquals(135, start.getY(), EPS);
+        assertEquals(0, start.getHeading(), EPS);            // collector toward the blue wall
+
+        Pose corner = b.map(r.steps.get(1).target);
+        assertEquals(135, corner.getX(), EPS);               // INTO the blue-wall corner (+x)
+        assertEquals(135, corner.getY(), EPS);               // along the far wall
+        assertTrue(corner.getX() > start.getX());            // sweep heads toward blue
+        assertTrue(corner.getX() + RobotConstants.ROBOT_LENGTH / 2 <= FieldConstants.FIELD_SIZE + EPS);
+        assertTrue(FieldConstants.BLUE_GARDEN.minX <= corner.getX());   // garden is the blue one
+
+        Pose back = b.map(r.steps.get(2).target);            // full-speed return = blue start
+        assertEquals(start.getX(), back.getX(), EPS);
+        assertEquals(start.getY(), back.getY(), EPS);
+        assertEquals(start.getHeading(), back.getHeading(), EPS);
+
+        // Park: same legs mirrored, all facing the blue wall, every leg path-safe.
+        Pose from = back;
+        for (int i = r.parkFrom; i < r.steps.size(); i++) {
+            Pose to = b.map(r.steps.get(i).target);
+            assertEquals("blue park leg " + i + " heading", 0, to.getHeading(), EPS);
+            Path p = new Path(new BezierLine(from, to));
+            p.setLinearHeadingInterpolation(from.getHeading(), to.getHeading());
+            assertTrue("blue leg " + i + ": " + PathSafety.check("leg", p),
+                    PathSafety.check("leg", p).isEmpty());
+            from = to;
+        }
+        // Garden-side park on blue is at the REAR-WALL end of the blue loading zone.
+        assertEquals(131, from.getX(), EPS);
+        assertEquals(49, from.getY(), EPS);
+        assertTrue(from.getY() > FieldConstants.BLUE_LOADING_ZONE.minY);
+    }
 }
