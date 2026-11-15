@@ -174,7 +174,7 @@ public abstract class RouteAuto extends OpMode {
     private final Launcher.Controls controls = new Launcher.Controls();
     private Turret turret;
     private TurretCamera camera;
-    // Camera-only until TurretDirector.USE_ODOMETRY_AIM is turned on; see that class.
+    // Camera-only unless USE_ODOMETRY_AIM is on -- tip routes force it, see applyAimSource().
     private TurretDirector aim;
     private FieldAprilTags.Cell aimCell;
     private Deflector deflector;
@@ -234,6 +234,31 @@ public abstract class RouteAuto extends OpMode {
         warnings.clear();
         buildPaths();
         checkPaths();
+        applyAimSource();
+    }
+
+    /** RobotProfile's USE_ODOMETRY_AIM for this robot, saved before a route overrides it. */
+    private boolean profileOdometryAim = false;
+
+    /**
+     * TIP ROUTES AIM BY ODOMETRY (Shane, 2026-11-14). Before the partner tips the
+     * hive our cell's tags are out of sight BY DEFINITION, so camera-only aiming
+     * just sits searching -- which is what Far Wall Wait and Shoot did on its
+     * first run. The pose is all there is, so these routes aim from it (with the
+     * camera trim taking over once the tags appear). Every other route keeps the
+     * robot's default from RobotProfile; switching routes in the menu restores it.
+     *
+     * Needs the robot's turret geometry measured (TurretGeometry.isConfigured);
+     * without it TurretDirector falls back to the camera, and the INIT screen says
+     * so loudly (see addRouteTelemetry).
+     */
+    private void applyAimSource() {
+        TurretDirector.USE_ODOMETRY_AIM = routeWaitsForTip() || profileOdometryAim;
+    }
+
+    private boolean routeWaitsForTip() {
+        return route != null && (route.has(Route.Action.TIP_LAUNCH)
+                || route.has(Route.Action.TIP_LAUNCH_HERE));
     }
 
     // How long (seconds after Start) a YIELD step waits. Only matters for
@@ -610,6 +635,7 @@ public abstract class RouteAuto extends OpMode {
     @Override
     public void init() {
         org.firstinspires.ftc.teamcode.RobotProfile.install();   // this robot's turret and camera numbers
+        profileOdometryAim = TurretDirector.USE_ODOMETRY_AIM;   // this robot's default, before any route overrides it
         pathTimer = new Timer();
         launchTimer = new Timer();
         dwellTimer = new Timer();
@@ -806,6 +832,11 @@ public abstract class RouteAuto extends OpMode {
             }
             if (launcher.isPivotBlocked()) {
                 telemetry.addLine("!! Pivot not measured on this robot -- nectar guard can't move it.");
+            }
+            if (routeWaitsForTip()
+                    && !org.firstinspires.ftc.teamcode.geometry.TurretGeometry.forRobot().isConfigured()) {
+                telemetry.addLine(">>> TURRET GEOMETRY NOT MEASURED on this robot -- it CANNOT aim");
+                telemetry.addLine("    by odometry, so it will only search for tags until the tip.");
             }
             telemetry.addData("Camera", camera.getNote());
         }
