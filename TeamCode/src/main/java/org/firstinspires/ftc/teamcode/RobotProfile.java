@@ -257,16 +257,31 @@ public final class RobotProfile {
      * was only ever for 5618's rebuilt collection system. 6494 was fine as
      * FORWARD and is put back here (Shane, 2026-11-12).
      *
-     * Neither value is robot-tested since the split.
+     * THE TWO ROBOTS ARE OPPOSITE: 6494 FORWARD, 5618 REVERSE. Both are now
+     * robot-observed -- 6494 on 2026-11-05, 5618 on 2026-11-14 -- so a future
+     * "these should match, surely" is the mistake to avoid. The per-robot case
+     * below carries 5618's full flip history.
      */
     public static DcMotorSimple.Direction indexerDirection() {
         try {
             switch (WhichRobot.get()) {
                 case R5618:
-                    // FORWARD again after the full 5618 rebuild (Jade, 2026-11-14:
-                    // "the indexer does not need to be reversed"). It was REVERSE
-                    // from 2026-11-11 for the earlier collection rebuild.
-                    return DcMotorSimple.Direction.FORWARD;
+                    // REVERSE. 5618's indexer is OPPOSITE 6494's -- this is the one
+                    // number here where the two robots genuinely differ, so expect
+                    // them to look wrong next to each other.
+                    //
+                    // THIS VALUE HAS NOW FLIPPED THREE TIMES, so read before changing:
+                    //   2026-11-11  REVERSE, for the rebuilt collection system
+                    //   2026-11-14  FORWARD (Jade, "the indexer does not need to be
+                    //               reversed") -- a bench call, not robot-tested
+                    //   2026-11-14  REVERSE again (Shane), WATCHING IT RUN on the
+                    //               robot: it fed backwards with FORWARD set
+                    //
+                    // The last one is the only entry with the motor turning in front
+                    // of somebody, which is why it wins. Change this only from the
+                    // robot, not from reasoning about the gearbox: run Collection
+                    // System Test and watch which way a ball goes.
+                    return DcMotorSimple.Direction.REVERSE;
                 case R6494:
                 default:
                     // Confirmed feeding UP on the robot, 2026-11-05.
