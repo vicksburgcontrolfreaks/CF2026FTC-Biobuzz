@@ -71,8 +71,9 @@ public class Launcher {
                     // Pollen Shot Tune's starting value; the autos switch to
                     // AUTO_FLYWHEEL_RPM (see useAutoRpm()).
                     // (Was 1100 for both: Shane, 2026-11-11, before the rebuild.)
+                    // Auto 1275 -> 1250 (Shane, 2026-11-15, comp day). TeleOp unchanged.
                     FLYWHEEL_RPM = 1225;
-                    AUTO_FLYWHEEL_RPM = 1275;
+                    AUTO_FLYWHEEL_RPM = 1250;
                     break;
                 case R6494:
                     // 1300 -> 1280: Shane, 2026-11-14. This is the SHOT MAP's answer
