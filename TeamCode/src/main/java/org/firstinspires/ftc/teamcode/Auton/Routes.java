@@ -141,7 +141,7 @@ public final class Routes {
     //      collector edge on the garden seam, side on the garden wall. The turret
     //      points away from the collector since the flip, so it already faces the
     //      hive from here.
-    //   2. launchHere(4): 2 s spin-up (wheels on since Start), feed 4 s, everything off. No driving
+    //   2. launchHere(5): 4 s spin-up (wheels on since Start), feed 5 s, everything off. No driving
     //      -- the step has no path at all.
     //   3. collectTo(GARDEN_CORNER) at 0.4 with a 1 s dwell: 24 in. along the
     //      wall into the garden corner, collector-first (heading 180 means the
@@ -173,7 +173,8 @@ public final class Routes {
     // "Don't park" stops after the second shot, still facing RED, and
     // needs nothing in TeleOp either -- same as the park above: do NOT press X
     // until the robot faces away. It is not parked and scores no park points.
-    public static final double SHOOT_2X_FIRE_SEC = 4;
+    public static final double SHOOT_2X_FIRST_FIRE_SEC = 5;   // preloads; 4 -> 5 (Shane, 2026-11-14)
+    public static final double SHOOT_2X_FIRE_SEC = 4;         // second volley
     public static final double SHOOT_2X_COLLECT_SPEED = 0.4;   // 0.2 too slow, 0.3 -> 0.4 to be sure it gets there (Shane, 2026-11-14)
     public static final double SHOOT_2X_WALL_DWELL_SEC = 1;   // 2 -> 1 to buy back time (Shane, 2026-11-14)
 
@@ -196,7 +197,7 @@ public final class Routes {
 
     public static Route gardenShoot2X(Park park) {
         Route route = Route.startAt(GARDEN_EDGE_START_FACING_RED)
-                .launchHere(SHOOT_2X_FIRE_SEC)                  // shoot where we stand
+                .launchHere(SHOOT_2X_FIRST_FIRE_SEC)            // shoot where we stand
                 .collectTo(GARDEN_CORNER, SHOOT_2X_COLLECT_SPEED, SHOOT_2X_WALL_DWELL_SEC)
                 .timeout(SHOOT_2X_SWEEP_TIMEOUT_SEC)            // blocked? leave it, keep going
                 .driveTo(GARDEN_EDGE_START_FACING_RED)          // back, same orientation

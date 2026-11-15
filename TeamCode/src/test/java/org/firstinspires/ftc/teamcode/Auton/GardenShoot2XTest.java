@@ -171,11 +171,11 @@ public class GardenShoot2XTest {
                         - FieldConstants.FLOWER_RED_WALL.maxX >= 3.0);
     }
 
-    @Test public void bothLaunchesFireFourSecondsAndHaveNoTarget() {
+    @Test public void launchesFireFiveThenFourSecondsAndHaveNoTarget() {
         Route r = Routes.gardenShoot2X(Routes.Park.GARDEN_SIDE);
         for (int i : new int[] {0, 3}) {
             Route.Step s = r.steps.get(i);
-            assertEquals(Routes.SHOOT_2X_FIRE_SEC, s.fireSec, EPS);
+            assertEquals(i == 0 ? Routes.SHOOT_2X_FIRST_FIRE_SEC : Routes.SHOOT_2X_FIRE_SEC, s.fireSec, EPS);
             // No path, so nothing to aim the follower at -- and nothing that could
             // become a zero-length path when we shoot from a spot we drove to.
             assertNull("step " + i + " should have no target", s.target);
