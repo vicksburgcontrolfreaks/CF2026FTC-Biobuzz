@@ -101,9 +101,12 @@ public final class Waypoints {
     // 5, was 8: leave our partner 3 more inches (Shane, 2026-11-08). The rule
     // only needs part of the robot in the zone (tape counts), so 5 in. still
     // leaves margin for a few inches of stopping error.
-    public static final double PARK_OVERLAP  = 5; // inches of robot inside the zone
+    // 5 -> 8 (Shane, 2026-11-14 evening): a 5x5 in. corner overlap missed the
+    // zone on the far-side park. Costs our partner 3 in. of room.
+    public static final double PARK_OVERLAP  = 8; // inches of robot inside the zone
     // 6, was 2: too close to the wall for comfort on the first run (Shane, 2026-11-06).
-    public static final double PARK_WALL_GAP = 6; // inches between robot and wall
+    // 6 -> 4 (Shane, 2026-11-14 evening): 9 in. of the 11 in. zone depth now.
+    public static final double PARK_WALL_GAP = 4; // inches between robot and wall
 
     private static final double PARK_X = HALF_LENGTH + PARK_WALL_GAP;
 
