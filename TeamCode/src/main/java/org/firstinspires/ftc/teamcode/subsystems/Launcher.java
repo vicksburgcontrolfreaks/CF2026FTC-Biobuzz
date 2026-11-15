@@ -170,6 +170,20 @@ public class Launcher {
      */
     private boolean spunUpThisHold = false;
 
+    /**
+     * AUTO ONLY (Shane, 2026-11-14): no at-speed gate. The indexer runs the
+     * moment fire/allForward is held, whatever the wheels are doing. RouteAuto
+     * runs on the clock instead -- a fixed spin-up, then a fixed feed time -- so
+     * a flywheel that never quite reaches tolerance can no longer silently
+     * cancel a whole shot. TeleOp keeps the gate. Direct mode only.
+     */
+    private boolean feedUngated = false;
+
+    /** Autos: feed on command, no wait for flywheel speed. See feedUngated. */
+    public void useUngatedFeed() {
+        feedUngated = true;
+    }
+
     private boolean flywheelOn = false;
     private Gap appliedGap = null;
     private Motion indexerCmd = null;    // null = unknown, forces the next write
@@ -347,7 +361,7 @@ public class Launcher {
         Motion wantIndexer;
         if (c.allBack || c.indexerBack) {
             wantIndexer = Motion.BACK;
-        } else if (want && spunUpThisHold) {
+        } else if (want && (spunUpThisHold || feedUngated)) {
             wantIndexer = Motion.FORWARD;
         } else {
             wantIndexer = Motion.STOP;

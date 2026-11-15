@@ -185,7 +185,7 @@ public class GardenShoot2XTest {
     @Test public void collectLegIsSlowDwellsAndLeadsWithTheCollector() {
         Route r = Routes.gardenShoot2X(Routes.Park.GARDEN_SIDE);
         Route.Step collect = r.steps.get(1);
-        assertEquals(0.2, collect.speed, EPS);
+        assertEquals(Routes.SHOOT_2X_COLLECT_SPEED, collect.speed, EPS);
         assertEquals(2.0, collect.dwellSec, EPS);
         // Into the garden corner: along the wall (y unchanged), toward the red
         // wall (x down). Heading 180 means the collector points down-x, so the

@@ -73,7 +73,7 @@ public final class Routes {
 
     // Start against the garden wall, launch the 4 preloads, collect the garden
     // pollen, go around the left of the hive to the far wall, launch again,
-    // then park. Launches are real: aim, then fire LAUNCH_SHOTS (see RouteAuto).
+    // then park. Launches are real: spin up, then fire (see RouteAuto.SPINUP_SEC).
     public static Route gardenWallLaunch(Park park) {
         Route route = Route.startAt(GARDEN_WALL_START)
                 .launchFrom(LAUNCH_GARDEN_WALL)  // launch the preloads
@@ -141,9 +141,9 @@ public final class Routes {
     //      collector edge on the garden seam, side on the garden wall. The turret
     //      points away from the collector since the flip, so it already faces the
     //      hive from here.
-    //   2. launchHere(4): flywheel up, aim, fire 4 s, everything off. No driving
+    //   2. launchHere(4): 2 s spin-up, feed 4 s, everything off. No driving
     //      -- the step has no path at all.
-    //   3. collectTo(GARDEN_CORNER) at 0.2 with a 2 s dwell: 24 in. along the
+    //   3. collectTo(GARDEN_CORNER) at 0.3 with a 2 s dwell: 24 in. along the
     //      wall into the garden corner, collector-first (heading 180 means the
     //      collector leads), then sit still for 2 s with the collector still
     //      running before it switches off.
@@ -165,7 +165,7 @@ public final class Routes {
     // then press X ("the robot faces away from me now") once in TeleOp, which is
     // exactly what that button is for. It is not parked and scores no park points.
     public static final double SHOOT_2X_FIRE_SEC = 4;
-    public static final double SHOOT_2X_COLLECT_SPEED = 0.2;
+    public static final double SHOOT_2X_COLLECT_SPEED = 0.3;   // 0.2 was too slow (2026-11-14)
     public static final double SHOOT_2X_WALL_DWELL_SEC = 2;
 
     // A BALL STOPPED THE WHOLE ROUTE (Shane, 5618, 2026-11-14). The sweep got
@@ -181,7 +181,7 @@ public final class Routes {
     // time" off the Driver Station on a clean run and set each limit a couple of
     // seconds above it. Too generous wastes auto; too tight cuts off a leg that
     // was going to make it. The sweep's is the bigger of the two because it runs
-    // at 0.2 speed and the return is at full power.
+    // at 0.3 speed and the return is at full power.
     public static final double SHOOT_2X_SWEEP_TIMEOUT_SEC = 8;
     public static final double SHOOT_2X_RETURN_TIMEOUT_SEC = 5;
 
@@ -260,7 +260,7 @@ public final class Routes {
     // 2026 ROBOT (Shane, 2026-11-08): Far Wall Tip Shoot + Park WITHOUT the tip
     // check -- for when we trust our partner to tip the hive and want to shoot
     // early and get out of their way. Same start, strafe and shot spot; on
-    // arrival aim (up to AIM_WAIT_SEC), fire FAR_QUICK_FIRE_SEC, then park.
+    // arrival spin up (SPINUP_SEC), fire FAR_QUICK_FIRE_SEC, then park.
     // Still cut short at PARK_LEAVE_BY_SEC so a long Wait can't cost the park.
     // Laptop path-checked; NOT robot-run. "Don't park" = stay at the shot spot.
     public static final double FAR_QUICK_FIRE_SEC = 13;

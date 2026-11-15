@@ -38,9 +38,9 @@ import java.util.List;
  *   2. Drive to each step's point, stopping at each one
  *      - COLLECT steps: collector on once within COLLECT_RADIUS of the
  *        point, off when we get there
- *      - LAUNCH steps: on arrival, wait for the turret to aim (AIM_WAIT_SEC
- *        max), then collector + indexer + flywheels for LAUNCH_MAX_SEC (or, with
- *        LAUNCH_FULL_TIME off, until LAUNCH_SHOTS / no ball), move on.
+ *      - LAUNCH steps: on arrival, SPINUP_SEC of flywheel only, then
+ *        collector + indexer + flywheels for the step's fire time (or
+ *        LAUNCH_MAX_SEC), move on. Pure clock -- no aim wait, no speed gate.
  *        The flywheel pre-spins from Start; the turret aims by camera the
  *        whole way at our cell on our side of the field.
  *      - YIELD steps: on arrival, hold still until yieldUntilSeconds
@@ -64,21 +64,22 @@ public abstract class RouteAuto extends OpMode {
     // (SelectAuto picks its own wait on the gamepad.)
     private static final double WAIT_SECONDS = 0;
 
-    // ---- Launching (real, 2026-11-06) ----------------------------------------
-    // A LAUNCH step: on arrival, wait for the turret to be on target (up to
-    // AIM_WAIT_SEC -- after that, fire anyway: a miss costs no more than not
-    // shooting), then fire until LAUNCH_SHOTS dips are counted, the shooter says
-    // "no ball", or LAUNCH_MAX_SEC runs out. Starting guesses -- time real runs.
-    public static int LAUNCH_SHOTS = 4;          // the 4 preloads (Routes.gardenWallLaunch)
-    public static double AIM_WAIT_SEC = 2.0;
-    /** Seconds of firing (collector + indexer + flywheels), counted from when firing starts. */
+    // ---- Launching: PURE CLOCK (Shane, 2026-11-14) ----------------------------
+    // Every launch step in every route: SPINUP_SEC with the flywheels on and
+    // nothing feeding, then collector + indexer + flywheels for the step's fire
+    // time (LAUNCH_MAX_SEC if the route didn't give one). That's all.
+    //
+    // NO aim wait: the turret aims during INIT and the whole way there, so it is
+    // already on target. NO at-speed gate: Launcher.useUngatedFeed() turns it off
+    // for autos (TeleOp keeps it). NO shot counting.
+    //
+    // WHY: Garden Shoot 2X fired nothing on 2026-11-14. The 4 s fire window
+    // started when the AIM finished -- about t = 0 now that INIT aims -- while
+    // the indexer was still waiting for both wheels to settle within 50 RPM.
+    // Spin-up ate the window and the Driver Station said "firing" throughout.
+    public static double SPINUP_SEC = 2.0;
+    /** Seconds of feeding (collector + indexer + flywheels), counted after SPINUP_SEC. */
     public static double LAUNCH_MAX_SEC = 15.0;   // 8 -> 12 -> 15: still short on shots (Shane, 2026-11-06)
-    /**
-     * true = always fire the full LAUNCH_MAX_SEC, ignoring the shot count and
-     * "no ball" (Shane, 2026-11-06: certain to empty the robot; dip counting
-     * isn't trusted yet). false = stop early at LAUNCH_SHOTS or "no ball".
-     */
-    public static boolean LAUNCH_FULL_TIME = true;
 
     /**
      * Home the deflector and turret during INIT instead of at Start.
@@ -174,7 +175,6 @@ public abstract class RouteAuto extends OpMode {
     public static double STOW_MAX_SEC = 3.0;
     private Timer stowTimer = null;
     private boolean turretStowed = false;
-    private int shotsAtLaunchStart = 0;
     private String launchNote = "";
 
     private Timer runTimer;               // seconds since Start
@@ -356,7 +356,7 @@ public abstract class RouteAuto extends OpMode {
                         launchNote = "no tip seen -- parking";
                     } else if (tipTagsSeen()) {
                         tipSeen = true;
-                        launchTimer.resetTimer();   // aim wait counts from the tip, not arrival
+                        launchTimer.resetTimer();   // spin-up counts from the tip, not arrival
                         return;
                     } else {
                         launchNote = String.format("waiting for tip: %s tags %d / %d frames (leave at %.0f s)",
@@ -459,69 +459,32 @@ public abstract class RouteAuto extends OpMode {
     }
 
     /**
-     * One loop of a LAUNCH step; true once it's finished. Fire waits for the
-     * turret to be on target (or AIM_WAIT_SEC), then keeps firing -- the
-     * Launcher feeds one ball per dip, pausing for the wheels to recover.
+     * One loop of a LAUNCH step; true once it's finished. Pure clock: SPINUP_SEC
+     * of flywheel only, then feed for the step's fire time. See SPINUP_SEC.
      */
     private boolean launchDone() {
         double t = launchTimer.getElapsedTimeSeconds();
-        int shots = launcher.getShooter().getShotsFired() - shotsAtLaunchStart;
 
         if (!launchFiring) {
-            boolean aimed = aim.isOnTarget() || !Turret.isMeasured();   // no turret = nothing to wait for
-            if (aimed || t >= AIM_WAIT_SEC) {
-                launchFiring = true;
+            if (t >= SPINUP_SEC) {
+                launchFiring = true;   // loop() turns this into allForward
                 fireStartSec = t;
-                shotsAtLaunchStart = launcher.getShooter().getShotsFired();
-                launchNote = aimed ? "aimed - firing" : "aim timed out - firing anyway";
-                // Don't check wasNoBall() yet: it may still be set from the LAST
-                // launch. This loop's launcher.update() calls fire(), which clears it.
-                return false;
+                launchNote = "spun up - feeding";
             } else {
-                launchNote = String.format("aiming (%.1f s)  %s", t, aim.getStatus());
-                return false;
+                launchNote = String.format("spinning up %.1f / %.0f s", t, SPINUP_SEC);
             }
+            return false;
         }
 
         double firing = t - fireStartSec;
         double stepFireSec = route.steps.get(step).fireSec;
         double maxSec = Double.isNaN(stepFireSec) ? LAUNCH_MAX_SEC : stepFireSec;   // per-route override
-        // DIRECT_FEED FORCES THE TIME PATH, and that is not a preference.
-        // Direct feed never queues a shot, so ShooterLogic never enters FEEDING,
-        // never counts a dip, and getShotsFired() stays where it started --
-        // meaning the "shots >= LAUNCH_SHOTS" path below can never be satisfied
-        // and wasNoBall() never fires. It would fall through to the maxSec
-        // timeout and report "TIMED OUT at 0 shots" on a launch that worked
-        // perfectly. Better to take the time path deliberately and say why.
-        boolean countingImpossible = Launcher.DIRECT_FEED;
-        if (LAUNCH_FULL_TIME || countingImpossible) {
-            // Fixed time: with direct feed the indexer simply runs for the whole
-            // window; with the old path the Launcher re-queued a shot whenever
-            // none was pending, so it kept feeding through "no ball" regardless.
-            String counted = countingImpossible
-                    ? "shots not counted (direct feed)" : shots + " shots counted";
-            if (firing >= maxSec) {
-                launchNote = String.format("done: %.0f s, %s", maxSec, counted);
-                return true;
-            }
-            launchNote = String.format("firing %.1f / %.0f s, %s  (%s)", firing, maxSec,
-                    counted, launcher.getShooter().getNote());
-            return false;
-        }
-        if (shots >= LAUNCH_SHOTS) {
-            launchNote = String.format("done: %d shots in %.1f s", shots, t);
-            return true;
-        }
-        if (launcher.getShooter().wasNoBall()) {
-            launchNote = String.format("done: no ball after %d shots (%.1f s)", shots, t);
-            return true;
-        }
         if (firing >= maxSec) {
-            launchNote = String.format("done: TIMED OUT at %d shots", shots);
+            launchNote = String.format("done: fed %.0f s", maxSec);
             return true;
         }
-        launchNote = String.format("firing: %d of %d  (%s)", shots, LAUNCH_SHOTS,
-                launcher.getShooter().getNote());
+        launchNote = String.format("feeding %.1f / %.0f s  (indexer %s)", firing, maxSec,
+                launcher.isIndexerForward() ? "ON" : "OFF");
         return false;
     }
 
@@ -610,6 +573,7 @@ public abstract class RouteAuto extends OpMode {
         hw.init(hardwareMap, false);   // TurretCamera owns the webcam
         launcher = new Launcher(hw, hardwareMap);
         launcher.useAutoRpm();   // this robot's AUTO speed (5618: 1275, TeleOp is 1225)
+        launcher.useUngatedFeed();   // autos run on the clock, see SPINUP_SEC
         turret = hw.turret;
         camera = new TurretCamera(hardwareMap);
         deflector = new Deflector(hardwareMap);
