@@ -237,4 +237,84 @@ public class GardenShoot2XTest {
         assertTrue("park should use the route speed",
                 Double.isNaN(r.steps.get(7).speed));
     }
+
+    /**
+     * A BALL CANNOT STOP THE ROUTE ANY MORE (Shane, 5618, 2026-11-14): the sweep
+     * wedged just short of the garden corner and the route never got past it,
+     * because a step only ends when the follower says it arrived.
+     *
+     * Both wall legs need the limit, not just the sweep -- the drive back covers
+     * the same 24 in. of the same wall. The launch steps must NOT have one: they
+     * have no driving to time, and fireSec owns the firing.
+     */
+    @Test public void bothWallLegsGiveUpRatherThanPushForever() {
+        Route r = Routes.gardenShoot2X(Routes.Park.GARDEN_SIDE);
+        assertEquals("sweep", Routes.SHOOT_2X_SWEEP_TIMEOUT_SEC,
+                r.steps.get(1).timeoutSec, EPS);
+        assertEquals("drive back", Routes.SHOOT_2X_RETURN_TIMEOUT_SEC,
+                r.steps.get(2).timeoutSec, EPS);
+        for (int i : new int[] {0, 3}) {
+            assertTrue("launch step " + i + " should have no drive timeout",
+                    Double.isNaN(r.steps.get(i).timeoutSec));
+        }
+        // A limit shorter than the leg would cut off runs that were going to make
+        // it. 24 in. at 0.2 power is not fast, but it is not 8 seconds slow either.
+        assertTrue("sweep limit should be the longer one -- it drives slowly",
+                Routes.SHOOT_2X_SWEEP_TIMEOUT_SEC > Routes.SHOOT_2X_RETURN_TIMEOUT_SEC);
+    }
+
+    /**
+     * THE PARK IS MARKED, AND THE MARK COVERS ALL FOUR LEGS. RouteAuto bails out
+     * to parkFrom at PARK_LEAVE_BY_SEC from anywhere earlier in the route, so a
+     * mark that pointed at the park spot alone would send the robot down the
+     * diagonal that hit the hive on 2026-11-14 -- the three legs before it are
+     * the clearance.
+     */
+    @Test public void theWholeParkIsMarkedAsThePark() {
+        Route r = Routes.gardenShoot2X(Routes.Park.GARDEN_SIDE);
+        assertEquals("park starts right after the second shot", 4, r.parkFrom);
+        assertEquals("four park legs", 4, r.steps.size() - r.parkFrom);
+        // The second shot is the last thing before the park, so nothing that
+        // scores gets skipped by a bail-out that fires early.
+        assertEquals(Route.Action.LAUNCH_HERE, r.steps.get(r.parkFrom - 1).action);
+        for (int i = r.parkFrom; i < r.steps.size(); i++) {
+            assertEquals("park leg " + i + " just drives",
+                    Route.Action.DRIVE, r.steps.get(i).action);
+        }
+        // Bailing out to the first park leg means driving to it from wherever we
+        // are, which is somewhere on the garden wall between the corner and the
+        // shot spot. It is on that same wall, so that is a straight line along
+        // it, not a diagonal across the field.
+        assertEquals("first park leg stays on the garden wall",
+                r.start.getY(), r.steps.get(r.parkFrom).target.getY(), EPS);
+    }
+
+    /** "Don't park" has no park to bail out to, and says so instead of guessing. */
+    @Test public void dontParkHasNoParkMark() {
+        assertEquals(-1, Routes.gardenShoot2X(Routes.Park.NONE).parkFrom);
+    }
+
+    /** timeout() changes only the step it follows, and nothing else about it. */
+    @Test public void timeoutOnlyTouchesTheStepBeforeIt() {
+        Route r = Route.startAt(Waypoints.GARDEN_EDGE_START)
+                .collectTo(Waypoints.GARDEN_CORNER, 0.2, 2).timeout(8)
+                .driveTo(Waypoints.GARDEN_EDGE_START);
+        assertEquals(8.0, r.steps.get(0).timeoutSec, EPS);
+        assertEquals(0.2, r.steps.get(0).speed, EPS);        // speed survives
+        assertEquals(2.0, r.steps.get(0).dwellSec, EPS);     // so does the dwell
+        assertEquals(Route.Action.COLLECT, r.steps.get(0).action);
+        assertTrue("the next step is untouched", Double.isNaN(r.steps.get(1).timeoutSec));
+    }
+
+    /** beginPark() marks a position, not a step -- the step list is unchanged. */
+    @Test public void beginParkAddsNoStep() {
+        Route plain = Route.startAt(Waypoints.GARDEN_EDGE_START)
+                .driveTo(Waypoints.GARDEN_CORNER);
+        Route marked = Route.startAt(Waypoints.GARDEN_EDGE_START)
+                .beginPark()
+                .driveTo(Waypoints.GARDEN_CORNER);
+        assertEquals(plain.steps.size(), marked.steps.size());
+        assertEquals(0, marked.parkFrom);
+        assertEquals(-1, plain.parkFrom);
+    }
 }

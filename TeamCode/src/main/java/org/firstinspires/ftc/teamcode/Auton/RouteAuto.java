@@ -44,7 +44,12 @@ import java.util.List;
  *        The flywheel pre-spins from Start; the turret aims by camera the
  *        whole way at our cell on our side of the field.
  *      - YIELD steps: on arrival, hold still until yieldUntilSeconds
- *   3. Say "Done" on the Driver Station, and show how long the run took
+ *      - a step with a timeout (Route.timeout) that can't get there in time is
+ *        abandoned, and the next step picks up from wherever the robot is
+ *   3. If the route marked its park steps (Route.beginPark), PARK_LEAVE_BY_SEC
+ *      is a hard deadline: at that point the robot quits whatever it is doing
+ *      and drives the park, so a stuck step can't cost the park too
+ *   4. Say "Done" on the Driver Station, and show how long the run took
  *
  * "abstract" means you can't run this class by itself -- only an OpMode
  * built on it, like SelectAuto.
@@ -132,8 +137,16 @@ public abstract class RouteAuto extends OpMode {
     private Route route;
     private double waitSeconds = WAIT_SECONDS;
 
+    /**
+     * A redrawn path shorter than this (inches) is treated as no path at all --
+     * the follower doesn't cope with zero-length paths. See rebuildPath().
+     */
+    private static final double MIN_PATH_IN = 1.0;
+
     private Follower follower;
     private Timer pathTimer;
+    /** Why we last gave up on a step, for the Driver Station. "" = never did. */
+    private String abandonNote = "";
     private boolean collectorOn = false;
     /** A step is holding on arrival for its dwellSec. See autonomousPathUpdate. */
     private boolean dwelling = false;
@@ -260,6 +273,24 @@ public abstract class RouteAuto extends OpMode {
             return; // done
         }
 
+        // PARK DEADLINE (Shane, 2026-11-14) -- the backstop for "get to the park
+        // no matter what". If the route marked where its park steps start
+        // (Route.beginPark) and we are still short of them at PARK_LEAVE_BY_SEC,
+        // drop whatever we are doing -- driving, collecting, dwelling, firing --
+        // and go park. This is checked FIRST, before anything else in the step,
+        // so nothing can hold the robot past the deadline.
+        //
+        // It covers the launch steps' own cutForPark and then some: cutForPark
+        // only stops FIRING and moves to the next step, which could be more
+        // collecting, while this jumps straight to the park. Both trigger at the
+        // same second; this one gets there first and wins.
+        if (route.parkFrom >= 0 && step < route.parkFrom
+                && runTimer.getElapsedTimeSeconds() >= PARK_LEAVE_BY_SEC) {
+            jumpTo(route.parkFrom,
+                    String.format("park deadline (%.0f s)", PARK_LEAVE_BY_SEC));
+            return;
+        }
+
         // COLLECT step: turn the collector on once we're close to the point.
         if (route.steps.get(step).action == Route.Action.COLLECT && !collectorOn) {
             Pose here = follower.getPose();
@@ -272,6 +303,21 @@ public abstract class RouteAuto extends OpMode {
         // isBusy() is true until the robot reaches the end of the step. A
         // LAUNCH_HERE step has no path, so it is arrived from the first loop.
         boolean arrived = paths.get(step) == null || !follower.isBusy();
+
+        // STEP TIMEOUT (Shane, 2026-11-14): still driving and out of time for
+        // this leg, so stop trying to reach the point and take the next step from
+        // wherever we actually are. See Route.Step.timeoutSec for why -- short
+        // version: isBusy() stays true forever against a ball, and a step that
+        // never ends takes the rest of the route with it.
+        //
+        // Only while !arrived: once the robot is there, the dwell and the launch
+        // own the clock, and timing them here would cut shots short.
+        double limit = route.steps.get(step).timeoutSec;
+        if (!arrived && !Double.isNaN(limit) && pathTimer.getElapsedTimeSeconds() >= limit) {
+            jumpTo(step + 1, String.format("step %d timed out (%.0f s)", step + 1, limit));
+            return;
+        }
+
         if (arrived) {
             // DWELL: hold on arrival with whatever the step was doing still
             // running, BEFORE the collector is switched off below. For a COLLECT
@@ -338,11 +384,78 @@ public abstract class RouteAuto extends OpMode {
             if (step + 1 < paths.size()) {
                 startStep(step + 1);
             } else {
-                step = paths.size();
-                finishedSeconds = runTimer.getElapsedTimeSeconds();
-                telemetry.speak("Done"); // spoken by the Driver Station
+                finish();
             }
         }
+    }
+
+    private void finish() {
+        step = paths.size();
+        finishedSeconds = runTimer.getElapsedTimeSeconds();
+        telemetry.speak("Done"); // spoken by the Driver Station
+    }
+
+    /**
+     * Give up on the step we're on and run step `to` instead, starting from
+     * WHERE THE ROBOT ACTUALLY IS.
+     *
+     * That last part is the whole job. buildPaths() draws every leg at INIT from
+     * the PREVIOUS leg's target, so step `to`'s path starts at a point we just
+     * decided we are never going to reach. Following it from here would have the
+     * robot cut across to that line from the side -- an unplanned diagonal, and
+     * the 2026-11-14 hive strike is what unplanned diagonals cost around here.
+     * So the path gets redrawn from the live pose.
+     *
+     * The redrawn line was never path-checked at INIT, so it is checked now and
+     * anything it finds is added to `warnings` -- the Driver Station's "Path
+     * check problems" count goes up, and the detail is there to read afterward.
+     * It is a report, not a veto: there is nothing better to do with the time
+     * left than drive it.
+     *
+     * The robot is probably still jammed on whatever stopped it. Nothing here can
+     * unjam it -- what unjams it is the next leg pulling AWAY. In Garden Shoot 2X
+     * that happens to be true for both legs that can time out (the sweep's
+     * escape is back toward blue, the return's is back toward red).
+     */
+    private void jumpTo(int to, String why) {
+        Pose here = follower.getPose();
+        abandonNote = String.format("%s -- jumped to step %d from (%.0f, %.0f)",
+                why, to + 1, here.getX(), here.getY());
+        collectorOn = false;
+        dwelling = false;
+        launching = false;
+        launchFiring = false;
+        if (to >= paths.size()) {   // nothing left to jump to: that was the route
+            launcher.setFlywheel(false);
+            finish();
+            return;
+        }
+        // Nothing left to shoot from `to` onward? Stop the wheels. (hasLaunchAfter
+        // looks at the steps AFTER its argument, so to - 1 means "to onward".)
+        if (!hasLaunchAfter(to - 1)) launcher.setFlywheel(false);
+        rebuildPath(to, here);
+        startStep(to);
+    }
+
+    /** Redraw step `index`'s path so it starts at `here`. See jumpTo(). */
+    private void rebuildPath(int index, Pose here) {
+        if (paths.get(index) == null) return;   // LAUNCH_HERE: no path to redraw
+        Pose to = targets.get(index);
+        if (Math.hypot(to.getX() - here.getX(), to.getY() - here.getY()) < MIN_PATH_IN) {
+            // We are already on the point. A path this short is a zero-length
+            // path as far as the follower is concerned (see Action.LAUNCH_HERE),
+            // so give the step NO path: it counts as arrived immediately and
+            // still does whatever it was going to do there.
+            paths.set(index, null);
+            targets.set(index, here);
+            return;
+        }
+        Path rebuilt = new Path(new BezierLine(here, to));
+        rebuilt.setLinearHeadingInterpolation(here.getHeading(), to.getHeading());
+        paths.set(index, rebuilt);
+        warnings.addAll(PathSafety.check(
+                String.format("Rebuilt step %d (to %.0f,%.0f)", index + 1, to.getX(), to.getY()),
+                rebuilt));
     }
 
     /**
@@ -756,6 +869,16 @@ public abstract class RouteAuto extends OpMode {
         }
         telemetry.addData("Path check problems", warnings.size());
         telemetry.addData("Step", (step + 1) + " of " + paths.size());
+        // STEP TIME is how you tune the timeouts: watch a good run, see what each
+        // leg really takes, then set the limit comfortably above it. Shows the
+        // limit too when the step has one.
+        if (step >= 0 && step < paths.size()) {
+            double limit = route.steps.get(step).timeoutSec;
+            telemetry.addData("Step time", Double.isNaN(limit)
+                    ? String.format("%.1f s", pathTimer.getElapsedTimeSeconds())
+                    : String.format("%.1f / %.0f s", pathTimer.getElapsedTimeSeconds(), limit));
+        }
+        if (!abandonNote.isEmpty()) telemetry.addData("GAVE UP", abandonNote);
         telemetry.addData("Collector", collectorOn ? "ON" : "off");
         if (launching) telemetry.addData("LAUNCH", launchNote);
         telemetry.addData("Flywheel", "%s  L %.0f / R %.0f", launcher.getShooter().getNote(),

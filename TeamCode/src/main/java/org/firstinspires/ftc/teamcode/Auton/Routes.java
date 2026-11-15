@@ -129,7 +129,13 @@ public final class Routes {
 
     // GARDEN SHOOT 2X (Shane, 2026-11-14). Shoot the preloads where we stand,
     // sweep the garden wall for more, come back to the same spot, shoot again,
-    // then park facing blue. NOT RUN ON A ROBOT YET.
+    // then park facing blue.
+    //
+    // RUN ON 5618 TWICE on 2026-11-14, and it has not finished yet: the first
+    // run clipped the hive on the way to the park (fixed with the two-point way
+    // out, see SHOOT_2X_WALL_BACK), the second wedged on a ball just short of the
+    // garden corner and stopped there for the rest of the match (fixed with the
+    // leg timeouts and beginPark() below). Neither fix has been driven.
     //
     //   1. Start on GARDEN_EDGE_START_FACING_RED: collector toward the RED wall,
     //      collector edge on the garden seam, side on the garden wall. The turret
@@ -162,16 +168,42 @@ public final class Routes {
     public static final double SHOOT_2X_COLLECT_SPEED = 0.2;
     public static final double SHOOT_2X_WALL_DWELL_SEC = 2;
 
+    // A BALL STOPPED THE WHOLE ROUTE (Shane, 5618, 2026-11-14). The sweep got
+    // almost to the garden corner, wedged on a ball, and sat there pushing: a
+    // step ends when the follower says it arrived, and a blocked robot never
+    // arrives, so the second shot and the park never happened.
+    //
+    // These two numbers are the fix, with Route.beginPark() below as the
+    // backstop. BOTH WALL LEGS GET ONE, not just the sweep -- the drive back is
+    // the same 24 in. of the same wall with the same loose balls on it.
+    //
+    // THE VALUES ARE PLACEHOLDERS UNTIL SOMEONE TIMES A GOOD RUN. Read "Step
+    // time" off the Driver Station on a clean run and set each limit a couple of
+    // seconds above it. Too generous wastes auto; too tight cuts off a leg that
+    // was going to make it. The sweep's is the bigger of the two because it runs
+    // at 0.2 speed and the return is at full power.
+    public static final double SHOOT_2X_SWEEP_TIMEOUT_SEC = 8;
+    public static final double SHOOT_2X_RETURN_TIMEOUT_SEC = 5;
+
     public static Route gardenShoot2X(Park park) {
         Route route = Route.startAt(GARDEN_EDGE_START_FACING_RED)
                 .launchHere(SHOOT_2X_FIRE_SEC)                  // shoot where we stand
                 .collectTo(GARDEN_CORNER, SHOOT_2X_COLLECT_SPEED, SHOOT_2X_WALL_DWELL_SEC)
+                .timeout(SHOOT_2X_SWEEP_TIMEOUT_SEC)            // blocked? leave it, keep going
                 .driveTo(GARDEN_EDGE_START_FACING_RED)          // back, same orientation
+                .timeout(SHOOT_2X_RETURN_TIMEOUT_SEC)
                 .launchHere(SHOOT_2X_FIRE_SEC);                 // second shooting sequence
         if (park == Park.NONE) {
             return route;
         }
         return route
+                // EVERYTHING BELOW IS THE PARK. Marking it lets RouteAuto bail
+                // out to these steps at PARK_LEAVE_BY_SEC from anywhere earlier
+                // in the route -- the park is worth more than the second shot,
+                // and it is the one thing we want from a run that goes wrong.
+                // It has to be the whole four-leg park, not just the park spot:
+                // the first three legs are what keeps us off the hive.
+                .beginPark()
                 // TOWARD RED FIRST, THEN TURN, then north to the park. Going
                 // straight to the park RAN INTO THE HIVE on the robot (Shane,
                 // 2026-11-14) even though the commanded line cleared it by ~7 in.

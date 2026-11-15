@@ -63,28 +63,98 @@ public final class Route {
          * the balls that arrive at the wall with you. NaN = 0.
          */
         public final double dwellSec;
+        /**
+         * Seconds to GET THERE before we give up on this step and move on to the
+         * next one. NaN = wait forever, which is what every step did before
+         * 2026-11-14.
+         *
+         * WHY IT EXISTS: a step only ends when the follower says it arrived (see
+         * RouteAuto.autonomousPathUpdate), and the follower is told to hold
+         * position at the end of its path. A robot wedged on a ball never
+         * arrives, so it pushes against it for the rest of the match and every
+         * later step -- including the park -- never runs. That is exactly what
+         * Garden Shoot 2X did on 5618 (Shane, 2026-11-14): it stalled a few
+         * inches short of the garden corner and sat there.
+         *
+         * It times the DRIVING only. On a LAUNCH step the clock stops once the
+         * robot arrives -- fireSec and cutForPark own the firing -- and a
+         * LAUNCH_HERE step has no driving to time at all.
+         *
+         * Set it with Route.timeout(). It is a BACKSTOP, not a schedule: make it
+         * comfortably longer than the leg really takes (read "Step time" off the
+         * Driver Station) or it will cut good runs short.
+         */
+        public final double timeoutSec;
 
         Step(Pose target, Action action, double fireSec, boolean cutForPark,
-             double speed, double dwellSec) {
+             double speed, double dwellSec, double timeoutSec) {
             this.target = target;
             this.action = action;
             this.fireSec = fireSec;
             this.cutForPark = cutForPark;
             this.speed = speed;
             this.dwellSec = dwellSec;
+            this.timeoutSec = timeoutSec;
         }
     }
 
     public final Pose start;
     public final List<Step> steps;
+    /**
+     * Index of the first PARK step, or -1 if the route never said. Set by
+     * beginPark().
+     *
+     * RouteAuto treats it as a deadline: at PARK_LEAVE_BY_SEC, whatever the
+     * robot is doing, it abandons it and drives the park steps from here (see
+     * RouteAuto.jumpTo). Scoring the park is worth more than finishing the
+     * route, and a route that gets stuck scores neither.
+     */
+    public final int parkFrom;
 
-    private Route(Pose start, List<Step> steps) {
+    private Route(Pose start, List<Step> steps, int parkFrom) {
         this.start = start;
         this.steps = Collections.unmodifiableList(steps);
+        this.parkFrom = parkFrom;
     }
 
     public static Route startAt(Pose start) {
-        return new Route(start, new ArrayList<Step>());
+        return new Route(start, new ArrayList<Step>(), -1);
+    }
+
+    /**
+     * "Everything after this is the park." Call it once, right before the
+     * driveTo() steps that go to the park spot. It adds no step of its own.
+     *
+     * That is what lets RouteAuto bail out to the park when the route runs long
+     * or gets stuck, instead of running out of time partway through the scoring
+     * steps. A route that doesn't call it behaves exactly as it always has:
+     * every step runs in order, and a stuck step stops the route.
+     *
+     * Mark the WHOLE park, not just the last point. Garden Shoot 2X needs three
+     * waypoints to get around the hive and the red-wall flower, and jumping
+     * straight to the last one would drive the diagonal that hit the hive on
+     * 2026-11-14.
+     */
+    public Route beginPark() {
+        if (parkFrom >= 0) return this;   // already marked; the first call wins
+        return new Route(start, new ArrayList<>(steps), steps.size());
+    }
+
+    /**
+     * Give the step just added a time limit for GETTING THERE, in seconds. See
+     * Step.timeoutSec for what it does and does not cover.
+     *
+     *     .collectTo(Waypoints.GARDEN_CORNER, 0.2, 2).timeout(8)
+     */
+    public Route timeout(double seconds) {
+        if (steps.isEmpty()) {
+            throw new IllegalStateException("timeout() needs a step before it");
+        }
+        List<Step> copy = new ArrayList<>(steps);
+        Step last = copy.remove(copy.size() - 1);
+        copy.add(new Step(last.target, last.action, last.fireSec, last.cutForPark,
+                last.speed, last.dwellSec, seconds));
+        return new Route(start, copy, parkFrom);
     }
 
     public Route driveTo(Pose target) {
@@ -103,12 +173,12 @@ public final class Route {
      * @param dwellSec seconds to sit still with the collector still turning
      */
     public Route collectTo(Pose target, double speed, double dwellSec) {
-        return then(new Step(target, Action.COLLECT, Double.NaN, false, speed, dwellSec));
+        return then(new Step(target, Action.COLLECT, Double.NaN, false, speed, dwellSec, Double.NaN));
     }
 
     /** Drive to a point at your own speed instead of the route's normal speed. */
     public Route driveTo(Pose target, double speed) {
-        return then(new Step(target, Action.DRIVE, Double.NaN, false, speed, Double.NaN));
+        return then(new Step(target, Action.DRIVE, Double.NaN, false, speed, Double.NaN, Double.NaN));
     }
 
     /**
@@ -123,7 +193,7 @@ public final class Route {
      * launch that has another step after it) and protects the park on a later one.
      */
     public Route launchHere(double fireSec) {
-        return then(new Step(null, Action.LAUNCH_HERE, fireSec, true, Double.NaN, Double.NaN));
+        return then(new Step(null, Action.LAUNCH_HERE, fireSec, true, Double.NaN, Double.NaN, Double.NaN));
     }
 
     public Route launchFrom(Pose target) {
@@ -135,11 +205,11 @@ public final class Route {
      * PARK_LEAVE_BY_SEC if a long Wait would make us miss the park.
      */
     public Route launchFrom(Pose target, double fireSec) {
-        return then(new Step(target, Action.LAUNCH, fireSec, true, Double.NaN, Double.NaN));
+        return then(new Step(target, Action.LAUNCH, fireSec, true, Double.NaN, Double.NaN, Double.NaN));
     }
 
     public Route tipLaunchFrom(Pose target) {
-        return then(new Step(target, Action.TIP_LAUNCH, Double.NaN, true, Double.NaN, Double.NaN));
+        return then(new Step(target, Action.TIP_LAUNCH, Double.NaN, true, Double.NaN, Double.NaN, Double.NaN));
     }
 
     // ("yield" by itself is a Java keyword, so this is yieldAt.)
@@ -157,12 +227,12 @@ public final class Route {
     }
 
     private Route then(Pose target, Action action) {
-        return then(new Step(target, action, Double.NaN, false, Double.NaN, Double.NaN));
+        return then(new Step(target, action, Double.NaN, false, Double.NaN, Double.NaN, Double.NaN));
     }
 
     private Route then(Step step) {
         List<Step> longer = new ArrayList<>(steps);
         longer.add(step);
-        return new Route(start, longer);
+        return new Route(start, longer, parkFrom);
     }
 }
