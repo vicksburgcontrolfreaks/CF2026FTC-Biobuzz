@@ -160,6 +160,19 @@ public final class Route {
         return new Route(start, copy, parkFrom);
     }
 
+    /**
+     * Append ANOTHER route's steps (its start is ignored). If the other route
+     * marked a park and this one hasn't, the mark carries over, shifted. Used to
+     * share one park sequence between routes (Routes.gardenParkLegs).
+     */
+    public Route then(Route more) {
+        List<Step> longer = new ArrayList<>(steps);
+        longer.addAll(more.steps);
+        int mark = parkFrom >= 0 ? parkFrom
+                : more.parkFrom >= 0 ? steps.size() + more.parkFrom : -1;
+        return new Route(start, longer, mark);
+    }
+
     public Route driveTo(Pose target) {
         return then(target, Action.DRIVE);
     }

@@ -69,32 +69,35 @@ public class GardenShootParkTest {
         assertEquals(0.0, park.getHeading(), EPS);
     }
 
-    @Test public void backupLeaveParkIsClearAndFacesBlue() {
+    @Test public void backupLeaveParkIsClearAndFacesRed() {   // today's orientation, 2026-11-14
         for (Alliance a : Alliance.values()) {
             for (Routes.Park p : Routes.Park.values()) {
                 Route r = Routes.gardenLeavePark2026(p);
                 List<String> w = warnings(r, a, p);
                 assertTrue("backup " + a + " / " + p + ": " + w, w.isEmpty());
-                assertEquals(1, r.steps.size());   // straight to the park, NONE parks garden side
-                assertEquals(0.0, r.steps.get(0).target.getHeading(), EPS);
+                assertEquals(4, r.steps.size());   // the Garden Shoot 2X park legs; NONE parks garden side
+                assertEquals(0, r.parkFrom);
+                assertEquals(180.0, Math.toDegrees(r.start.getHeading()), EPS);
+                for (Route.Step s : r.steps) assertEquals(Math.PI, s.target.getHeading(), EPS);   // no turn
             }
         }
     }
 
-    @Test public void farLeaveParkIsClearAndFacesBlue() {
+    @Test public void farLeaveParkIsClearAndFacesRed() {   // today's orientation, 2026-11-14
         for (Alliance a : Alliance.values()) {
             for (Routes.Park p : Routes.Park.values()) {
                 Route r = Routes.farLeavePark2026(p);
                 List<String> w = warnings(r, a, p);
                 assertTrue("far leave+park " + a + " / " + p + ": " + w, w.isEmpty());
                 assertEquals(1, r.steps.size());
-                assertEquals(0.0, r.steps.get(0).target.getHeading(), EPS);
+                assertEquals(Math.PI, r.steps.get(0).target.getHeading(), EPS);   // no turn
+                assertEquals(0, r.parkFrom);
             }
         }
         Pose start = Routes.farLeavePark2026(Routes.Park.FAR_SIDE).start;
-        assertEquals(33.0, start.getX(), EPS);    // back edge on x = 24
+        assertEquals(33.0, start.getX(), EPS);    // collector edge on x = 24
         assertEquals(135.0, start.getY(), EPS);   // touching the far wall
-        assertEquals(0.0, start.getHeading(), EPS);
+        assertEquals(Math.PI, start.getHeading(), EPS);
     }
 
     @Test public void farTipShootParkIsClear() {

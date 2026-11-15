@@ -207,13 +207,13 @@ public final class Routes {
             return route;
         }
         return route
-                // EVERYTHING BELOW IS THE PARK. Marking it lets RouteAuto bail
-                // out to these steps at PARK_LEAVE_BY_SEC from anywhere earlier
-                // in the route -- the park is worth more than the second shot,
-                // and it is the one thing we want from a run that goes wrong.
-                // It has to be the whole four-leg park, not just the park spot:
-                // the first three legs are what keeps us off the hive.
-                .beginPark()
+                // EVERYTHING BELOW IS THE PARK (gardenParkLegs). Marking it lets
+                // RouteAuto bail out to these steps at PARK_LEAVE_BY_SEC from
+                // anywhere earlier in the route -- the park is worth more than the
+                // second shot, and it is the one thing we want from a run that
+                // goes wrong. It has to be the whole four-leg park, not just the
+                // park spot: the first three legs are what keeps us off the hive.
+                //
                 // TOWARD RED FIRST, THEN TURN, then north to the park. Going
                 // straight to the park RAN INTO THE HIVE on the robot (Shane,
                 // 2026-11-14) even though the commanded line cleared it by ~7 in.
@@ -228,10 +228,23 @@ public final class Routes {
                 // far end of the loading zone -- odometry ~30 in. off in y. The
                 // in-motion 180 deg turn is the prime suspect, so this run tests
                 // that by removing it. Same points, heading 180 throughout.
+                .then(gardenParkLegs(park));
+    }
+
+    /**
+     * THE PARK FROM THE GARDEN-EDGE START (facing red), shared by Garden Shoot
+     * 2X and Garden Leave + Park so the two cannot drift apart. Four legs, all
+     * facing red, no turn -- see the comments in gardenShoot2X for why each one
+     * is there (hive strike, red-wall flower, odometry error from turning).
+     * Starts with beginPark(), so the 25 s deadline jumps to the whole park.
+     */
+    private static Route gardenParkLegs(Park park) {
+        return Route.startAt(GARDEN_EDGE_START_FACING_RED)   // start unused; steps only
+                .beginPark()
                 .driveTo(SHOOT_2X_WALL_BACK)                    // flat out toward red
                 .driveTo(facingRed(SHOOT_2X_TURN_BACK))         // north off the wall, no turn
                 .driveTo(facingRed(SHOOT_2X_PAST_FLOWER))       // hold x until past the flower
-                .driveTo(facingRed(park.spot));                 // collector still toward red
+                .driveTo(facingRed(parkSpot(park)));            // collector still toward red
     }
 
     // FAR WALL WAIT AND SHOOT (Shane, 2026-11-14). Start on the far wall facing
@@ -254,24 +267,26 @@ public final class Routes {
                 .driveTo(parkSpot(park));        // park spots already face red
     }
 
-    // 2026 ROBOT BACKUP (2026-11-07): Garden Shoot + Park's start, no launch,
-    // straight to the park facing blue. For a broken launcher or a partner who
-    // needs the shot. Always parks. Laptop path-checked (GardenShootParkTest);
-    // NOT run on a robot yet.
+    // GARDEN LEAVE + PARK, TODAY'S ORIENTATION (Shane, 2026-11-14): the
+    // backup -- no shooting. Same start as Garden Shoot 2X (facing red,
+    // collector edge on the garden seam) and the same four-leg, no-turn park.
+    // Always parks. Laptop path-checked; NOT robot-run in this form.
+    // (Was 2026-11-07: start facing blue, one straight leg to the park.)
     public static Route gardenLeavePark2026(Park park) {
-        return Route.startAt(GARDEN_EDGE_START)
-                .driveTo(facingBlue(parkSpot(park)));
+        return Route.startAt(GARDEN_EDGE_START_FACING_RED)
+                .then(gardenParkLegs(park));
     }
 
-    // 2026 ROBOT (Shane, 2026-11-08): LEAVE + PARK from the far wall. Starts
-    // like Garden Shoot + Park but on the far wall (FAR_EDGE_START), then drives
-    // straight to the park facing blue -- the far-side park is a short diagonal
-    // that moves away from the flower, so no extra waypoints are needed. No
-    // launch. Always parks. Laptop path-checked (GardenShootParkTest); NOT run
-    // on a robot yet.
+    // FAR WALL LEAVE + PARK, TODAY'S ORIENTATION (Shane, 2026-11-14): same
+    // start as Far Wall Wait and Shoot (facing red, collector edge on the first
+    // seam, side on the far wall), then one straight diagonal off the wall to
+    // the park, still facing red. No shooting. Always parks. The turret still
+    // homes on lock and is kept homed into TeleOp. Laptop path-checked; NOT
+    // robot-run. (Was 2026-11-08: start facing blue.)
     public static Route farLeavePark2026(Park park) {
-        return Route.startAt(FAR_EDGE_START)
-                .driveTo(facingBlue(parkSpot(park)));
+        return Route.startAt(FAR_EDGE_START_FACING_RED)
+                .beginPark()
+                .driveTo(parkSpot(park));        // park spots already face red
     }
 
     // 2026 ROBOT (Shane, 2026-11-08): Garden Shoot + Park mirrored onto the far

@@ -26,8 +26,8 @@ public class SelectAuto extends RouteAuto {
     enum AutoRoute {
         GARDEN_SHOOT_PARK("Garden Shoot + Park", Routes.Park.GARDEN_SIDE, false),   // 2026 robot
         GARDEN_SHOOT_2X("Garden Shoot 2X", Routes.Park.GARDEN_SIDE, false),   // 2026 robot, 2026-11-14
-        GARDEN_LEAVE_PARK_2026("Garden Leave + Park (backup)", Routes.Park.GARDEN_SIDE, true),   // 2026 robot
-        FAR_LEAVE_PARK_2026("Far Wall Leave + Park", Routes.Park.FAR_SIDE, true),   // 2026 robot
+        GARDEN_LEAVE_PARK_2026("Garden Leave + Park", Routes.Park.GARDEN_SIDE, true),   // 2026 robot, facing red 2026-11-14
+        FAR_LEAVE_PARK_2026("Far Wall Leave + Park", Routes.Park.FAR_SIDE, true),   // 2026 robot, facing red 2026-11-14
         FAR_TIP_SHOOT_PARK("Far Wall Tip Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
         FAR_QUICK_SHOOT_PARK("Far Wall Quick Shoot + Park", Routes.Park.FAR_SIDE, false),   // 2026 robot
         FAR_WAIT_SHOOT("Far Wall Wait and Shoot", Routes.Park.FAR_SIDE, true),   // 2026 robot, 2026-11-14
@@ -83,14 +83,13 @@ public class SelectAuto extends RouteAuto {
     private final AutoMenu.Choice<Alliance> alliance =
             menu.add("Alliance", Alliance.RED, Alliance.BLUE);
     private final AutoMenu.Choice<AutoRoute> autoRoute =
-            // Only the 2026-robot routes (2026-11-07, competition). The older routes
-            // below still exist but face the red wall, predate this robot, and
-            // Garden Wall + Launch cannot finish in 30 s with 15 s launches -- add
-            // one back here only after it is rebuilt and robot-tested.
-            menu.add("Route", AutoRoute.GARDEN_SHOOT_PARK, AutoRoute.GARDEN_SHOOT_2X,
-                    AutoRoute.GARDEN_LEAVE_PARK_2026,
-                    AutoRoute.FAR_LEAVE_PARK_2026, AutoRoute.FAR_TIP_SHOOT_PARK,
-                    AutoRoute.FAR_QUICK_SHOOT_PARK, AutoRoute.FAR_WAIT_SHOOT);
+            // COMPETITION MENU, 2026-11-15 (Shane): four routes, all starting facing
+            // red -- two on the garden-edge start, two on the far-edge start. First
+            // = default. Garden Shoot + Park, Far Wall Tip Shoot + Park and Far Wall
+            // Quick Shoot + Park still exist in Routes but are off the menu: pre-flip
+            // or never robot-run, and replaced by these.
+            menu.add("Route", AutoRoute.GARDEN_SHOOT_2X, AutoRoute.FAR_WAIT_SHOOT,
+                    AutoRoute.GARDEN_LEAVE_PARK_2026, AutoRoute.FAR_LEAVE_PARK_2026);
     private final AutoMenu.Choice<Integer> startWait =
             menu.add("Wait (sec)", 0, 3, 5, 8)
                     .summary("Wait %ds")
