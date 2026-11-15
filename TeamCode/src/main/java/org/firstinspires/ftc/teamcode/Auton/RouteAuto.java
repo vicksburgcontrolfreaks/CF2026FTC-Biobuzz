@@ -77,7 +77,15 @@ public abstract class RouteAuto extends OpMode {
     // started when the AIM finished -- about t = 0 now that INIT aims -- while
     // the indexer was still waiting for both wheels to settle within 50 RPM.
     // Spin-up ate the window and the Driver Station said "firing" throughout.
+    //
+    // SPIN-UP IS SKIPPED when the wheels have ALREADY been on for SPINUP_SEC
+    // (Shane, 2026-11-14): the clock is "flywheel on for 2 s", not "2 s per
+    // launch". So a launch at the start waits 2 s, but Garden Shoot 2X's second
+    // launch (wheels on since Start) and any launch reached by a drive longer
+    // than 2 s feed immediately. See flywheel() and flywheelOnSinceSec.
     public static double SPINUP_SEC = 2.0;
+    /** runTimer time the flywheel was last switched on; NaN = off. Set only by flywheel(). */
+    private double flywheelOnSinceSec = Double.NaN;
     /** Seconds of feeding (collector + indexer + flywheels), counted after SPINUP_SEC. */
     public static double LAUNCH_MAX_SEC = 15.0;   // 8 -> 12 -> 15: still short on shots (Shane, 2026-11-06)
 
@@ -342,7 +350,7 @@ public abstract class RouteAuto extends OpMode {
                     launching = true;
                     launchFiring = false;
                     launchTimer.resetTimer();
-                    launcher.setFlywheel(true);   // normally already spinning (pre-spun at Start)
+                    flywheel(true);    // normally already spinning (pre-spun at Start)
                     tipSeen = action != Route.Action.TIP_LAUNCH;   // plain LAUNCH doesn't wait
                     tipFrames = 0;
                     lastTipFrame = 0;
@@ -370,7 +378,7 @@ public abstract class RouteAuto extends OpMode {
                 }
                 launching = false;
                 launchFiring = false;
-                if (!hasLaunchAfter(step)) launcher.setFlywheel(false);   // nothing left to shoot
+                if (!hasLaunchAfter(step)) flywheel(false);   // nothing left to shoot
             }
 
             // YIELD step: we've arrived, so hold still until the yield time.
@@ -426,13 +434,13 @@ public abstract class RouteAuto extends OpMode {
         launching = false;
         launchFiring = false;
         if (to >= paths.size()) {   // nothing left to jump to: that was the route
-            launcher.setFlywheel(false);
+            flywheel(false);
             finish();
             return;
         }
         // Nothing left to shoot from `to` onward? Stop the wheels. (hasLaunchAfter
         // looks at the steps AFTER its argument, so to - 1 means "to onward".)
-        if (!hasLaunchAfter(to - 1)) launcher.setFlywheel(false);
+        if (!hasLaunchAfter(to - 1)) flywheel(false);
         rebuildPath(to, here);
         startStep(to);
     }
@@ -466,7 +474,9 @@ public abstract class RouteAuto extends OpMode {
         double t = launchTimer.getElapsedTimeSeconds();
 
         if (!launchFiring) {
-            if (t >= SPINUP_SEC) {
+            double spunSec = Double.isNaN(flywheelOnSinceSec)
+                    ? 0 : runTimer.getElapsedTimeSeconds() - flywheelOnSinceSec;
+            if (t >= SPINUP_SEC || spunSec >= SPINUP_SEC) {   // already spun up = no wait
                 launchFiring = true;   // loop() turns this into allForward
                 fireStartSec = t;
                 launchNote = "spun up - feeding";
@@ -510,6 +520,20 @@ public abstract class RouteAuto extends OpMode {
             return;
         }
         turret.update();
+    }
+
+    /**
+     * Flywheel on/off for the route. ALWAYS use this, never launcher.setFlywheel()
+     * directly (stop() excepted), or the spin-up skip in launchDone() will think
+     * the wheels have been on longer than they have.
+     */
+    private void flywheel(boolean on) {
+        if (on && Double.isNaN(flywheelOnSinceSec)) {
+            flywheelOnSinceSec = runTimer.getElapsedTimeSeconds();
+        } else if (!on) {
+            flywheelOnSinceSec = Double.NaN;
+        }
+        launcher.setFlywheel(on);
     }
 
     private boolean hasLaunchAfter(int s) {
@@ -787,7 +811,7 @@ public abstract class RouteAuto extends OpMode {
         // Still homing at Start? goTo just sets the target; it goes there once homed.
         if (deflector.isZeroed() || deflector.isHoming()) deflector.goTo(Deflector.DEFAULT_SHOT_DEG);
         // Pre-spin, so the first launch spot doesn't wait 1-2 s for spin-up.
-        if (routeLaunches()) launcher.setFlywheel(true);
+        if (routeLaunches()) flywheel(true);
     }
 
     @Override

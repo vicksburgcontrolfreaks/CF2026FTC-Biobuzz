@@ -141,14 +141,14 @@ public final class Routes {
     //      collector edge on the garden seam, side on the garden wall. The turret
     //      points away from the collector since the flip, so it already faces the
     //      hive from here.
-    //   2. launchHere(4): 2 s spin-up, feed 4 s, everything off. No driving
+    //   2. launchHere(4): 2 s spin-up (wheels on since Start), feed 4 s, everything off. No driving
     //      -- the step has no path at all.
-    //   3. collectTo(GARDEN_CORNER) at 0.3 with a 2 s dwell: 24 in. along the
+    //   3. collectTo(GARDEN_CORNER) at 0.4 with a 2 s dwell: 24 in. along the
     //      wall into the garden corner, collector-first (heading 180 means the
     //      collector leads), then sit still for 2 s with the collector still
     //      running before it switches off.
     //   4. driveTo the start pose again at full speed, same orientation.
-    //   5. launchHere(4) again -- launchFrom() here would be a zero-length path.
+    //   5. launchHere(4) again, NO spin-up (wheels already on) -- launchFrom() here would be a zero-length path.
     //   6. Park facing BLUE, which turns the robot 180 deg so the collector
     //      leads for the drivers. See the note on the TeleOp handoff below.
     //
@@ -165,7 +165,7 @@ public final class Routes {
     // then press X ("the robot faces away from me now") once in TeleOp, which is
     // exactly what that button is for. It is not parked and scores no park points.
     public static final double SHOOT_2X_FIRE_SEC = 4;
-    public static final double SHOOT_2X_COLLECT_SPEED = 0.3;   // 0.2 was too slow (2026-11-14)
+    public static final double SHOOT_2X_COLLECT_SPEED = 0.4;   // 0.2 too slow, 0.3 -> 0.4 to be sure it gets there (Shane, 2026-11-14)
     public static final double SHOOT_2X_WALL_DWELL_SEC = 2;
 
     // A BALL STOPPED THE WHOLE ROUTE (Shane, 5618, 2026-11-14). The sweep got
@@ -181,7 +181,7 @@ public final class Routes {
     // time" off the Driver Station on a clean run and set each limit a couple of
     // seconds above it. Too generous wastes auto; too tight cuts off a leg that
     // was going to make it. The sweep's is the bigger of the two because it runs
-    // at 0.3 speed and the return is at full power.
+    // at 0.4 speed and the return is at full power.
     public static final double SHOOT_2X_SWEEP_TIMEOUT_SEC = 8;
     public static final double SHOOT_2X_RETURN_TIMEOUT_SEC = 5;
 
